@@ -35,9 +35,10 @@ enabled without the required config for whichever mode is selected.
 
 Two engines, selected by `DATABASE_URL`'s scheme:
 
-- `postgres://...` (kubernetes deployment) — standard Postgres via CNPG.
+- `postgres://...` (kubernetes deployment) — standard Postgres via CNPG; the backend
+  applies pending goose migrations itself on startup.
 - `sqlite://path/to/file.db` (docker-compose deployment) — a single SQLite file; the
-  backend applies its schema itself on first run, no separate migration step.
+  backend applies its schema itself on first run.
 
 Both are driven through the same `internal/store.Store` interface, so the API behaves
 identically regardless of which one is active — see `internal/store/pg` and

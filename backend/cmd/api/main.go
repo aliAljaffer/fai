@@ -13,6 +13,7 @@ import (
 	"github.com/alialjaffer/fai/backend/internal/config"
 	"github.com/alialjaffer/fai/backend/internal/httpapi"
 	"github.com/alialjaffer/fai/backend/internal/jira"
+	"github.com/alialjaffer/fai/backend/internal/migrate"
 	"github.com/alialjaffer/fai/backend/internal/ntfy"
 	"github.com/alialjaffer/fai/backend/internal/reminders"
 	"github.com/alialjaffer/fai/backend/internal/store"
@@ -48,6 +49,9 @@ func main() {
 		}
 		st = s
 	} else {
+		if err := migrate.Postgres(context.Background(), cfg.DatabaseURL); err != nil {
+			log.Fatalf("migrating database: %v", err)
+		}
 		pool, err := pgxpool.New(context.Background(), cfg.DatabaseURL)
 		if err != nil {
 			log.Fatalf("connecting to database: %v", err)
