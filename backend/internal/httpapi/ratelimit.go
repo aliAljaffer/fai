@@ -5,12 +5,14 @@ import (
 	"sync"
 
 	"golang.org/x/time/rate"
+
+	"github.com/alialjaffer/fai/backend/internal/auth"
 )
 
 // rateLimitByUser enforces a per-user token bucket on expensive AI endpoints, since fai
 // is publicly exposed (see plan §3) and a valid bearer token could otherwise burn
 // through the configured AI API key with repeated requests. Keyed by the request's JWT
-// subject once auth (phase 13) sets one on the context; falls back to a single shared
+// subject once auth middleware sets one on the context; falls back to a single shared
 // bucket under DISABLE_AUTH, which is fine for local/personal use.
 func rateLimitByUser(requestsPerMinute float64, burst int) func(http.Handler) http.Handler {
 	var mu sync.Mutex
@@ -30,7 +32,7 @@ func rateLimitByUser(requestsPerMinute float64, burst int) func(http.Handler) ht
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			key := "anonymous"
-			if sub, ok := r.Context().Value(jwtSubjectKey).(string); ok && sub != "" {
+			if sub, ok := r.Context().Value(auth.SubjectContextKey).(string); ok && sub != "" {
 				key = sub
 			}
 			if !limiterFor(key).Allow() {
@@ -41,7 +43,3 @@ func rateLimitByUser(requestsPerMinute float64, burst int) func(http.Handler) ht
 		})
 	}
 }
-
-type contextKey string
-
-const jwtSubjectKey contextKey = "jwt_subject"

@@ -1,6 +1,7 @@
 import { NavLink, Route, Routes } from 'react-router-dom'
 import { Toaster } from '@/components/ui/sonner'
 import { cn } from '@/lib/utils'
+import { AuthCallback } from './pages/AuthCallback'
 import { Board } from './pages/Board'
 import { Calendar } from './pages/Calendar'
 import { List } from './pages/List'
@@ -95,6 +96,7 @@ export function App() {
           <Route path="/reminders" element={<Reminders />} />
           <Route path="/search" element={<Search />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/auth/callback" element={<AuthCallback />} />
         </Routes>
       </main>
       <Toaster />

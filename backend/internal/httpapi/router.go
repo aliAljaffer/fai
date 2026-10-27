@@ -19,6 +19,9 @@ type Server struct {
 	JiraDefaultProject  string
 	JiraStatusColumnMap map[string]string
 	AI                  ai.Provider
+	// AuthMiddleware validates bearer tokens on every /api/* route when set.
+	// Left nil under DISABLE_AUTH for local dev.
+	AuthMiddleware func(http.Handler) http.Handler
 }
 
 func NewRouter(s *Server) http.Handler {
@@ -32,6 +35,10 @@ func NewRouter(s *Server) http.Handler {
 	})
 
 	r.Route("/api", func(r chi.Router) {
+		if s.AuthMiddleware != nil {
+			r.Use(s.AuthMiddleware)
+		}
+
 		r.Get("/boards", s.listBoards)
 		r.Post("/boards", s.createBoard)
 		r.Get("/boards/{boardID}/columns", s.listColumns)

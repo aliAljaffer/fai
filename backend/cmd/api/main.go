@@ -9,6 +9,7 @@ import (
 	"github.com/joho/godotenv"
 
 	"github.com/alialjaffer/fai/backend/internal/ai"
+	"github.com/alialjaffer/fai/backend/internal/auth"
 	"github.com/alialjaffer/fai/backend/internal/config"
 	"github.com/alialjaffer/fai/backend/internal/db/sqlc"
 	"github.com/alialjaffer/fai/backend/internal/httpapi"
@@ -21,8 +22,16 @@ func main() {
 	_ = godotenv.Load()
 	cfg := config.Load()
 
+	var authMiddleware func(http.Handler) http.Handler
 	if cfg.DisableAuth {
 		log.Println("WARNING: DISABLE_AUTH=true — authentication is OFF. Never set this in production.")
+	} else {
+		// Fail-closed: auth is on by default, so a missing issuer/audience is a
+		// startup error, not a silent bypass.
+		if cfg.OIDCIssuerURL == "" || cfg.OIDCAudience == "" {
+			log.Fatal("OIDC_ISSUER_URL and OIDC_AUDIENCE are required unless DISABLE_AUTH=true")
+		}
+		authMiddleware = auth.MustMiddleware(context.Background(), cfg.OIDCIssuerURL, cfg.OIDCAudience)
 	}
 
 	pool, err := pgxpool.New(context.Background(), cfg.DatabaseURL)
@@ -47,6 +56,7 @@ func main() {
 		JiraDefaultProject:  cfg.JiraDefaultProject,
 		JiraStatusColumnMap: jira.ParseStatusColumnMap(cfg.JiraStatusColumnMap),
 		AI:                  aiProvider,
+		AuthMiddleware:      authMiddleware,
 	}
 	router := httpapi.NewRouter(server)
 

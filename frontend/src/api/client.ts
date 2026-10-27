@@ -1,6 +1,12 @@
+import { getAccessToken } from '../auth/oidc'
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = await getAccessToken()
   const res = await fetch(`/api${path}`, {
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
     ...init,
   })
   if (!res.ok) {
