@@ -210,7 +210,17 @@ func (s *Server) jiraLink(w http.ResponseWriter, r *http.Request) {
 		projectKey = parts[0]
 	}
 
-	link, err := s.Store.CreateJiraLinkManual(r.Context(), taskID, issue.Key, s.Jira.IssueURL(issue.Key), projectKey, issue.Status)
+	ctx := r.Context()
+	if existing, err := s.Store.GetJiraLinkByKey(ctx, issue.Key); err == nil && existing != nil {
+		writeError(w, http.StatusConflict, "jira issue is already linked to another task")
+		return
+	}
+	if existing, err := s.Store.GetJiraLinkByTask(ctx, taskID); err == nil && existing != nil {
+		writeError(w, http.StatusConflict, "task is already linked to a jira issue")
+		return
+	}
+
+	link, err := s.Store.CreateJiraLinkManual(ctx, taskID, issue.Key, s.Jira.IssueURL(issue.Key), projectKey, issue.Status)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

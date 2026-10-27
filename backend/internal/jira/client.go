@@ -43,7 +43,7 @@ type searchResponse struct {
 }
 
 func (c *Client) SearchIssues(jql string, maxResults int) ([]Issue, error) {
-	u := c.baseURL + "/rest/api/3/search?" + url.Values{
+	u := c.baseURL + "/rest/api/3/search/jql?" + url.Values{
 		"jql":        {jql},
 		"maxResults": {fmt.Sprint(maxResults)},
 		"fields":     {"summary,status"},
