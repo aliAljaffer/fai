@@ -1,5 +1,6 @@
 import { DndContext, PointerSensor, closestCorners, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
 import { useEffect, useMemo, useState } from 'react'
+import { Skeleton } from '@/components/ui/skeleton'
 import { useBoards, useColumns, useCreateTask, useDeleteTask, useMoveTask, useTasks, useUpdateTask } from '../api/hooks'
 import { BoardColumn } from '../components/board/BoardColumn'
 import { TaskDetail } from '../components/board/TaskDetail'
@@ -60,12 +61,20 @@ export function Board() {
     moveTask.mutate({ id: taskId, column_id: targetColumnId, before_task_id: beforeTaskId })
   }
 
-  if (!boardId || !columns) return <div className="loading">Loading board…</div>
+  if (!boardId || !columns) {
+    return (
+      <div className="flex gap-4">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <Skeleton key={i} className="h-80 w-70 rounded-lg" />
+        ))}
+      </div>
+    )
+  }
 
   return (
-    <div className="board-page">
+    <div>
       <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
-        <div className="board-columns">
+        <div className="flex items-start gap-4">
           {columns.map((col) => (
             <BoardColumn
               key={col.id}

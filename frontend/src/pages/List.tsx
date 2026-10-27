@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useBoards, useColumns, useTasks } from '../api/hooks'
 import { useUIStore } from '../store/ui'
 
@@ -24,27 +25,31 @@ export function List() {
   }, [tasks, sortKey])
 
   return (
-    <div className="list-page">
-      <table>
-        <thead>
-          <tr>
-            <th onClick={() => setSortKey('title')}>Title</th>
-            <th>Column</th>
-            <th onClick={() => setSortKey('priority')}>Priority</th>
-            <th onClick={() => setSortKey('due_date')}>Due</th>
-          </tr>
-        </thead>
-        <tbody>
-          {sorted.map((t) => (
-            <tr key={t.id}>
-              <td>{t.title}</td>
-              <td>{columnName.get(t.column_id)}</td>
-              <td>{t.priority}</td>
-              <td>{t.due_date ?? '—'}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead className="cursor-pointer" onClick={() => setSortKey('title')}>
+            Title
+          </TableHead>
+          <TableHead>Column</TableHead>
+          <TableHead className="cursor-pointer" onClick={() => setSortKey('priority')}>
+            Priority
+          </TableHead>
+          <TableHead className="cursor-pointer" onClick={() => setSortKey('due_date')}>
+            Due
+          </TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {sorted.map((t) => (
+          <TableRow key={t.id}>
+            <TableCell>{t.title}</TableCell>
+            <TableCell>{columnName.get(t.column_id)}</TableCell>
+            <TableCell>{t.priority}</TableCell>
+            <TableCell>{t.due_date ?? '—'}</TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
   )
 }

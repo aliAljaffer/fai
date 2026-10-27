@@ -1,6 +1,15 @@
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
+import { Badge } from '@/components/ui/badge'
+import { Card, CardContent } from '@/components/ui/card'
+import { cn } from '@/lib/utils'
 import type { Task } from '../../api/types'
+
+const priorityVariant: Record<string, 'default' | 'secondary' | 'destructive'> = {
+  high: 'destructive',
+  medium: 'secondary',
+  low: 'default',
+}
 
 export function TaskCard({ task, onClick }: { task: Task; onClick: () => void }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -10,20 +19,25 @@ export function TaskCard({ task, onClick }: { task: Task; onClick: () => void })
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.4 : 1,
   }
 
   return (
-    <div
+    <Card
       ref={setNodeRef}
       style={style}
       {...attributes}
       {...listeners}
       onClick={onClick}
-      className="task-card"
+      className={cn('cursor-grab gap-2 py-3 active:cursor-grabbing', isDragging && 'opacity-40')}
     >
-      <div className="task-card-title">{task.title}</div>
-      {task.priority !== 'medium' && <span className={`priority priority-${task.priority}`}>{task.priority}</span>}
-    </div>
+      <CardContent className="px-3">
+        <div className="text-sm">{task.title}</div>
+        {task.priority !== 'medium' && (
+          <Badge variant={priorityVariant[task.priority] ?? 'secondary'} className="mt-2">
+            {task.priority}
+          </Badge>
+        )}
+      </CardContent>
+    </Card>
   )
 }
