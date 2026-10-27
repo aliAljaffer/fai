@@ -10,6 +10,17 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type Attachment struct {
+	ID          int64       `json:"id"`
+	TaskID      pgtype.Int8 `json:"task_id"`
+	NoteID      pgtype.Int8 `json:"note_id"`
+	Filename    string      `json:"filename"`
+	ContentType string      `json:"content_type"`
+	SizeBytes   int64       `json:"size_bytes"`
+	StorageKey  string      `json:"storage_key"`
+	CreatedAt   time.Time   `json:"created_at"`
+}
+
 type Board struct {
 	ID        int64     `json:"id"`
 	Name      string    `json:"name"`

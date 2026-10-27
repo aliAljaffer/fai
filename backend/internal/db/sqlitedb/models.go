@@ -8,6 +8,17 @@ import (
 	"database/sql"
 )
 
+type Attachment struct {
+	ID          int64         `json:"id"`
+	TaskID      sql.NullInt64 `json:"task_id"`
+	NoteID      sql.NullInt64 `json:"note_id"`
+	Filename    string        `json:"filename"`
+	ContentType string        `json:"content_type"`
+	SizeBytes   int64         `json:"size_bytes"`
+	StorageKey  string        `json:"storage_key"`
+	CreatedAt   string        `json:"created_at"`
+}
+
 type Board struct {
 	ID        int64  `json:"id"`
 	Name      string `json:"name"`

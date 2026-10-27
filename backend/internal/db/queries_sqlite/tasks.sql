@@ -20,6 +20,9 @@ WHERE t.archived = 0
   AND (CAST(sqlc.narg('board_id') AS INTEGER) IS NULL OR t.board_id = sqlc.narg('board_id'))
   AND (CAST(sqlc.narg('column_id') AS INTEGER) IS NULL OR t.column_id = sqlc.narg('column_id'))
   AND (CAST(sqlc.narg('tag') AS TEXT) IS NULL OR tg.name = sqlc.narg('tag'))
+  AND (CAST(sqlc.narg('q') AS TEXT) IS NULL
+       OR t.title LIKE '%' || sqlc.narg('q') || '%'
+       OR t.description_md LIKE '%' || sqlc.narg('q') || '%')
 ORDER BY t.column_id, t.position;
 
 -- name: ListSubtasks :many

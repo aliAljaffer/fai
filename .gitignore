@@ -6,3 +6,4 @@ backend/tmp/
 .env.prod
 .claude/
 PLAN.md
+backend/data/

@@ -37,7 +37,7 @@ func (s *Store) GetTask(ctx context.Context, id int64) (store.Task, error) {
 
 func (s *Store) ListTasks(ctx context.Context, p store.ListTasksParams) ([]store.Task, error) {
 	rows, err := s.q.ListTasks(ctx, sqlc.ListTasksParams{
-		BoardID: ptrToInt8(p.BoardID), ColumnID: ptrToInt8(p.ColumnID), Tag: ptrToText(p.Tag),
+		BoardID: ptrToInt8(p.BoardID), ColumnID: ptrToInt8(p.ColumnID), Tag: ptrToText(p.Tag), Q: ptrToText(p.Q),
 	})
 	if err != nil {
 		return nil, err

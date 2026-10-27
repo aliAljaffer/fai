@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from './client'
 import type {
+  Attachment,
   Board,
   BoardColumn,
   ExtractedTask,
@@ -26,11 +27,33 @@ export function useColumns(boardId: number | undefined) {
   })
 }
 
-export function useTasks(boardId: number | undefined) {
+export interface TaskFilters {
+  q?: string
+  columnId?: number
+  tag?: string
+}
+
+export function useTasks(boardId: number | undefined, filters: TaskFilters = {}) {
+  const { q, columnId, tag } = filters
   return useQuery({
-    queryKey: ['tasks', boardId],
-    queryFn: () => api.get<Task[]>(`/tasks?board_id=${boardId}`),
+    queryKey: ['tasks', boardId, q ?? '', columnId ?? null, tag ?? ''],
+    queryFn: () => {
+      const params = new URLSearchParams()
+      if (boardId !== undefined) params.set('board_id', String(boardId))
+      if (q) params.set('q', q)
+      if (columnId !== undefined) params.set('column_id', String(columnId))
+      if (tag) params.set('tag', tag)
+      return api.get<Task[]>(`/tasks?${params}`)
+    },
     enabled: boardId !== undefined,
+  })
+}
+
+export function useTask(id: number | undefined) {
+  return useQuery({
+    queryKey: ['task', id],
+    queryFn: () => api.get<Task>(`/tasks/${id}`),
+    enabled: id !== undefined,
   })
 }
 
@@ -271,6 +294,13 @@ export function useAIChat() {
   })
 }
 
+export function useCalendarFeedURL() {
+  return useQuery({
+    queryKey: ['calendar-feed'],
+    queryFn: () => api.get<{ url: string }>('/calendar/feed'),
+  })
+}
+
 export function usePendingMeetingOutcomes() {
   return useQuery({
     queryKey: ['meeting-outcomes', 'pending'],
@@ -350,5 +380,53 @@ export function useDeleteNote() {
   return useMutation({
     mutationFn: (id: number) => api.delete<void>(`/notes/${id}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['notes'] }),
+  })
+}
+
+export function useTaskAttachments(taskId: number | undefined) {
+  return useQuery({
+    queryKey: ['attachments', 'task', taskId],
+    queryFn: () => api.get<Attachment[]>(`/tasks/${taskId}/attachments`),
+    enabled: taskId !== undefined,
+  })
+}
+
+export function useNoteAttachments(noteId: number | undefined) {
+  return useQuery({
+    queryKey: ['attachments', 'note', noteId],
+    queryFn: () => api.get<Attachment[]>(`/notes/${noteId}/attachments`),
+    enabled: noteId !== undefined,
+  })
+}
+
+export function useUploadTaskAttachment(taskId: number | undefined) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (file: File) => {
+      const body = new FormData()
+      body.append('file', file)
+      return api.postForm<Attachment>(`/tasks/${taskId}/attachments`, body)
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['attachments', 'task', taskId] }),
+  })
+}
+
+export function useUploadNoteAttachment(noteId: number | undefined) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (file: File) => {
+      const body = new FormData()
+      body.append('file', file)
+      return api.postForm<Attachment>(`/notes/${noteId}/attachments`, body)
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['attachments', 'note', noteId] }),
+  })
+}
+
+export function useDeleteAttachment() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) => api.delete<void>(`/attachments/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['attachments'] }),
   })
 }

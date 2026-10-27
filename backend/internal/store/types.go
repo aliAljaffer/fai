@@ -47,6 +47,26 @@ type Task struct {
 	UpdatedAt        time.Time  `json:"updated_at"`
 }
 
+type Attachment struct {
+	ID          int64     `json:"id"`
+	TaskID      *int64    `json:"task_id"`
+	NoteID      *int64    `json:"note_id"`
+	Filename    string    `json:"filename"`
+	ContentType string    `json:"content_type"`
+	SizeBytes   int64     `json:"size_bytes"`
+	StorageKey  string    `json:"-"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+type CreateAttachmentParams struct {
+	TaskID      *int64
+	NoteID      *int64
+	Filename    string
+	ContentType string
+	SizeBytes   int64
+	StorageKey  string
+}
+
 type Note struct {
 	ID        int64     `json:"id"`
 	Title     string    `json:"title"`

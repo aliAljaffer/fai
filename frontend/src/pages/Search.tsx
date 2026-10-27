@@ -31,7 +31,11 @@ export function Search() {
             <h3 className="mb-2 text-sm font-medium text-muted-foreground">Tasks</h3>
             <div className="flex flex-col gap-2">
               {data.tasks?.map((t) => (
-                <Card key={t.id} className="cursor-pointer" onClick={() => navigate('/list')}>
+                <Card
+                  key={t.id}
+                  className="cursor-pointer"
+                  onClick={() => navigate({ search: `?task=${t.id}` })}
+                >
                   <CardContent>{t.title}</CardContent>
                 </Card>
               ))}

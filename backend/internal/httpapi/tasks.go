@@ -43,6 +43,7 @@ func (s *Server) listTasks(w http.ResponseWriter, r *http.Request) {
 		BoardID:  optionalInt64Param(r, "board_id"),
 		ColumnID: optionalInt64Param(r, "column_id"),
 		Tag:      optionalTextParam(r, "tag"),
+		Q:        optionalTextParam(r, "q"),
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())

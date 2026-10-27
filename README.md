@@ -44,6 +44,31 @@ Both are driven through the same `internal/store.Store` interface, so the API be
 identically regardless of which one is active — see `internal/store/pg` and
 `internal/store/lite`.
 
+## Attachments
+
+Tasks and notes accept file attachments (25 MiB each) over
+`POST /api/tasks/{id}/attachments` and `POST /api/notes/{id}/attachments`; metadata
+lives in the database, bytes live under `ATTACHMENTS_DIR`. The kubernetes deployment
+mounts a Longhorn `ReadWriteMany` PVC at `/data/attachments`; docker-compose uses
+`/data/attachments` inside the existing `faidata` volume. Leave `ATTACHMENTS_DIR`
+unset to disable uploads.
+
+## Calendar subscription
+
+`GET /api/calendar.ics?token=<ICS_TOKEN>` is a read-only ICS feed of open tasks with
+a due date, suitable for Apple Calendar (File → New Calendar Subscription). It sits
+outside OIDC because calendar clients cannot log in, so the token is the credential;
+the Settings page shows the full URL. Set `ICS_TOKEN` (`openssl rand -hex 32`) and
+`PUBLIC_URL` (used for the task links inside events); rotating the token invalidates
+existing subscriptions. In docker-compose, Caddy routes this one path around
+`forward_auth`.
+
+## Navigation
+
+`⌘K`/`Ctrl+K` opens the command palette (pages, tasks, new task). `n` creates a task,
+`e` focuses the open task's title, and `Esc` closes sheets/dialogs. The List page
+filters by text, column, and tag; rows open the task sheet.
+
 ## Notifications
 
 Reminders and meeting-outcome prompts go out over every configured channel; both are

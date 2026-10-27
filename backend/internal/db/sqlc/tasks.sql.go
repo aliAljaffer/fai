@@ -210,6 +210,9 @@ WHERE t.archived = false
   AND ($1::bigint IS NULL OR t.board_id = $1)
   AND ($2::bigint IS NULL OR t.column_id = $2)
   AND ($3::text IS NULL OR tg.name = $3)
+  AND ($4::text IS NULL
+       OR t.title ILIKE '%' || $4 || '%'
+       OR t.description_md ILIKE '%' || $4 || '%')
 ORDER BY t.column_id, t.position
 `
 
@@ -217,6 +220,7 @@ type ListTasksParams struct {
 	BoardID  pgtype.Int8 `json:"board_id"`
 	ColumnID pgtype.Int8 `json:"column_id"`
 	Tag      pgtype.Text `json:"tag"`
+	Q        pgtype.Text `json:"q"`
 }
 
 type ListTasksRow struct {
@@ -237,7 +241,12 @@ type ListTasksRow struct {
 }
 
 func (q *Queries) ListTasks(ctx context.Context, arg ListTasksParams) ([]ListTasksRow, error) {
-	rows, err := q.db.Query(ctx, listTasks, arg.BoardID, arg.ColumnID, arg.Tag)
+	rows, err := q.db.Query(ctx, listTasks,
+		arg.BoardID,
+		arg.ColumnID,
+		arg.Tag,
+		arg.Q,
+	)
 	if err != nil {
 		return nil, err
 	}

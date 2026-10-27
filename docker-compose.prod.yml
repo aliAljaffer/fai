@@ -7,6 +7,8 @@ services:
       AUTH_MODE: proxy-header
       PORT: "8080"
       NTFY_URL: http://ntfy
+      ATTACHMENTS_DIR: /data/attachments
+      PUBLIC_URL: https://${FAI_DOMAIN}
     volumes:
       - faidata:/data
     expose: ["8080"]

@@ -1,5 +1,6 @@
 import { NavLink, Route, Routes } from 'react-router-dom'
 import { Toaster } from '@/components/ui/sonner'
+import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { AuthCallback } from './pages/AuthCallback'
 import { Board } from './pages/Board'
@@ -11,9 +12,14 @@ import { Reminders } from './pages/Reminders'
 import { Search } from './pages/Search'
 import { Settings } from './pages/Settings'
 import { Stats } from './pages/Stats'
+import { CommandPalette } from './components/CommandPalette'
 import { TimerWidget } from './components/TimerWidget'
+import { TaskDetailSheet } from './components/board/TaskDetailSheet'
+import { useUIStore } from './store/ui'
 
 export function App() {
+  const setCommandOpen = useUIStore((state) => state.setCommandOpen)
+
   return (
     <div className="min-h-screen">
       <nav className="flex items-center gap-5 border-b px-6 py-3">
@@ -68,10 +74,19 @@ export function App() {
           Reminders
         </NavLink>
         <TimerWidget />
+        <Button
+          variant="ghost"
+          size="sm"
+          className="ml-auto text-muted-foreground"
+          aria-label="Open command palette"
+          onClick={() => setCommandOpen(true)}
+        >
+          <kbd className="rounded border px-1 text-[0.65rem]">⌘K</kbd>
+        </Button>
         <NavLink
           to="/search"
           className={({ isActive }) =>
-            cn('ml-auto text-muted-foreground hover:text-foreground', isActive && 'font-semibold text-foreground')
+            cn('text-muted-foreground hover:text-foreground', isActive && 'font-semibold text-foreground')
           }
         >
           Search
@@ -99,6 +114,8 @@ export function App() {
           <Route path="/auth/callback" element={<AuthCallback />} />
         </Routes>
       </main>
+      <TaskDetailSheet />
+      <CommandPalette />
       <Toaster />
     </div>
   )

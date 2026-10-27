@@ -4,11 +4,12 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { useBoards, useJiraImport } from '../api/hooks'
+import { useBoards, useCalendarFeedURL, useJiraImport } from '../api/hooks'
 
 export function Settings() {
   const { data: boards } = useBoards()
   const jiraImport = useJiraImport()
+  const { data: feed } = useCalendarFeedURL()
   const [jql, setJql] = useState('')
   const [forceUpdate, setForceUpdate] = useState(false)
 
@@ -59,6 +60,49 @@ export function Settings() {
           >
             {jiraImport.isPending ? 'Importing…' : 'Import from Jira'}
           </Button>
+        </CardContent>
+      </Card>
+
+      <Card className="max-w-xl">
+        <CardHeader>
+          <CardTitle>Calendar subscription</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          <p className="text-sm text-muted-foreground">
+            Subscribe from Apple Calendar (File → New Calendar Subscription, or Settings → Calendar →
+            Accounts → Add Account → Other → Add Subscribed Calendar). Open tasks with a due date
+            appear as all-day events and refresh about every 30 minutes.
+          </p>
+          <div className="flex gap-2">
+            <Input
+              readOnly
+              value={feed?.url ?? ''}
+              placeholder={feed ? '' : 'Calendar feed is not configured'}
+              onFocus={(e) => e.currentTarget.select()}
+            />
+            <Button
+              variant="outline"
+              disabled={!feed}
+              onClick={() => {
+                if (!feed) return
+                navigator.clipboard.writeText(feed.url).then(
+                  () => toast.success('Subscription URL copied'),
+                  () => toast.error('Could not copy the URL'),
+                )
+              }}
+            >
+              Copy
+            </Button>
+          </div>
+          {feed && (
+            <a className="text-sm text-primary underline" href={feed.url.replace(/^https:/, 'webcal:')}>
+              Open in Calendar
+            </a>
+          )}
+          <p className="text-xs text-muted-foreground">
+            The URL contains a secret token — treat it like a password. Rotating ICS_TOKEN
+            invalidates existing subscriptions.
+          </p>
         </CardContent>
       </Card>
     </div>

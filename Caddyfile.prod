@@ -3,6 +3,12 @@
 		reverse_proxy oauth2-proxy:4180
 	}
 
+	# Calendar clients cannot complete an OIDC login; the feed is gated by its
+	# own URL token instead. Everything else stays behind forward_auth.
+	handle /api/calendar.ics* {
+		reverse_proxy backend:8080
+	}
+
 	handle {
 		forward_auth oauth2-proxy:4180 {
 			uri /oauth2/auth

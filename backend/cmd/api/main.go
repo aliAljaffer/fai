@@ -75,6 +75,9 @@ func main() {
 		JiraDefaultProject:  cfg.JiraDefaultProject,
 		JiraStatusColumnMap: jira.ParseStatusColumnMap(cfg.JiraStatusColumnMap),
 		AI:                  aiProvider,
+		ICSToken:            cfg.ICSToken,
+		PublicURL:           cfg.PublicURL,
+		AttachmentsDir:      cfg.AttachmentsDir,
 		AuthMiddleware:      authMiddleware,
 	}
 	router := httpapi.NewRouter(server)
@@ -82,6 +85,9 @@ func main() {
 	ntfyClient := ntfy.New(cfg.NtfyURL, cfg.NtfyTopic, cfg.NtfyUsername, cfg.NtfyPassword)
 	if ntfyClient == nil {
 		log.Println("NTFY_URL/NTFY_TOPIC unset — reminder push notifications disabled")
+	}
+	if cfg.AttachmentsDir == "" {
+		log.Println("ATTACHMENTS_DIR unset — task/note attachments disabled")
 	}
 	mailClient := mailer.New(cfg.SMTPAddr, cfg.SMTPFrom, cfg.SMTPTo)
 	if mailClient == nil {

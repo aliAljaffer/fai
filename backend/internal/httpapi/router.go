@@ -17,6 +17,9 @@ type Server struct {
 	JiraDefaultProject  string
 	JiraStatusColumnMap map[string]string
 	AI                  ai.Provider
+	ICSToken            string
+	PublicURL           string
+	AttachmentsDir      string
 	// AuthMiddleware validates bearer tokens on every /api/* route when set.
 	// Left nil under DISABLE_AUTH for local dev.
 	AuthMiddleware func(http.Handler) http.Handler
@@ -24,6 +27,16 @@ type Server struct {
 
 func NewRouter(s *Server) http.Handler {
 	r := chi.NewRouter()
+	// The calendar feed carries its credential in the query string; keep it out
+	// of the access log without touching the handler's view of the request.
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == "/api/calendar.ics" {
+				r.RequestURI = r.URL.Path
+			}
+			next.ServeHTTP(w, r)
+		})
+	})
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 
@@ -33,70 +46,84 @@ func NewRouter(s *Server) http.Handler {
 	})
 
 	r.Route("/api", func(r chi.Router) {
-		if s.AuthMiddleware != nil {
-			r.Use(s.AuthMiddleware)
-		}
+		// Calendar clients cannot complete OIDC; this one route is gated by its
+		// own URL token instead (see calendar.go).
+		r.Get("/calendar.ics", s.calendarFeed)
 
-		r.Get("/boards", s.listBoards)
-		r.Post("/boards", s.createBoard)
-		r.Get("/boards/{boardID}/columns", s.listColumns)
-		r.Post("/boards/{boardID}/columns", s.createColumn)
-
-		r.Get("/tasks", s.listTasks)
-		r.Post("/tasks", s.createTask)
-		r.Get("/tasks/{taskID}", s.getTask)
-		r.Get("/tasks/{taskID}/subtasks", s.listSubtasks)
-		r.Patch("/tasks/{taskID}", s.updateTask)
-		r.Delete("/tasks/{taskID}", s.deleteTask)
-		r.Post("/tasks/{taskID}/move", s.moveTask)
-		r.Put("/tasks/{taskID}/tags/{tagID}", s.addTaskTag)
-		r.Delete("/tasks/{taskID}/tags/{tagID}", s.removeTaskTag)
-
-		r.Get("/tags", s.listTags)
-		r.Post("/tags", s.createTag)
-
-		r.Get("/search", s.search)
-		r.Get("/stats/completions", s.statsCompletions)
-		r.Get("/stats/time", s.statsTime)
-
-		r.Post("/tasks/{taskID}/time/start", s.startTime)
-		r.Post("/tasks/{taskID}/time/stop", s.stopTime)
-		r.Get("/tasks/{taskID}/time", s.listTimeForTask)
-		r.Get("/time/running", s.runningTime)
-
-		r.Get("/notes", s.listNotes)
-		r.Post("/notes", s.createNote)
-		r.Get("/notes/by-title/{title}", s.getNoteByTitle)
-		r.Get("/notes/{noteID}", s.getNote)
-		r.Patch("/notes/{noteID}", s.updateNote)
-		r.Delete("/notes/{noteID}", s.deleteNote)
-
-		r.Get("/reminders", s.listReminders)
-		r.Post("/reminders", s.createReminder)
-		r.Patch("/reminders/{reminderID}", s.updateReminder)
-		r.Delete("/reminders/{reminderID}", s.deleteReminder)
-
-		r.Post("/jira/import", s.jiraImport)
-		r.Post("/jira/export", s.jiraExport)
-		r.Get("/tasks/{taskID}/jira/link", s.jiraGetLink)
-		r.Post("/tasks/{taskID}/jira/link", s.jiraLink)
-		r.Delete("/tasks/{taskID}/jira/link", s.jiraUnlink)
-		r.Get("/tasks/{taskID}/jira/suggestions", s.jiraSuggestions)
-
-		r.Get("/ai/status", s.aiStatus)
 		r.Group(func(r chi.Router) {
-			r.Use(rateLimitByUser(10, 5))
-			r.Post("/tasks/{taskID}/ai/breakdown", s.aiBreakdown)
-			r.Post("/ai/chat", s.aiChat)
-			r.Post("/meeting-outcomes/{outcomeID}/ai/extract-tasks", s.extractTasksFromOutcome)
-		})
+			if s.AuthMiddleware != nil {
+				r.Use(s.AuthMiddleware)
+			}
 
-		r.Get("/meeting-outcomes", s.listMeetingOutcomes)
-		r.Post("/meeting-outcomes", s.createMeetingOutcome)
-		r.Get("/meeting-outcomes/{outcomeID}", s.getMeetingOutcome)
-		r.Patch("/meeting-outcomes/{outcomeID}", s.updateMeetingOutcome)
-		r.Delete("/meeting-outcomes/{outcomeID}", s.deleteMeetingOutcome)
-		r.Post("/meeting-outcomes/{outcomeID}/tasks", s.createTaskFromOutcome)
+			r.Get("/calendar/feed", s.calendarFeedInfo)
+			r.Get("/boards", s.listBoards)
+			r.Post("/boards", s.createBoard)
+			r.Get("/boards/{boardID}/columns", s.listColumns)
+			r.Post("/boards/{boardID}/columns", s.createColumn)
+
+			r.Get("/tasks", s.listTasks)
+			r.Post("/tasks", s.createTask)
+			r.Get("/tasks/{taskID}", s.getTask)
+			r.Get("/tasks/{taskID}/subtasks", s.listSubtasks)
+			r.Patch("/tasks/{taskID}", s.updateTask)
+			r.Delete("/tasks/{taskID}", s.deleteTask)
+			r.Post("/tasks/{taskID}/move", s.moveTask)
+			r.Put("/tasks/{taskID}/tags/{tagID}", s.addTaskTag)
+			r.Delete("/tasks/{taskID}/tags/{tagID}", s.removeTaskTag)
+
+			r.Get("/tasks/{taskID}/attachments", s.listTaskAttachments)
+			r.Post("/tasks/{taskID}/attachments", s.uploadTaskAttachment)
+			r.Get("/notes/{noteID}/attachments", s.listNoteAttachments)
+			r.Post("/notes/{noteID}/attachments", s.uploadNoteAttachment)
+			r.Get("/attachments/{attachmentID}", s.downloadAttachment)
+			r.Delete("/attachments/{attachmentID}", s.deleteAttachment)
+
+			r.Get("/tags", s.listTags)
+			r.Post("/tags", s.createTag)
+
+			r.Get("/search", s.search)
+			r.Get("/stats/completions", s.statsCompletions)
+			r.Get("/stats/time", s.statsTime)
+
+			r.Post("/tasks/{taskID}/time/start", s.startTime)
+			r.Post("/tasks/{taskID}/time/stop", s.stopTime)
+			r.Get("/tasks/{taskID}/time", s.listTimeForTask)
+			r.Get("/time/running", s.runningTime)
+
+			r.Get("/notes", s.listNotes)
+			r.Post("/notes", s.createNote)
+			r.Get("/notes/by-title/{title}", s.getNoteByTitle)
+			r.Get("/notes/{noteID}", s.getNote)
+			r.Patch("/notes/{noteID}", s.updateNote)
+			r.Delete("/notes/{noteID}", s.deleteNote)
+
+			r.Get("/reminders", s.listReminders)
+			r.Post("/reminders", s.createReminder)
+			r.Patch("/reminders/{reminderID}", s.updateReminder)
+			r.Delete("/reminders/{reminderID}", s.deleteReminder)
+
+			r.Post("/jira/import", s.jiraImport)
+			r.Post("/jira/export", s.jiraExport)
+			r.Get("/tasks/{taskID}/jira/link", s.jiraGetLink)
+			r.Post("/tasks/{taskID}/jira/link", s.jiraLink)
+			r.Delete("/tasks/{taskID}/jira/link", s.jiraUnlink)
+			r.Get("/tasks/{taskID}/jira/suggestions", s.jiraSuggestions)
+
+			r.Get("/ai/status", s.aiStatus)
+			r.Group(func(r chi.Router) {
+				r.Use(rateLimitByUser(10, 5))
+				r.Post("/tasks/{taskID}/ai/breakdown", s.aiBreakdown)
+				r.Post("/ai/chat", s.aiChat)
+				r.Post("/meeting-outcomes/{outcomeID}/ai/extract-tasks", s.extractTasksFromOutcome)
+			})
+
+			r.Get("/meeting-outcomes", s.listMeetingOutcomes)
+			r.Post("/meeting-outcomes", s.createMeetingOutcome)
+			r.Get("/meeting-outcomes/{outcomeID}", s.getMeetingOutcome)
+			r.Patch("/meeting-outcomes/{outcomeID}", s.updateMeetingOutcome)
+			r.Delete("/meeting-outcomes/{outcomeID}", s.deleteMeetingOutcome)
+			r.Post("/meeting-outcomes/{outcomeID}/tasks", s.createTaskFromOutcome)
+		})
 	})
 
 	return r

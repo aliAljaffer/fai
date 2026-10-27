@@ -1,6 +1,6 @@
 // Package lite implements store.Store against SQLite, used by the docker-compose
-// deployment. Unlike Postgres, there's no separate migration-runner step wired into
-// that deployment, so New applies the embedded schema itself on first run.
+// deployment. There's no separate migration-runner step wired into that
+// deployment, so New applies the embedded schema itself.
 package lite
 
 import (
@@ -49,6 +49,11 @@ func New(path string) (*Store, error) {
 		if _, err := db.ExecContext(ctx, migrationssqlite.Schema); err != nil {
 			return nil, fmt.Errorf("applying sqlite schema: %w", err)
 		}
+	}
+	// Additive migrations are idempotent (IF NOT EXISTS) so existing SQLite
+	// files pick them up on upgrade.
+	if _, err := db.ExecContext(ctx, migrationssqlite.Attachments); err != nil {
+		return nil, fmt.Errorf("applying sqlite attachments schema: %w", err)
 	}
 
 	return &Store{q: sqlitedb.New(db), db: db}, nil

@@ -19,6 +19,9 @@ WHERE t.archived = false
   AND (sqlc.narg('board_id')::bigint IS NULL OR t.board_id = sqlc.narg('board_id'))
   AND (sqlc.narg('column_id')::bigint IS NULL OR t.column_id = sqlc.narg('column_id'))
   AND (sqlc.narg('tag')::text IS NULL OR tg.name = sqlc.narg('tag'))
+  AND (sqlc.narg('q')::text IS NULL
+       OR t.title ILIKE '%' || sqlc.narg('q') || '%'
+       OR t.description_md ILIKE '%' || sqlc.narg('q') || '%')
 ORDER BY t.column_id, t.position;
 
 -- name: ListSubtasks :many

@@ -28,6 +28,16 @@ export interface Note {
   updated_at: string
 }
 
+export interface Attachment {
+  id: number
+  task_id: number | null
+  note_id: number | null
+  filename: string
+  content_type: string
+  size_bytes: number
+  created_at: string
+}
+
 export interface JiraLink {
   task_id: number
   jira_key: string

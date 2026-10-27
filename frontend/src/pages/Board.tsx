@@ -1,9 +1,9 @@
 import { DndContext, PointerSensor, closestCorners, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo } from 'react'
 import { Skeleton } from '@/components/ui/skeleton'
-import { useBoards, useColumns, useCreateTask, useDeleteTask, useMoveTask, useTasks, useUpdateTask } from '../api/hooks'
+import { useBoards, useColumns, useCreateTask, useMoveTask, useTasks } from '../api/hooks'
 import { BoardColumn } from '../components/board/BoardColumn'
-import { TaskDetail } from '../components/board/TaskDetail'
+import { useSearchParams } from 'react-router-dom'
 import { useUIStore } from '../store/ui'
 import type { Task } from '../api/types'
 
@@ -19,11 +19,8 @@ export function Board() {
   const { data: columns } = useColumns(boardId)
   const { data: tasks } = useTasks(boardId)
   const createTask = useCreateTask(boardId)
-  const updateTask = useUpdateTask(boardId)
   const moveTask = useMoveTask(boardId)
-  const deleteTask = useDeleteTask(boardId)
-
-  const [activeTask, setActiveTask] = useState<Task | null>(null)
+  const [, setSearchParams] = useSearchParams()
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
 
@@ -80,7 +77,7 @@ export function Board() {
               key={col.id}
               column={col}
               tasks={tasksByColumn.get(col.id) ?? []}
-              onTaskClick={setActiveTask}
+              onTaskClick={(task) => setSearchParams({ task: String(task.id) })}
               onAddTask={(columnId) => {
                 const title = prompt('Task title?')
                 if (title) createTask.mutate({ board_id: boardId, column_id: columnId, title })
@@ -89,18 +86,6 @@ export function Board() {
           ))}
         </div>
       </DndContext>
-
-      {activeTask && (
-        <TaskDetail
-          task={activeTask}
-          onClose={() => setActiveTask(null)}
-          onSave={(fields) => updateTask.mutate({ id: activeTask.id, ...fields })}
-          onDelete={() => {
-            deleteTask.mutate(activeTask.id)
-            setActiveTask(null)
-          }}
-        />
-      )}
     </div>
   )
 }

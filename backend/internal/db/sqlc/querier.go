@@ -14,6 +14,7 @@ type Querier interface {
 	AddTaskTag(ctx context.Context, arg AddTaskTagParams) error
 	ArchiveTask(ctx context.Context, id int64) error
 	CompletionsByDay(ctx context.Context, arg CompletionsByDayParams) ([]CompletionsByDayRow, error)
+	CreateAttachment(ctx context.Context, arg CreateAttachmentParams) (Attachment, error)
 	CreateBoard(ctx context.Context, name string) (Board, error)
 	CreateColumn(ctx context.Context, arg CreateColumnParams) (BoardColumn, error)
 	CreateJiraLink(ctx context.Context, arg CreateJiraLinkParams) (JiraLink, error)
@@ -24,11 +25,13 @@ type Querier interface {
 	CreateReminder(ctx context.Context, arg CreateReminderParams) (Reminder, error)
 	CreateTag(ctx context.Context, arg CreateTagParams) (Tag, error)
 	CreateTask(ctx context.Context, arg CreateTaskParams) (CreateTaskRow, error)
+	DeleteAttachment(ctx context.Context, id int64) error
 	DeleteJiraLink(ctx context.Context, taskID int64) error
 	DeleteMeetingOutcome(ctx context.Context, id int64) error
 	DeleteNote(ctx context.Context, id int64) error
 	DeleteReminder(ctx context.Context, id int64) error
 	DeleteTask(ctx context.Context, id int64) error
+	GetAttachment(ctx context.Context, id int64) (Attachment, error)
 	GetBoard(ctx context.Context, id int64) (Board, error)
 	GetColumn(ctx context.Context, id int64) (BoardColumn, error)
 	GetJiraLinkByKey(ctx context.Context, jiraKey string) (JiraLink, error)
@@ -39,6 +42,8 @@ type Querier interface {
 	GetReminder(ctx context.Context, id int64) (Reminder, error)
 	GetRunningEntry(ctx context.Context) (TaskTimeEntry, error)
 	GetTask(ctx context.Context, id int64) (GetTaskRow, error)
+	ListAttachmentsByNote(ctx context.Context, dollar_1 int64) ([]Attachment, error)
+	ListAttachmentsByTask(ctx context.Context, dollar_1 int64) ([]Attachment, error)
 	ListBacklinks(ctx context.Context, arg ListBacklinksParams) ([]ListBacklinksRow, error)
 	ListBoards(ctx context.Context) ([]Board, error)
 	ListColumnsByBoard(ctx context.Context, boardID int64) ([]BoardColumn, error)

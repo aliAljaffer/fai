@@ -23,6 +23,9 @@ type Config struct {
 	SMTPAddr            string
 	SMTPFrom            string
 	SMTPTo              string
+	ICSToken            string
+	PublicURL           string
+	AttachmentsDir      string
 	AIProvider          string
 	AIAPIKey            string
 	AIModel             string
@@ -64,6 +67,9 @@ func Load() Config {
 		SMTPAddr:            os.Getenv("SMTP_ADDR"),
 		SMTPFrom:            os.Getenv("SMTP_FROM"),
 		SMTPTo:              os.Getenv("SMTP_TO"),
+		ICSToken:            os.Getenv("ICS_TOKEN"),
+		PublicURL:           os.Getenv("PUBLIC_URL"),
+		AttachmentsDir:      os.Getenv("ATTACHMENTS_DIR"),
 		AIProvider:          os.Getenv("AI_PROVIDER"),
 		AIAPIKey:            os.Getenv("AI_API_KEY"),
 		AIModel:             os.Getenv("AI_MODEL"),

@@ -160,6 +160,9 @@ WHERE t.archived = 0
   AND (CAST(?1 AS INTEGER) IS NULL OR t.board_id = ?1)
   AND (CAST(?2 AS INTEGER) IS NULL OR t.column_id = ?2)
   AND (CAST(?3 AS TEXT) IS NULL OR tg.name = ?3)
+  AND (CAST(?4 AS TEXT) IS NULL
+       OR t.title LIKE '%' || ?4 || '%'
+       OR t.description_md LIKE '%' || ?4 || '%')
 ORDER BY t.column_id, t.position
 `
 
@@ -167,10 +170,16 @@ type ListTasksParams struct {
 	BoardID  sql.NullInt64  `json:"board_id"`
 	ColumnID sql.NullInt64  `json:"column_id"`
 	Tag      sql.NullString `json:"tag"`
+	Q        sql.NullString `json:"q"`
 }
 
 func (q *Queries) ListTasks(ctx context.Context, arg ListTasksParams) ([]Task, error) {
-	rows, err := q.db.QueryContext(ctx, listTasks, arg.BoardID, arg.ColumnID, arg.Tag)
+	rows, err := q.db.QueryContext(ctx, listTasks,
+		arg.BoardID,
+		arg.ColumnID,
+		arg.Tag,
+		arg.Q,
+	)
 	if err != nil {
 		return nil, err
 	}

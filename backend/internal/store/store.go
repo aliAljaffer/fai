@@ -28,6 +28,7 @@ type ListTasksParams struct {
 	BoardID  *int64
 	ColumnID *int64
 	Tag      *string
+	Q        *string
 }
 
 // Store is the engine-agnostic persistence interface. internal/store/pg implements
@@ -60,6 +61,13 @@ type Store interface {
 	SetTaskPosition(ctx context.Context, id int64, position float64) error
 	ArchiveTask(ctx context.Context, id int64) error
 	DeleteTask(ctx context.Context, id int64) error
+
+	// Attachments (metadata only; bytes live on disk)
+	CreateAttachment(ctx context.Context, p CreateAttachmentParams) (Attachment, error)
+	ListAttachmentsByTask(ctx context.Context, taskID int64) ([]Attachment, error)
+	ListAttachmentsByNote(ctx context.Context, noteID int64) ([]Attachment, error)
+	GetAttachment(ctx context.Context, id int64) (Attachment, error)
+	DeleteAttachment(ctx context.Context, id int64) error
 
 	// Notes
 	ListNotes(ctx context.Context) ([]Note, error)

@@ -2,6 +2,7 @@ import MDEditor from '@uiw/react-md-editor'
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
+import { AttachmentsPanel } from '../components/AttachmentsPanel'
 import { MarkdownRenderer } from '../components/MarkdownRenderer'
 import { useDeleteNote, useNote, useUpdateNote } from '../api/hooks'
 
@@ -59,6 +60,8 @@ export function NoteEditor() {
           <MarkdownRenderer source={body} />
         </div>
       </div>
+
+      <AttachmentsPanel noteId={noteId} />
 
       {data.backlinks.length > 0 && (
         <div>
