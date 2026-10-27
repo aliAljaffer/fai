@@ -26,12 +26,13 @@ type BoardColumn struct {
 }
 
 type Note struct {
-	ID        int64       `json:"id"`
-	Title     string      `json:"title"`
-	BodyMd    string      `json:"body_md"`
-	TaskID    pgtype.Int8 `json:"task_id"`
-	CreatedAt time.Time   `json:"created_at"`
-	UpdatedAt time.Time   `json:"updated_at"`
+	ID           int64       `json:"id"`
+	Title        string      `json:"title"`
+	BodyMd       string      `json:"body_md"`
+	TaskID       pgtype.Int8 `json:"task_id"`
+	CreatedAt    time.Time   `json:"created_at"`
+	UpdatedAt    time.Time   `json:"updated_at"`
+	SearchVector interface{} `json:"search_vector"`
 }
 
 type NoteTag struct {
@@ -58,6 +59,7 @@ type Task struct {
 	Archived      bool               `json:"archived"`
 	CreatedAt     time.Time          `json:"created_at"`
 	UpdatedAt     time.Time          `json:"updated_at"`
+	SearchVector  interface{}        `json:"search_vector"`
 }
 
 type TaskTag struct {

@@ -7,12 +7,14 @@ package sqlc
 
 import (
 	"context"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createNote = `-- name: CreateNote :one
-INSERT INTO notes (title, body_md, task_id) VALUES ($1, $2, $3) RETURNING id, title, body_md, task_id, created_at, updated_at
+INSERT INTO notes (title, body_md, task_id) VALUES ($1, $2, $3)
+RETURNING id, title, body_md, task_id, created_at, updated_at
 `
 
 type CreateNoteParams struct {
@@ -21,9 +23,18 @@ type CreateNoteParams struct {
 	TaskID pgtype.Int8 `json:"task_id"`
 }
 
-func (q *Queries) CreateNote(ctx context.Context, arg CreateNoteParams) (Note, error) {
+type CreateNoteRow struct {
+	ID        int64       `json:"id"`
+	Title     string      `json:"title"`
+	BodyMd    string      `json:"body_md"`
+	TaskID    pgtype.Int8 `json:"task_id"`
+	CreatedAt time.Time   `json:"created_at"`
+	UpdatedAt time.Time   `json:"updated_at"`
+}
+
+func (q *Queries) CreateNote(ctx context.Context, arg CreateNoteParams) (CreateNoteRow, error) {
 	row := q.db.QueryRow(ctx, createNote, arg.Title, arg.BodyMd, arg.TaskID)
-	var i Note
+	var i CreateNoteRow
 	err := row.Scan(
 		&i.ID,
 		&i.Title,
@@ -48,9 +59,18 @@ const getNote = `-- name: GetNote :one
 SELECT id, title, body_md, task_id, created_at, updated_at FROM notes WHERE id = $1
 `
 
-func (q *Queries) GetNote(ctx context.Context, id int64) (Note, error) {
+type GetNoteRow struct {
+	ID        int64       `json:"id"`
+	Title     string      `json:"title"`
+	BodyMd    string      `json:"body_md"`
+	TaskID    pgtype.Int8 `json:"task_id"`
+	CreatedAt time.Time   `json:"created_at"`
+	UpdatedAt time.Time   `json:"updated_at"`
+}
+
+func (q *Queries) GetNote(ctx context.Context, id int64) (GetNoteRow, error) {
 	row := q.db.QueryRow(ctx, getNote, id)
-	var i Note
+	var i GetNoteRow
 	err := row.Scan(
 		&i.ID,
 		&i.Title,
@@ -66,9 +86,18 @@ const getNoteByTitle = `-- name: GetNoteByTitle :one
 SELECT id, title, body_md, task_id, created_at, updated_at FROM notes WHERE title = $1
 `
 
-func (q *Queries) GetNoteByTitle(ctx context.Context, title string) (Note, error) {
+type GetNoteByTitleRow struct {
+	ID        int64       `json:"id"`
+	Title     string      `json:"title"`
+	BodyMd    string      `json:"body_md"`
+	TaskID    pgtype.Int8 `json:"task_id"`
+	CreatedAt time.Time   `json:"created_at"`
+	UpdatedAt time.Time   `json:"updated_at"`
+}
+
+func (q *Queries) GetNoteByTitle(ctx context.Context, title string) (GetNoteByTitleRow, error) {
 	row := q.db.QueryRow(ctx, getNoteByTitle, title)
-	var i Note
+	var i GetNoteByTitleRow
 	err := row.Scan(
 		&i.ID,
 		&i.Title,
@@ -81,7 +110,8 @@ func (q *Queries) GetNoteByTitle(ctx context.Context, title string) (Note, error
 }
 
 const listBacklinks = `-- name: ListBacklinks :many
-SELECT id, title, body_md, task_id, created_at, updated_at FROM notes WHERE id != $1 AND body_md ILIKE '%[[' || $2::text || ']]%'
+SELECT id, title, body_md, task_id, created_at, updated_at
+FROM notes WHERE id != $1 AND body_md ILIKE '%[[' || $2::text || ']]%'
 `
 
 type ListBacklinksParams struct {
@@ -89,15 +119,24 @@ type ListBacklinksParams struct {
 	Column2 string `json:"column_2"`
 }
 
-func (q *Queries) ListBacklinks(ctx context.Context, arg ListBacklinksParams) ([]Note, error) {
+type ListBacklinksRow struct {
+	ID        int64       `json:"id"`
+	Title     string      `json:"title"`
+	BodyMd    string      `json:"body_md"`
+	TaskID    pgtype.Int8 `json:"task_id"`
+	CreatedAt time.Time   `json:"created_at"`
+	UpdatedAt time.Time   `json:"updated_at"`
+}
+
+func (q *Queries) ListBacklinks(ctx context.Context, arg ListBacklinksParams) ([]ListBacklinksRow, error) {
 	rows, err := q.db.Query(ctx, listBacklinks, arg.ID, arg.Column2)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Note
+	var items []ListBacklinksRow
 	for rows.Next() {
-		var i Note
+		var i ListBacklinksRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Title,
@@ -120,15 +159,24 @@ const listNotes = `-- name: ListNotes :many
 SELECT id, title, body_md, task_id, created_at, updated_at FROM notes ORDER BY updated_at DESC
 `
 
-func (q *Queries) ListNotes(ctx context.Context) ([]Note, error) {
+type ListNotesRow struct {
+	ID        int64       `json:"id"`
+	Title     string      `json:"title"`
+	BodyMd    string      `json:"body_md"`
+	TaskID    pgtype.Int8 `json:"task_id"`
+	CreatedAt time.Time   `json:"created_at"`
+	UpdatedAt time.Time   `json:"updated_at"`
+}
+
+func (q *Queries) ListNotes(ctx context.Context) ([]ListNotesRow, error) {
 	rows, err := q.db.Query(ctx, listNotes)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Note
+	var items []ListNotesRow
 	for rows.Next() {
-		var i Note
+		var i ListNotesRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Title,
@@ -160,14 +208,23 @@ type UpdateNoteParams struct {
 	TaskID pgtype.Int8 `json:"task_id"`
 }
 
-func (q *Queries) UpdateNote(ctx context.Context, arg UpdateNoteParams) (Note, error) {
+type UpdateNoteRow struct {
+	ID        int64       `json:"id"`
+	Title     string      `json:"title"`
+	BodyMd    string      `json:"body_md"`
+	TaskID    pgtype.Int8 `json:"task_id"`
+	CreatedAt time.Time   `json:"created_at"`
+	UpdatedAt time.Time   `json:"updated_at"`
+}
+
+func (q *Queries) UpdateNote(ctx context.Context, arg UpdateNoteParams) (UpdateNoteRow, error) {
 	row := q.db.QueryRow(ctx, updateNote,
 		arg.ID,
 		arg.Title,
 		arg.BodyMd,
 		arg.TaskID,
 	)
-	var i Note
+	var i UpdateNoteRow
 	err := row.Scan(
 		&i.ID,
 		&i.Title,

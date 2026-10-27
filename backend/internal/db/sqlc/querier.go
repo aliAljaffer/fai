@@ -13,29 +13,31 @@ type Querier interface {
 	ArchiveTask(ctx context.Context, id int64) error
 	CreateBoard(ctx context.Context, name string) (Board, error)
 	CreateColumn(ctx context.Context, arg CreateColumnParams) (BoardColumn, error)
-	CreateNote(ctx context.Context, arg CreateNoteParams) (Note, error)
+	CreateNote(ctx context.Context, arg CreateNoteParams) (CreateNoteRow, error)
 	CreateTag(ctx context.Context, arg CreateTagParams) (Tag, error)
-	CreateTask(ctx context.Context, arg CreateTaskParams) (Task, error)
+	CreateTask(ctx context.Context, arg CreateTaskParams) (CreateTaskRow, error)
 	DeleteNote(ctx context.Context, id int64) error
 	DeleteTask(ctx context.Context, id int64) error
 	GetBoard(ctx context.Context, id int64) (Board, error)
 	GetColumn(ctx context.Context, id int64) (BoardColumn, error)
-	GetNote(ctx context.Context, id int64) (Note, error)
-	GetNoteByTitle(ctx context.Context, title string) (Note, error)
-	GetTask(ctx context.Context, id int64) (Task, error)
-	ListBacklinks(ctx context.Context, arg ListBacklinksParams) ([]Note, error)
+	GetNote(ctx context.Context, id int64) (GetNoteRow, error)
+	GetNoteByTitle(ctx context.Context, title string) (GetNoteByTitleRow, error)
+	GetTask(ctx context.Context, id int64) (GetTaskRow, error)
+	ListBacklinks(ctx context.Context, arg ListBacklinksParams) ([]ListBacklinksRow, error)
 	ListBoards(ctx context.Context) ([]Board, error)
 	ListColumnsByBoard(ctx context.Context, boardID int64) ([]BoardColumn, error)
-	ListNotes(ctx context.Context) ([]Note, error)
+	ListNotes(ctx context.Context) ([]ListNotesRow, error)
 	ListTags(ctx context.Context) ([]Tag, error)
 	ListTagsForTask(ctx context.Context, taskID int64) ([]Tag, error)
-	ListTasks(ctx context.Context, arg ListTasksParams) ([]Task, error)
-	ListTasksByColumnOrdered(ctx context.Context, columnID int64) ([]Task, error)
-	MoveTask(ctx context.Context, arg MoveTaskParams) (Task, error)
+	ListTasks(ctx context.Context, arg ListTasksParams) ([]ListTasksRow, error)
+	ListTasksByColumnOrdered(ctx context.Context, columnID int64) ([]ListTasksByColumnOrderedRow, error)
+	MoveTask(ctx context.Context, arg MoveTaskParams) (MoveTaskRow, error)
 	RemoveTaskTag(ctx context.Context, arg RemoveTaskTagParams) error
+	SearchNotes(ctx context.Context, websearchToTsquery string) ([]SearchNotesRow, error)
+	SearchTasks(ctx context.Context, websearchToTsquery string) ([]SearchTasksRow, error)
 	SetTaskPosition(ctx context.Context, arg SetTaskPositionParams) error
-	UpdateNote(ctx context.Context, arg UpdateNoteParams) (Note, error)
-	UpdateTask(ctx context.Context, arg UpdateTaskParams) (Task, error)
+	UpdateNote(ctx context.Context, arg UpdateNoteParams) (UpdateNoteRow, error)
+	UpdateTask(ctx context.Context, arg UpdateTaskParams) (UpdateTaskRow, error)
 }
 
 var _ Querier = (*Queries)(nil)

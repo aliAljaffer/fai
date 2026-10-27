@@ -3,13 +3,15 @@ WITH col AS (SELECT is_done FROM board_columns WHERE id = $2)
 INSERT INTO tasks (board_id, column_id, title, description_md, priority, due_date, position, completed_at)
 SELECT $1, $2, $3, $4, $5, $6, $7, CASE WHEN col.is_done THEN now() ELSE NULL END
 FROM col
-RETURNING *;
+RETURNING id, board_id, column_id, title, description_md, priority, due_date, position, completed_at, archived, created_at, updated_at;
 
 -- name: GetTask :one
-SELECT * FROM tasks WHERE id = $1 AND archived = false;
+SELECT id, board_id, column_id, title, description_md, priority, due_date, position, completed_at, archived, created_at, updated_at
+FROM tasks WHERE id = $1 AND archived = false;
 
 -- name: ListTasks :many
-SELECT DISTINCT t.* FROM tasks t
+SELECT DISTINCT t.id, t.board_id, t.column_id, t.title, t.description_md, t.priority, t.due_date, t.position, t.completed_at, t.archived, t.created_at, t.updated_at
+FROM tasks t
 LEFT JOIN task_tags tt ON tt.task_id = t.id
 LEFT JOIN tags tg ON tg.id = tt.tag_id
 WHERE t.archived = false
@@ -26,7 +28,7 @@ UPDATE tasks SET
   due_date = $5,
   updated_at = now()
 WHERE id = $1 AND archived = false
-RETURNING *;
+RETURNING id, board_id, column_id, title, description_md, priority, due_date, position, completed_at, archived, created_at, updated_at;
 
 -- name: MoveTask :one
 UPDATE tasks t SET
@@ -38,10 +40,11 @@ UPDATE tasks t SET
   END,
   updated_at = now()
 WHERE t.id = $1
-RETURNING *;
+RETURNING id, board_id, column_id, title, description_md, priority, due_date, position, completed_at, archived, created_at, updated_at;
 
 -- name: ListTasksByColumnOrdered :many
-SELECT * FROM tasks WHERE column_id = $1 AND archived = false ORDER BY position;
+SELECT id, board_id, column_id, title, description_md, priority, due_date, position, completed_at, archived, created_at, updated_at
+FROM tasks WHERE column_id = $1 AND archived = false ORDER BY position;
 
 -- name: SetTaskPosition :exec
 UPDATE tasks SET position = $2, updated_at = now() WHERE id = $1;

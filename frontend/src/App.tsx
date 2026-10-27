@@ -5,6 +5,7 @@ import { Board } from './pages/Board'
 import { List } from './pages/List'
 import { Notes } from './pages/Notes'
 import { NoteEditor } from './pages/NoteEditor'
+import { Search } from './pages/Search'
 
 export function App() {
   return (
@@ -36,6 +37,14 @@ export function App() {
         >
           Notes
         </NavLink>
+        <NavLink
+          to="/search"
+          className={({ isActive }) =>
+            cn('ml-auto text-muted-foreground hover:text-foreground', isActive && 'font-semibold text-foreground')
+          }
+        >
+          Search
+        </NavLink>
       </nav>
       <main className="p-6">
         <Routes>
@@ -43,6 +52,7 @@ export function App() {
           <Route path="/list" element={<List />} />
           <Route path="/notes" element={<Notes />} />
           <Route path="/notes/:id" element={<NoteEditor />} />
+          <Route path="/search" element={<Search />} />
         </Routes>
       </main>
       <Toaster />

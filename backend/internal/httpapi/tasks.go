@@ -185,10 +185,10 @@ func (s *Server) moveTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Exclude the task being moved from its own neighbor calculation (same-column reorder).
-	filtered := siblings[:0]
+	filtered := make([]idPos, 0, len(siblings))
 	for _, t := range siblings {
 		if t.ID != id {
-			filtered = append(filtered, t)
+			filtered = append(filtered, idPos{ID: t.ID, Position: t.Position})
 		}
 	}
 
@@ -212,10 +212,15 @@ func (s *Server) moveTask(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, task)
 }
 
+type idPos struct {
+	ID       int64
+	Position float64
+}
+
 // computePosition finds the midpoint position for inserting between afterID and beforeID
 // (both optional) among siblings already ordered by position. Returns needsRenumber=true
 // if the gap between neighbors has collapsed below positionEpsilon.
-func computePosition(siblings []sqlc.Task, afterID, beforeID *int64) (float64, bool) {
+func computePosition(siblings []idPos, afterID, beforeID *int64) (float64, bool) {
 	var lo, hi *float64
 	for _, t := range siblings {
 		tp := t.Position

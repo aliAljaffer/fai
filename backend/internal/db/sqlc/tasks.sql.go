@@ -7,6 +7,7 @@ package sqlc
 
 import (
 	"context"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -38,7 +39,22 @@ type CreateTaskParams struct {
 	Position      float64     `json:"position"`
 }
 
-func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (Task, error) {
+type CreateTaskRow struct {
+	ID            int64              `json:"id"`
+	BoardID       int64              `json:"board_id"`
+	ColumnID      int64              `json:"column_id"`
+	Title         string             `json:"title"`
+	DescriptionMd string             `json:"description_md"`
+	Priority      string             `json:"priority"`
+	DueDate       pgtype.Date        `json:"due_date"`
+	Position      float64            `json:"position"`
+	CompletedAt   pgtype.Timestamptz `json:"completed_at"`
+	Archived      bool               `json:"archived"`
+	CreatedAt     time.Time          `json:"created_at"`
+	UpdatedAt     time.Time          `json:"updated_at"`
+}
+
+func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (CreateTaskRow, error) {
 	row := q.db.QueryRow(ctx, createTask,
 		arg.BoardID,
 		arg.ColumnID,
@@ -48,7 +64,7 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (Task, e
 		arg.DueDate,
 		arg.Position,
 	)
-	var i Task
+	var i CreateTaskRow
 	err := row.Scan(
 		&i.ID,
 		&i.BoardID,
@@ -76,12 +92,28 @@ func (q *Queries) DeleteTask(ctx context.Context, id int64) error {
 }
 
 const getTask = `-- name: GetTask :one
-SELECT id, board_id, column_id, title, description_md, priority, due_date, position, completed_at, archived, created_at, updated_at FROM tasks WHERE id = $1 AND archived = false
+SELECT id, board_id, column_id, title, description_md, priority, due_date, position, completed_at, archived, created_at, updated_at
+FROM tasks WHERE id = $1 AND archived = false
 `
 
-func (q *Queries) GetTask(ctx context.Context, id int64) (Task, error) {
+type GetTaskRow struct {
+	ID            int64              `json:"id"`
+	BoardID       int64              `json:"board_id"`
+	ColumnID      int64              `json:"column_id"`
+	Title         string             `json:"title"`
+	DescriptionMd string             `json:"description_md"`
+	Priority      string             `json:"priority"`
+	DueDate       pgtype.Date        `json:"due_date"`
+	Position      float64            `json:"position"`
+	CompletedAt   pgtype.Timestamptz `json:"completed_at"`
+	Archived      bool               `json:"archived"`
+	CreatedAt     time.Time          `json:"created_at"`
+	UpdatedAt     time.Time          `json:"updated_at"`
+}
+
+func (q *Queries) GetTask(ctx context.Context, id int64) (GetTaskRow, error) {
 	row := q.db.QueryRow(ctx, getTask, id)
-	var i Task
+	var i GetTaskRow
 	err := row.Scan(
 		&i.ID,
 		&i.BoardID,
@@ -100,7 +132,8 @@ func (q *Queries) GetTask(ctx context.Context, id int64) (Task, error) {
 }
 
 const listTasks = `-- name: ListTasks :many
-SELECT DISTINCT t.id, t.board_id, t.column_id, t.title, t.description_md, t.priority, t.due_date, t.position, t.completed_at, t.archived, t.created_at, t.updated_at FROM tasks t
+SELECT DISTINCT t.id, t.board_id, t.column_id, t.title, t.description_md, t.priority, t.due_date, t.position, t.completed_at, t.archived, t.created_at, t.updated_at
+FROM tasks t
 LEFT JOIN task_tags tt ON tt.task_id = t.id
 LEFT JOIN tags tg ON tg.id = tt.tag_id
 WHERE t.archived = false
@@ -116,15 +149,30 @@ type ListTasksParams struct {
 	Tag      pgtype.Text `json:"tag"`
 }
 
-func (q *Queries) ListTasks(ctx context.Context, arg ListTasksParams) ([]Task, error) {
+type ListTasksRow struct {
+	ID            int64              `json:"id"`
+	BoardID       int64              `json:"board_id"`
+	ColumnID      int64              `json:"column_id"`
+	Title         string             `json:"title"`
+	DescriptionMd string             `json:"description_md"`
+	Priority      string             `json:"priority"`
+	DueDate       pgtype.Date        `json:"due_date"`
+	Position      float64            `json:"position"`
+	CompletedAt   pgtype.Timestamptz `json:"completed_at"`
+	Archived      bool               `json:"archived"`
+	CreatedAt     time.Time          `json:"created_at"`
+	UpdatedAt     time.Time          `json:"updated_at"`
+}
+
+func (q *Queries) ListTasks(ctx context.Context, arg ListTasksParams) ([]ListTasksRow, error) {
 	rows, err := q.db.Query(ctx, listTasks, arg.BoardID, arg.ColumnID, arg.Tag)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Task
+	var items []ListTasksRow
 	for rows.Next() {
-		var i Task
+		var i ListTasksRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.BoardID,
@@ -150,18 +198,34 @@ func (q *Queries) ListTasks(ctx context.Context, arg ListTasksParams) ([]Task, e
 }
 
 const listTasksByColumnOrdered = `-- name: ListTasksByColumnOrdered :many
-SELECT id, board_id, column_id, title, description_md, priority, due_date, position, completed_at, archived, created_at, updated_at FROM tasks WHERE column_id = $1 AND archived = false ORDER BY position
+SELECT id, board_id, column_id, title, description_md, priority, due_date, position, completed_at, archived, created_at, updated_at
+FROM tasks WHERE column_id = $1 AND archived = false ORDER BY position
 `
 
-func (q *Queries) ListTasksByColumnOrdered(ctx context.Context, columnID int64) ([]Task, error) {
+type ListTasksByColumnOrderedRow struct {
+	ID            int64              `json:"id"`
+	BoardID       int64              `json:"board_id"`
+	ColumnID      int64              `json:"column_id"`
+	Title         string             `json:"title"`
+	DescriptionMd string             `json:"description_md"`
+	Priority      string             `json:"priority"`
+	DueDate       pgtype.Date        `json:"due_date"`
+	Position      float64            `json:"position"`
+	CompletedAt   pgtype.Timestamptz `json:"completed_at"`
+	Archived      bool               `json:"archived"`
+	CreatedAt     time.Time          `json:"created_at"`
+	UpdatedAt     time.Time          `json:"updated_at"`
+}
+
+func (q *Queries) ListTasksByColumnOrdered(ctx context.Context, columnID int64) ([]ListTasksByColumnOrderedRow, error) {
 	rows, err := q.db.Query(ctx, listTasksByColumnOrdered, columnID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Task
+	var items []ListTasksByColumnOrderedRow
 	for rows.Next() {
-		var i Task
+		var i ListTasksByColumnOrderedRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.BoardID,
@@ -205,9 +269,24 @@ type MoveTaskParams struct {
 	Position float64 `json:"position"`
 }
 
-func (q *Queries) MoveTask(ctx context.Context, arg MoveTaskParams) (Task, error) {
+type MoveTaskRow struct {
+	ID            int64              `json:"id"`
+	BoardID       int64              `json:"board_id"`
+	ColumnID      int64              `json:"column_id"`
+	Title         string             `json:"title"`
+	DescriptionMd string             `json:"description_md"`
+	Priority      string             `json:"priority"`
+	DueDate       pgtype.Date        `json:"due_date"`
+	Position      float64            `json:"position"`
+	CompletedAt   pgtype.Timestamptz `json:"completed_at"`
+	Archived      bool               `json:"archived"`
+	CreatedAt     time.Time          `json:"created_at"`
+	UpdatedAt     time.Time          `json:"updated_at"`
+}
+
+func (q *Queries) MoveTask(ctx context.Context, arg MoveTaskParams) (MoveTaskRow, error) {
 	row := q.db.QueryRow(ctx, moveTask, arg.ID, arg.ColumnID, arg.Position)
-	var i Task
+	var i MoveTaskRow
 	err := row.Scan(
 		&i.ID,
 		&i.BoardID,
@@ -258,7 +337,22 @@ type UpdateTaskParams struct {
 	DueDate       pgtype.Date `json:"due_date"`
 }
 
-func (q *Queries) UpdateTask(ctx context.Context, arg UpdateTaskParams) (Task, error) {
+type UpdateTaskRow struct {
+	ID            int64              `json:"id"`
+	BoardID       int64              `json:"board_id"`
+	ColumnID      int64              `json:"column_id"`
+	Title         string             `json:"title"`
+	DescriptionMd string             `json:"description_md"`
+	Priority      string             `json:"priority"`
+	DueDate       pgtype.Date        `json:"due_date"`
+	Position      float64            `json:"position"`
+	CompletedAt   pgtype.Timestamptz `json:"completed_at"`
+	Archived      bool               `json:"archived"`
+	CreatedAt     time.Time          `json:"created_at"`
+	UpdatedAt     time.Time          `json:"updated_at"`
+}
+
+func (q *Queries) UpdateTask(ctx context.Context, arg UpdateTaskParams) (UpdateTaskRow, error) {
 	row := q.db.QueryRow(ctx, updateTask,
 		arg.ID,
 		arg.Title,
@@ -266,7 +360,7 @@ func (q *Queries) UpdateTask(ctx context.Context, arg UpdateTaskParams) (Task, e
 		arg.Priority,
 		arg.DueDate,
 	)
-	var i Task
+	var i UpdateTaskRow
 	err := row.Scan(
 		&i.ID,
 		&i.BoardID,
