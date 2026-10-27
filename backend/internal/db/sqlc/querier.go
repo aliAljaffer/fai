@@ -15,25 +15,31 @@ type Querier interface {
 	CreateBoard(ctx context.Context, name string) (Board, error)
 	CreateColumn(ctx context.Context, arg CreateColumnParams) (BoardColumn, error)
 	CreateNote(ctx context.Context, arg CreateNoteParams) (CreateNoteRow, error)
+	CreateReminder(ctx context.Context, arg CreateReminderParams) (Reminder, error)
 	CreateTag(ctx context.Context, arg CreateTagParams) (Tag, error)
 	CreateTask(ctx context.Context, arg CreateTaskParams) (CreateTaskRow, error)
 	DeleteNote(ctx context.Context, id int64) error
+	DeleteReminder(ctx context.Context, id int64) error
 	DeleteTask(ctx context.Context, id int64) error
 	GetBoard(ctx context.Context, id int64) (Board, error)
 	GetColumn(ctx context.Context, id int64) (BoardColumn, error)
 	GetNote(ctx context.Context, id int64) (GetNoteRow, error)
 	GetNoteByTitle(ctx context.Context, title string) (GetNoteByTitleRow, error)
+	GetReminder(ctx context.Context, id int64) (Reminder, error)
 	GetRunningEntry(ctx context.Context) (TaskTimeEntry, error)
 	GetTask(ctx context.Context, id int64) (GetTaskRow, error)
 	ListBacklinks(ctx context.Context, arg ListBacklinksParams) ([]ListBacklinksRow, error)
 	ListBoards(ctx context.Context) ([]Board, error)
 	ListColumnsByBoard(ctx context.Context, boardID int64) ([]BoardColumn, error)
+	ListDueUnsentReminders(ctx context.Context) ([]Reminder, error)
 	ListEntriesForTask(ctx context.Context, taskID int64) ([]TaskTimeEntry, error)
 	ListNotes(ctx context.Context) ([]ListNotesRow, error)
+	ListReminders(ctx context.Context) ([]Reminder, error)
 	ListTags(ctx context.Context) ([]Tag, error)
 	ListTagsForTask(ctx context.Context, taskID int64) ([]Tag, error)
 	ListTasks(ctx context.Context, arg ListTasksParams) ([]ListTasksRow, error)
 	ListTasksByColumnOrdered(ctx context.Context, columnID int64) ([]ListTasksByColumnOrderedRow, error)
+	MarkReminderSent(ctx context.Context, id int64) error
 	MoveTask(ctx context.Context, arg MoveTaskParams) (MoveTaskRow, error)
 	RemoveTaskTag(ctx context.Context, arg RemoveTaskTagParams) error
 	SearchNotes(ctx context.Context, websearchToTsquery string) ([]SearchNotesRow, error)
@@ -44,6 +50,7 @@ type Querier interface {
 	StopRunningEntry(ctx context.Context) error
 	TimeByDay(ctx context.Context, arg TimeByDayParams) ([]TimeByDayRow, error)
 	UpdateNote(ctx context.Context, arg UpdateNoteParams) (UpdateNoteRow, error)
+	UpdateReminder(ctx context.Context, arg UpdateReminderParams) (Reminder, error)
 	UpdateTask(ctx context.Context, arg UpdateTaskParams) (UpdateTaskRow, error)
 }
 

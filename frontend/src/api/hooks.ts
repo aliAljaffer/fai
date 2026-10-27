@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from './client'
-import type { Board, BoardColumn, Note, Tag, Task, TimeEntry } from './types'
+import type { Board, BoardColumn, Note, Reminder, Tag, Task, TimeEntry } from './types'
 
 export function useBoards() {
   return useQuery({ queryKey: ['boards'], queryFn: () => api.get<Board[]>('/boards') })
@@ -106,6 +106,36 @@ export function useUpdateNote() {
       qc.invalidateQueries({ queryKey: ['notes'] })
       qc.invalidateQueries({ queryKey: ['notes', note.id] })
     },
+  })
+}
+
+export function useReminders() {
+  return useQuery({ queryKey: ['reminders'], queryFn: () => api.get<Reminder[]>('/reminders') })
+}
+
+export function useCreateReminder() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { title: string; remind_at: string; task_id?: number }) =>
+      api.post<Reminder>('/reminders', body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['reminders'] }),
+  })
+}
+
+export function useUpdateReminder() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, ...body }: { id: number; title: string; remind_at: string; task_id?: number }) =>
+      api.patch<Reminder>(`/reminders/${id}`, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['reminders'] }),
+  })
+}
+
+export function useDeleteReminder() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) => api.delete<void>(`/reminders/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['reminders'] }),
   })
 }
 

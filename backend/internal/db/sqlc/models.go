@@ -40,6 +40,15 @@ type NoteTag struct {
 	TagID  int64 `json:"tag_id"`
 }
 
+type Reminder struct {
+	ID        int64       `json:"id"`
+	Title     string      `json:"title"`
+	RemindAt  time.Time   `json:"remind_at"`
+	TaskID    pgtype.Int8 `json:"task_id"`
+	Sent      bool        `json:"sent"`
+	CreatedAt time.Time   `json:"created_at"`
+}
+
 type Tag struct {
 	ID    int64  `json:"id"`
 	Name  string `json:"name"`

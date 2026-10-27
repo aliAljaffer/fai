@@ -28,6 +28,15 @@ export interface Note {
   updated_at: string
 }
 
+export interface Reminder {
+  id: number
+  title: string
+  remind_at: string
+  task_id: number | null
+  sent: boolean
+  created_at: string
+}
+
 export interface TimeEntry {
   id: number
   task_id: number

@@ -11,6 +11,8 @@ import (
 	"github.com/alialjaffer/fai/backend/internal/config"
 	"github.com/alialjaffer/fai/backend/internal/db/sqlc"
 	"github.com/alialjaffer/fai/backend/internal/httpapi"
+	"github.com/alialjaffer/fai/backend/internal/ntfy"
+	"github.com/alialjaffer/fai/backend/internal/reminders"
 )
 
 func main() {
@@ -27,8 +29,16 @@ func main() {
 	}
 	defer pool.Close()
 
-	server := &httpapi.Server{Q: sqlc.New(pool), Pool: pool}
+	queries := sqlc.New(pool)
+	server := &httpapi.Server{Q: queries, Pool: pool}
 	router := httpapi.NewRouter(server)
+
+	ntfyClient := ntfy.New(cfg.NtfyURL, cfg.NtfyTopic, cfg.NtfyUsername, cfg.NtfyPassword)
+	if ntfyClient == nil {
+		log.Println("NTFY_URL/NTFY_TOPIC unset — reminder push notifications disabled")
+	}
+	scheduler := &reminders.Scheduler{Q: queries, Ntfy: ntfyClient}
+	go scheduler.Run(context.Background())
 
 	addr := ":" + cfg.Port
 	log.Printf("fai backend listening on %s", addr)

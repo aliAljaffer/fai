@@ -58,6 +58,11 @@ func NewRouter(s *Server) http.Handler {
 		r.Get("/notes/{noteID}", s.getNote)
 		r.Patch("/notes/{noteID}", s.updateNote)
 		r.Delete("/notes/{noteID}", s.deleteNote)
+
+		r.Get("/reminders", s.listReminders)
+		r.Post("/reminders", s.createReminder)
+		r.Patch("/reminders/{reminderID}", s.updateReminder)
+		r.Delete("/reminders/{reminderID}", s.deleteReminder)
 	})
 
 	return r
