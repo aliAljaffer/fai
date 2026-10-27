@@ -147,3 +147,43 @@
   fill: var(--muted-foreground);
   font-size: 6px;
 }
+
+.rbc-calendar {
+  color: var(--foreground);
+}
+.rbc-off-range-bg {
+  background: var(--muted);
+}
+.rbc-today {
+  background: color-mix(in oklch, var(--primary) 12%, transparent);
+}
+.rbc-header,
+.rbc-month-view,
+.rbc-month-row,
+.rbc-day-bg + .rbc-day-bg,
+.rbc-header + .rbc-header,
+.rbc-toolbar button {
+  border-color: var(--border);
+}
+.rbc-toolbar button {
+  color: var(--foreground);
+  background: var(--card);
+}
+.rbc-toolbar button:hover {
+  background: var(--accent);
+}
+.rbc-toolbar button.rbc-active {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+.rbc-event {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+.rbc-off-range {
+  color: var(--muted-foreground);
+}
+.rbc-show-more {
+  color: var(--primary);
+  background: transparent;
+}

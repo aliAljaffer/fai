@@ -38,8 +38,16 @@ export function useCreateTask(boardId: number | undefined) {
 export function useUpdateTask(boardId: number | undefined) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, ...body }: { id: number; title: string; description_md: string; priority: string }) =>
-      api.patch<Task>(`/tasks/${id}`, body),
+    mutationFn: ({
+      id,
+      ...body
+    }: {
+      id: number
+      title: string
+      description_md: string
+      priority: string
+      due_date?: string | null
+    }) => api.patch<Task>(`/tasks/${id}`, body),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['tasks', boardId] }),
   })
 }

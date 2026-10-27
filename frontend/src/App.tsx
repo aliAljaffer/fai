@@ -2,6 +2,7 @@ import { NavLink, Route, Routes } from 'react-router-dom'
 import { Toaster } from '@/components/ui/sonner'
 import { cn } from '@/lib/utils'
 import { Board } from './pages/Board'
+import { Calendar } from './pages/Calendar'
 import { List } from './pages/List'
 import { Notes } from './pages/Notes'
 import { NoteEditor } from './pages/NoteEditor'
@@ -31,6 +32,14 @@ export function App() {
           }
         >
           List
+        </NavLink>
+        <NavLink
+          to="/calendar"
+          className={({ isActive }) =>
+            cn('text-muted-foreground hover:text-foreground', isActive && 'font-semibold text-foreground')
+          }
+        >
+          Calendar
         </NavLink>
         <NavLink
           to="/notes"
@@ -70,6 +79,7 @@ export function App() {
         <Routes>
           <Route path="/" element={<Board />} />
           <Route path="/list" element={<List />} />
+          <Route path="/calendar" element={<Calendar />} />
           <Route path="/notes" element={<Notes />} />
           <Route path="/notes/:id" element={<NoteEditor />} />
           <Route path="/stats" element={<Stats />} />
