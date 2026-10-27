@@ -116,7 +116,7 @@ conflict with the session oauth2-proxy already established). Build a compose-spe
 frontend image with that build arg omitted:
 
 ```sh
-docker build -t ghcr.io/alialjaffer/fai-frontend:compose frontend/
+make build-frontend-compose   # ghcr.io/alialjaffer/fai-frontend:compose
 # update docker-compose.prod.yml's frontend image to the :compose tag, or push it
 # to your own registry
 ```
