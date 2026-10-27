@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 
+	"github.com/alialjaffer/fai/backend/internal/ai"
 	"github.com/alialjaffer/fai/backend/internal/config"
 	"github.com/alialjaffer/fai/backend/internal/db/sqlc"
 	"github.com/alialjaffer/fai/backend/internal/httpapi"
@@ -35,12 +36,17 @@ func main() {
 	if jiraClient == nil {
 		log.Println("JIRA_BASE_URL/EMAIL/API_TOKEN unset — Jira import disabled")
 	}
+	aiProvider := ai.NewProvider(cfg.AIProvider, cfg.AIAPIKey, cfg.AIModel)
+	if aiProvider == nil {
+		log.Println("AI_API_KEY unset — AI features disabled")
+	}
 	server := &httpapi.Server{
 		Q:                   queries,
 		Pool:                pool,
 		Jira:                jiraClient,
 		JiraDefaultProject:  cfg.JiraDefaultProject,
 		JiraStatusColumnMap: jira.ParseStatusColumnMap(cfg.JiraStatusColumnMap),
+		AI:                  aiProvider,
 	}
 	router := httpapi.NewRouter(server)
 

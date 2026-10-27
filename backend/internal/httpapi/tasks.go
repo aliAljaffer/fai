@@ -60,6 +60,14 @@ type taskBody struct {
 	DescriptionMd string  `json:"description_md"`
 	Priority      string  `json:"priority"`
 	DueDate       *string `json:"due_date"`
+	ParentTaskID  *int64  `json:"parent_task_id"`
+}
+
+func (b taskBody) parentTaskID() pgtype.Int8 {
+	if b.ParentTaskID == nil {
+		return pgtype.Int8{}
+	}
+	return pgtype.Int8{Int64: *b.ParentTaskID, Valid: true}
 }
 
 func (b taskBody) dueDate() pgtype.Date {
@@ -97,12 +105,27 @@ func (s *Server) createTask(w http.ResponseWriter, r *http.Request) {
 		Priority:      body.Priority,
 		DueDate:       body.dueDate(),
 		Position:      position,
+		ParentTaskID:  body.parentTaskID(),
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	writeJSON(w, http.StatusCreated, task)
+}
+
+func (s *Server) listSubtasks(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseID(r, "taskID")
+	if !ok {
+		writeError(w, http.StatusBadRequest, "invalid task id")
+		return
+	}
+	subtasks, err := s.Q.ListSubtasks(r.Context(), pgtype.Int8{Int64: id, Valid: true})
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, subtasks)
 }
 
 func (s *Server) getTask(w http.ResponseWriter, r *http.Request) {

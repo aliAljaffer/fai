@@ -6,6 +6,8 @@ package sqlc
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Querier interface {
@@ -41,6 +43,7 @@ type Querier interface {
 	ListEntriesForTask(ctx context.Context, taskID int64) ([]TaskTimeEntry, error)
 	ListNotes(ctx context.Context) ([]ListNotesRow, error)
 	ListReminders(ctx context.Context) ([]Reminder, error)
+	ListSubtasks(ctx context.Context, parentTaskID pgtype.Int8) ([]ListSubtasksRow, error)
 	ListTags(ctx context.Context) ([]Tag, error)
 	ListTagsForTask(ctx context.Context, taskID int64) ([]Tag, error)
 	ListTasks(ctx context.Context, arg ListTasksParams) ([]ListTasksRow, error)

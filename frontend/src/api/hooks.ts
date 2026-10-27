@@ -228,6 +228,37 @@ export function useExportJira(taskId: number) {
   })
 }
 
+export function useAIStatus() {
+  return useQuery({ queryKey: ['ai', 'status'], queryFn: () => api.get<{ configured: boolean }>('/ai/status') })
+}
+
+export function useSubtasks(taskId: number) {
+  return useQuery({ queryKey: ['tasks', taskId, 'subtasks'], queryFn: () => api.get<Task[]>(`/tasks/${taskId}/subtasks`) })
+}
+
+export function useCreateSubtask(taskId: number) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { board_id: number; column_id: number; title: string }) =>
+      api.post<Task>('/tasks', { ...body, parent_task_id: taskId }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['tasks', taskId, 'subtasks'] }),
+  })
+}
+
+export function useAIBreakdown(taskId: number) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: () => api.post<{ id: number; title: string }[]>(`/tasks/${taskId}/ai/breakdown`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['tasks', taskId, 'subtasks'] }),
+  })
+}
+
+export function useAIChat() {
+  return useMutation({
+    mutationFn: (prompt: string) => api.post<{ reply: string }>('/ai/chat', { prompt }),
+  })
+}
+
 export interface JiraImportResult {
   imported: number
   updated: number

@@ -81,6 +81,7 @@ type Task struct {
 	CreatedAt     time.Time          `json:"created_at"`
 	UpdatedAt     time.Time          `json:"updated_at"`
 	SearchVector  interface{}        `json:"search_vector"`
+	ParentTaskID  pgtype.Int8        `json:"parent_task_id"`
 }
 
 type TaskTag struct {

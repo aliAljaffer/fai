@@ -7,6 +7,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/alialjaffer/fai/backend/internal/ai"
 	"github.com/alialjaffer/fai/backend/internal/db/sqlc"
 	"github.com/alialjaffer/fai/backend/internal/jira"
 )
@@ -17,6 +18,7 @@ type Server struct {
 	Jira                *jira.Client
 	JiraDefaultProject  string
 	JiraStatusColumnMap map[string]string
+	AI                  ai.Provider
 }
 
 func NewRouter(s *Server) http.Handler {
@@ -38,6 +40,7 @@ func NewRouter(s *Server) http.Handler {
 		r.Get("/tasks", s.listTasks)
 		r.Post("/tasks", s.createTask)
 		r.Get("/tasks/{taskID}", s.getTask)
+		r.Get("/tasks/{taskID}/subtasks", s.listSubtasks)
 		r.Patch("/tasks/{taskID}", s.updateTask)
 		r.Delete("/tasks/{taskID}", s.deleteTask)
 		r.Post("/tasks/{taskID}/move", s.moveTask)
@@ -74,6 +77,13 @@ func NewRouter(s *Server) http.Handler {
 		r.Post("/tasks/{taskID}/jira/link", s.jiraLink)
 		r.Delete("/tasks/{taskID}/jira/link", s.jiraUnlink)
 		r.Get("/tasks/{taskID}/jira/suggestions", s.jiraSuggestions)
+
+		r.Get("/ai/status", s.aiStatus)
+		r.Group(func(r chi.Router) {
+			r.Use(rateLimitByUser(10, 5))
+			r.Post("/tasks/{taskID}/ai/breakdown", s.aiBreakdown)
+			r.Post("/ai/chat", s.aiChat)
+		})
 	})
 
 	return r

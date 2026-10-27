@@ -9,7 +9,10 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Sheet, SheetContent, SheetFooter, SheetHeader } from '@/components/ui/sheet'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { AIPanel } from './AIPanel'
 import { JiraPanel } from './JiraPanel'
+import { SubtasksPanel } from './SubtasksPanel'
 import { MarkdownRenderer } from '../MarkdownRenderer'
 import { useRunningTime, useStartTime, useStopTime, useTaskTimeEntries } from '../../api/hooks'
 import { formatDuration } from '../../lib/format'
@@ -47,41 +50,61 @@ export function TaskDetail({
             onChange={(e) => setTitle(e.target.value)}
           />
         </SheetHeader>
-        <MDEditor
-          value={description}
-          onChange={(v) => setDescription(v ?? '')}
-          height={220}
-          preview="edit"
-          data-color-mode="dark"
-        />
-        {description && (
-          <div className="rounded-lg border p-3">
-            <MarkdownRenderer source={description} />
-          </div>
-        )}
-        <div className="flex items-center gap-3">
-          <Button
-            size="sm"
-            variant={isRunning ? 'destructive' : 'outline'}
-            onClick={() => (isRunning ? stopTime.mutate(task.id) : startTime.mutate(task.id))}
-          >
-            {isRunning ? 'Stop timer' : 'Start timer'}
-          </Button>
-          <span className="text-sm text-muted-foreground">
-            {formatDuration(totalSeconds)} tracked
-          </span>
-        </div>
-        <Select value={priority} onValueChange={(value) => value && setPriority(value)}>
-          <SelectTrigger className="w-32">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="low">low</SelectItem>
-            <SelectItem value="medium">medium</SelectItem>
-            <SelectItem value="high">high</SelectItem>
-          </SelectContent>
-        </Select>
-        <JiraPanel taskId={task.id} />
+
+        <Tabs defaultValue="details">
+          <TabsList>
+            <TabsTrigger value="details">Details</TabsTrigger>
+            <TabsTrigger value="subtasks">Subtasks</TabsTrigger>
+            <TabsTrigger value="time">Time</TabsTrigger>
+            <TabsTrigger value="ai">AI</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="details" className="flex flex-col gap-4">
+            <MDEditor
+              value={description}
+              onChange={(v) => setDescription(v ?? '')}
+              height={220}
+              preview="edit"
+              data-color-mode="dark"
+            />
+            {description && (
+              <div className="rounded-lg border p-3">
+                <MarkdownRenderer source={description} />
+              </div>
+            )}
+            <Select value={priority} onValueChange={(value) => value && setPriority(value)}>
+              <SelectTrigger className="w-32">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="low">low</SelectItem>
+                <SelectItem value="medium">medium</SelectItem>
+                <SelectItem value="high">high</SelectItem>
+              </SelectContent>
+            </Select>
+            <JiraPanel taskId={task.id} />
+          </TabsContent>
+
+          <TabsContent value="subtasks">
+            <SubtasksPanel task={task} />
+          </TabsContent>
+
+          <TabsContent value="time" className="flex items-center gap-3">
+            <Button
+              size="sm"
+              variant={isRunning ? 'destructive' : 'outline'}
+              onClick={() => (isRunning ? stopTime.mutate(task.id) : startTime.mutate(task.id))}
+            >
+              {isRunning ? 'Stop timer' : 'Start timer'}
+            </Button>
+            <span className="text-sm text-muted-foreground">{formatDuration(totalSeconds)} tracked</span>
+          </TabsContent>
+
+          <TabsContent value="ai">
+            <AIPanel task={task} />
+          </TabsContent>
+        </Tabs>
+
         <SheetFooter className="mt-auto flex-row justify-start px-0">
           <Button
             onClick={() => {

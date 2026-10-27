@@ -73,6 +73,7 @@ export interface Task {
   priority: string
   due_date: string | null
   position: number
+  parent_task_id: number | null
   completed_at: string | null
   archived: boolean
   created_at: string

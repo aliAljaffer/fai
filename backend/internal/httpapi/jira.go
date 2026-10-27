@@ -16,6 +16,10 @@ import (
 	"github.com/alialjaffer/fai/backend/internal/db/sqlc"
 )
 
+func pgtypeInt8(v int64) pgtype.Int8 {
+	return pgtype.Int8{Int64: v, Valid: true}
+}
+
 func pgtypeText(s string) pgtype.Text {
 	if s == "" {
 		return pgtype.Text{}
