@@ -4,3 +4,4 @@ frontend/dist/
 backend/tmp/
 *.log
 .env.prod
+.claude/

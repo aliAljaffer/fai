@@ -1,0 +1,64 @@
+name: Build and push images
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - "frontend/**"
+      - ".github/workflows/build-images.yml"
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  OWNER: alialjaffer
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: backend
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.OWNER }}/fai-backend:latest
+            ${{ env.REGISTRY }}/${{ env.OWNER }}/fai-backend:${{ github.sha }}
+
+  frontend:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: frontend
+          push: true
+          # VITE_OIDC_AUTHORITY baked in for the kubernetes deployment (see
+          # README's docker-compose note: that deployment needs a separately
+          # built image with this build-arg omitted).
+          build-args: |
+            VITE_OIDC_AUTHORITY=https://kc.alialjaffer.com/realms/homelab
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.OWNER }}/fai-frontend:latest
+            ${{ env.REGISTRY }}/${{ env.OWNER }}/fai-frontend:${{ github.sha }}
