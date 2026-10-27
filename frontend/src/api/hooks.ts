@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from './client'
-import type { Board, BoardColumn, Note, Tag, Task } from './types'
+import type { Board, BoardColumn, Note, Tag, Task, TimeEntry } from './types'
 
 export function useBoards() {
   return useQuery({ queryKey: ['boards'], queryFn: () => api.get<Board[]>('/boards') })
@@ -106,6 +106,50 @@ export function useUpdateNote() {
       qc.invalidateQueries({ queryKey: ['notes'] })
       qc.invalidateQueries({ queryKey: ['notes', note.id] })
     },
+  })
+}
+
+export function useRunningTime() {
+  return useQuery({
+    queryKey: ['time', 'running'],
+    queryFn: () => api.get<TimeEntry | null>('/time/running'),
+    refetchInterval: 1000,
+  })
+}
+
+export function useStartTime() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (taskId: number) => api.post<TimeEntry>(`/tasks/${taskId}/time/start`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['time'] }),
+  })
+}
+
+export function useStopTime() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (taskId: number) => api.post<TimeEntry>(`/tasks/${taskId}/time/stop`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['time'] }),
+  })
+}
+
+export function useTaskTimeEntries(taskId: number | undefined) {
+  return useQuery({
+    queryKey: ['time', 'task', taskId],
+    queryFn: () => api.get<TimeEntry[]>(`/tasks/${taskId}/time`),
+    enabled: taskId !== undefined,
+  })
+}
+
+export interface TimePoint {
+  date: string
+  seconds: number
+}
+
+export function useTimeStats(from: string, to: string) {
+  return useQuery({
+    queryKey: ['stats', 'time', from, to],
+    queryFn: () => api.get<TimePoint[]>(`/stats/time?from=${from}&to=${to}`),
   })
 }
 

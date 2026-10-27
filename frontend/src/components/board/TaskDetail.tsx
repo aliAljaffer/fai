@@ -10,6 +10,8 @@ import {
 } from '@/components/ui/select'
 import { Sheet, SheetContent, SheetFooter, SheetHeader } from '@/components/ui/sheet'
 import { MarkdownRenderer } from '../MarkdownRenderer'
+import { useRunningTime, useStartTime, useStopTime, useTaskTimeEntries } from '../../api/hooks'
+import { formatDuration } from '../../lib/format'
 import type { Task } from '../../api/types'
 
 export function TaskDetail({
@@ -26,6 +28,13 @@ export function TaskDetail({
   const [title, setTitle] = useState(task.title)
   const [description, setDescription] = useState(task.description_md)
   const [priority, setPriority] = useState(task.priority)
+
+  const { data: running } = useRunningTime()
+  const { data: entries } = useTaskTimeEntries(task.id)
+  const startTime = useStartTime()
+  const stopTime = useStopTime()
+  const isRunning = running?.task_id === task.id
+  const totalSeconds = (entries ?? []).reduce((sum, e) => sum + (e.duration_seconds ?? 0), 0)
 
   return (
     <Sheet open onOpenChange={(open) => !open && onClose()}>
@@ -49,6 +58,18 @@ export function TaskDetail({
             <MarkdownRenderer source={description} />
           </div>
         )}
+        <div className="flex items-center gap-3">
+          <Button
+            size="sm"
+            variant={isRunning ? 'destructive' : 'outline'}
+            onClick={() => (isRunning ? stopTime.mutate(task.id) : startTime.mutate(task.id))}
+          >
+            {isRunning ? 'Stop timer' : 'Start timer'}
+          </Button>
+          <span className="text-sm text-muted-foreground">
+            {formatDuration(totalSeconds)} tracked
+          </span>
+        </div>
         <Select value={priority} onValueChange={(value) => value && setPriority(value)}>
           <SelectTrigger className="w-32">
             <SelectValue />

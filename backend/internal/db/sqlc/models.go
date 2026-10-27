@@ -66,3 +66,11 @@ type TaskTag struct {
 	TaskID int64 `json:"task_id"`
 	TagID  int64 `json:"tag_id"`
 }
+
+type TaskTimeEntry struct {
+	ID              int64              `json:"id"`
+	TaskID          int64              `json:"task_id"`
+	StartedAt       time.Time          `json:"started_at"`
+	EndedAt         pgtype.Timestamptz `json:"ended_at"`
+	DurationSeconds pgtype.Int4        `json:"duration_seconds"`
+}

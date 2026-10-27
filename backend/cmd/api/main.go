@@ -27,7 +27,7 @@ func main() {
 	}
 	defer pool.Close()
 
-	server := &httpapi.Server{Q: sqlc.New(pool)}
+	server := &httpapi.Server{Q: sqlc.New(pool), Pool: pool}
 	router := httpapi.NewRouter(server)
 
 	addr := ":" + cfg.Port

@@ -7,6 +7,7 @@ import { Notes } from './pages/Notes'
 import { NoteEditor } from './pages/NoteEditor'
 import { Search } from './pages/Search'
 import { Stats } from './pages/Stats'
+import { TimerWidget } from './components/TimerWidget'
 
 export function App() {
   return (
@@ -46,6 +47,7 @@ export function App() {
         >
           Stats
         </NavLink>
+        <TimerWidget />
         <NavLink
           to="/search"
           className={({ isActive }) =>

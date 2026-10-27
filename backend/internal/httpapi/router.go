@@ -5,12 +5,14 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/alialjaffer/fai/backend/internal/db/sqlc"
 )
 
 type Server struct {
-	Q *sqlc.Queries
+	Q    *sqlc.Queries
+	Pool *pgxpool.Pool
 }
 
 func NewRouter(s *Server) http.Handler {
@@ -43,6 +45,12 @@ func NewRouter(s *Server) http.Handler {
 
 		r.Get("/search", s.search)
 		r.Get("/stats/completions", s.statsCompletions)
+		r.Get("/stats/time", s.statsTime)
+
+		r.Post("/tasks/{taskID}/time/start", s.startTime)
+		r.Post("/tasks/{taskID}/time/stop", s.stopTime)
+		r.Get("/tasks/{taskID}/time", s.listTimeForTask)
+		r.Get("/time/running", s.runningTime)
 
 		r.Get("/notes", s.listNotes)
 		r.Post("/notes", s.createNote)

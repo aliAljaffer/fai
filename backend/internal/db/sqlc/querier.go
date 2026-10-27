@@ -23,10 +23,12 @@ type Querier interface {
 	GetColumn(ctx context.Context, id int64) (BoardColumn, error)
 	GetNote(ctx context.Context, id int64) (GetNoteRow, error)
 	GetNoteByTitle(ctx context.Context, title string) (GetNoteByTitleRow, error)
+	GetRunningEntry(ctx context.Context) (TaskTimeEntry, error)
 	GetTask(ctx context.Context, id int64) (GetTaskRow, error)
 	ListBacklinks(ctx context.Context, arg ListBacklinksParams) ([]ListBacklinksRow, error)
 	ListBoards(ctx context.Context) ([]Board, error)
 	ListColumnsByBoard(ctx context.Context, boardID int64) ([]BoardColumn, error)
+	ListEntriesForTask(ctx context.Context, taskID int64) ([]TaskTimeEntry, error)
 	ListNotes(ctx context.Context) ([]ListNotesRow, error)
 	ListTags(ctx context.Context) ([]Tag, error)
 	ListTagsForTask(ctx context.Context, taskID int64) ([]Tag, error)
@@ -37,6 +39,10 @@ type Querier interface {
 	SearchNotes(ctx context.Context, websearchToTsquery string) ([]SearchNotesRow, error)
 	SearchTasks(ctx context.Context, websearchToTsquery string) ([]SearchTasksRow, error)
 	SetTaskPosition(ctx context.Context, arg SetTaskPositionParams) error
+	StartEntry(ctx context.Context, taskID int64) (TaskTimeEntry, error)
+	StopEntryForTask(ctx context.Context, taskID int64) (TaskTimeEntry, error)
+	StopRunningEntry(ctx context.Context) error
+	TimeByDay(ctx context.Context, arg TimeByDayParams) ([]TimeByDayRow, error)
 	UpdateNote(ctx context.Context, arg UpdateNoteParams) (UpdateNoteRow, error)
 	UpdateTask(ctx context.Context, arg UpdateTaskParams) (UpdateTaskRow, error)
 }
