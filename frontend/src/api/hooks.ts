@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from './client'
-import type { Board, BoardColumn, Tag, Task } from './types'
+import type { Board, BoardColumn, Note, Tag, Task } from './types'
 
 export function useBoards() {
   return useQuery({ queryKey: ['boards'], queryFn: () => api.get<Board[]>('/boards') })
@@ -65,5 +65,54 @@ export function useDeleteTask(boardId: number | undefined) {
   return useMutation({
     mutationFn: (id: number) => api.delete<void>(`/tasks/${id}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['tasks', boardId] }),
+  })
+}
+
+export function useNotes() {
+  return useQuery({ queryKey: ['notes'], queryFn: () => api.get<Note[]>('/notes') })
+}
+
+export function useNote(id: number | undefined) {
+  return useQuery({
+    queryKey: ['notes', id],
+    queryFn: () => api.get<{ note: Note; backlinks: Note[] }>(`/notes/${id}`),
+    enabled: id !== undefined,
+  })
+}
+
+export function useNoteByTitle(title: string | undefined) {
+  return useQuery({
+    queryKey: ['notes', 'by-title', title],
+    queryFn: () => api.get<Note>(`/notes/by-title/${encodeURIComponent(title!)}`),
+    enabled: !!title,
+    retry: false,
+  })
+}
+
+export function useCreateNote() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { title: string; body_md: string }) => api.post<Note>('/notes', body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['notes'] }),
+  })
+}
+
+export function useUpdateNote() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, ...body }: { id: number; title: string; body_md: string }) =>
+      api.patch<Note>(`/notes/${id}`, body),
+    onSuccess: (note) => {
+      qc.invalidateQueries({ queryKey: ['notes'] })
+      qc.invalidateQueries({ queryKey: ['notes', note.id] })
+    },
+  })
+}
+
+export function useDeleteNote() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) => api.delete<void>(`/notes/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['notes'] }),
   })
 }

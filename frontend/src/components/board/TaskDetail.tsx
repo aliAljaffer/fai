@@ -1,3 +1,4 @@
+import MDEditor from '@uiw/react-md-editor'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import {
@@ -8,7 +9,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Sheet, SheetContent, SheetFooter, SheetHeader } from '@/components/ui/sheet'
-import { Textarea } from '@/components/ui/textarea'
+import { MarkdownRenderer } from '../MarkdownRenderer'
 import type { Task } from '../../api/types'
 
 export function TaskDetail({
@@ -28,7 +29,7 @@ export function TaskDetail({
 
   return (
     <Sheet open onOpenChange={(open) => !open && onClose()}>
-      <SheetContent className="gap-4 p-4">
+      <SheetContent className="w-full gap-4 overflow-y-auto p-4 sm:max-w-xl">
         <SheetHeader className="px-0">
           <input
             className="border-b bg-transparent pb-2 text-lg font-medium outline-none"
@@ -36,12 +37,18 @@ export function TaskDetail({
             onChange={(e) => setTitle(e.target.value)}
           />
         </SheetHeader>
-        <Textarea
-          placeholder="Description (markdown)"
+        <MDEditor
           value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          rows={10}
+          onChange={(v) => setDescription(v ?? '')}
+          height={220}
+          preview="edit"
+          data-color-mode="dark"
         />
+        {description && (
+          <div className="rounded-lg border p-3">
+            <MarkdownRenderer source={description} />
+          </div>
+        )}
         <Select value={priority} onValueChange={(value) => value && setPriority(value)}>
           <SelectTrigger className="w-32">
             <SelectValue />

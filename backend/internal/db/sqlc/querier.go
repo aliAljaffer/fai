@@ -13,14 +13,20 @@ type Querier interface {
 	ArchiveTask(ctx context.Context, id int64) error
 	CreateBoard(ctx context.Context, name string) (Board, error)
 	CreateColumn(ctx context.Context, arg CreateColumnParams) (BoardColumn, error)
+	CreateNote(ctx context.Context, arg CreateNoteParams) (Note, error)
 	CreateTag(ctx context.Context, arg CreateTagParams) (Tag, error)
 	CreateTask(ctx context.Context, arg CreateTaskParams) (Task, error)
+	DeleteNote(ctx context.Context, id int64) error
 	DeleteTask(ctx context.Context, id int64) error
 	GetBoard(ctx context.Context, id int64) (Board, error)
 	GetColumn(ctx context.Context, id int64) (BoardColumn, error)
+	GetNote(ctx context.Context, id int64) (Note, error)
+	GetNoteByTitle(ctx context.Context, title string) (Note, error)
 	GetTask(ctx context.Context, id int64) (Task, error)
+	ListBacklinks(ctx context.Context, arg ListBacklinksParams) ([]Note, error)
 	ListBoards(ctx context.Context) ([]Board, error)
 	ListColumnsByBoard(ctx context.Context, boardID int64) ([]BoardColumn, error)
+	ListNotes(ctx context.Context) ([]Note, error)
 	ListTags(ctx context.Context) ([]Tag, error)
 	ListTagsForTask(ctx context.Context, taskID int64) ([]Tag, error)
 	ListTasks(ctx context.Context, arg ListTasksParams) ([]Task, error)
@@ -28,6 +34,7 @@ type Querier interface {
 	MoveTask(ctx context.Context, arg MoveTaskParams) (Task, error)
 	RemoveTaskTag(ctx context.Context, arg RemoveTaskTagParams) error
 	SetTaskPosition(ctx context.Context, arg SetTaskPositionParams) error
+	UpdateNote(ctx context.Context, arg UpdateNoteParams) (Note, error)
 	UpdateTask(ctx context.Context, arg UpdateTaskParams) (Task, error)
 }
 

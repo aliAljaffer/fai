@@ -1,0 +1,19 @@
+-- +goose Up
+CREATE TABLE notes (
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  title TEXT NOT NULL UNIQUE,
+  body_md TEXT NOT NULL DEFAULT '',
+  task_id BIGINT REFERENCES tasks(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE note_tags (
+  note_id BIGINT NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
+  tag_id  BIGINT NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+  PRIMARY KEY (note_id, tag_id)
+);
+
+-- +goose Down
+DROP TABLE note_tags;
+DROP TABLE notes;

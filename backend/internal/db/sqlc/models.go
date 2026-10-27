@@ -25,6 +25,20 @@ type BoardColumn struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+type Note struct {
+	ID        int64       `json:"id"`
+	Title     string      `json:"title"`
+	BodyMd    string      `json:"body_md"`
+	TaskID    pgtype.Int8 `json:"task_id"`
+	CreatedAt time.Time   `json:"created_at"`
+	UpdatedAt time.Time   `json:"updated_at"`
+}
+
+type NoteTag struct {
+	NoteID int64 `json:"note_id"`
+	TagID  int64 `json:"tag_id"`
+}
+
 type Tag struct {
 	ID    int64  `json:"id"`
 	Name  string `json:"name"`

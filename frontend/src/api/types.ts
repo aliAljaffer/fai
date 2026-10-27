@@ -19,6 +19,15 @@ export interface Tag {
   color: string
 }
 
+export interface Note {
+  id: number
+  title: string
+  body_md: string
+  task_id: number | null
+  created_at: string
+  updated_at: string
+}
+
 export interface Task {
   id: number
   board_id: number

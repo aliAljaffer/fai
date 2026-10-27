@@ -3,23 +3,23 @@ package config
 import "os"
 
 type Config struct {
-	DatabaseURL       string
-	Port              string
-	DisableAuth       bool
-	OIDCIssuerURL     string
-	OIDCAudience      string
-	JiraBaseURL       string
-	JiraEmail         string
-	JiraAPIToken      string
-	JiraDefaultProject string
+	DatabaseURL         string
+	Port                string
+	DisableAuth         bool
+	OIDCIssuerURL       string
+	OIDCAudience        string
+	JiraBaseURL         string
+	JiraEmail           string
+	JiraAPIToken        string
+	JiraDefaultProject  string
 	JiraStatusColumnMap string
-	NtfyURL           string
-	NtfyTopic         string
-	NtfyUsername      string
-	NtfyPassword      string
-	AIProvider        string
-	AIAPIKey          string
-	AIModel           string
+	NtfyURL             string
+	NtfyTopic           string
+	NtfyUsername        string
+	NtfyPassword        string
+	AIProvider          string
+	AIAPIKey            string
+	AIModel             string
 }
 
 func Load() Config {

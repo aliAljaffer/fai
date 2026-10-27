@@ -161,8 +161,8 @@ func (s *Server) deleteTask(w http.ResponseWriter, r *http.Request) {
 }
 
 type moveBody struct {
-	ColumnID    int64  `json:"column_id"`
-	AfterTaskID *int64 `json:"after_task_id"`
+	ColumnID     int64  `json:"column_id"`
+	AfterTaskID  *int64 `json:"after_task_id"`
 	BeforeTaskID *int64 `json:"before_task_id"`
 }
 
