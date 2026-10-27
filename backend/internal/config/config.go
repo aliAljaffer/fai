@@ -20,6 +20,9 @@ type Config struct {
 	NtfyTopic           string
 	NtfyUsername        string
 	NtfyPassword        string
+	SMTPAddr            string
+	SMTPFrom            string
+	SMTPTo              string
 	AIProvider          string
 	AIAPIKey            string
 	AIModel             string
@@ -58,6 +61,9 @@ func Load() Config {
 		NtfyTopic:           os.Getenv("NTFY_TOPIC"),
 		NtfyUsername:        os.Getenv("NTFY_USERNAME"),
 		NtfyPassword:        os.Getenv("NTFY_PASSWORD"),
+		SMTPAddr:            os.Getenv("SMTP_ADDR"),
+		SMTPFrom:            os.Getenv("SMTP_FROM"),
+		SMTPTo:              os.Getenv("SMTP_TO"),
 		AIProvider:          os.Getenv("AI_PROVIDER"),
 		AIAPIKey:            os.Getenv("AI_API_KEY"),
 		AIModel:             os.Getenv("AI_MODEL"),

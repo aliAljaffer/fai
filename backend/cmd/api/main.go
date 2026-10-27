@@ -13,6 +13,7 @@ import (
 	"github.com/alialjaffer/fai/backend/internal/config"
 	"github.com/alialjaffer/fai/backend/internal/httpapi"
 	"github.com/alialjaffer/fai/backend/internal/jira"
+	"github.com/alialjaffer/fai/backend/internal/mailer"
 	"github.com/alialjaffer/fai/backend/internal/migrate"
 	"github.com/alialjaffer/fai/backend/internal/ntfy"
 	"github.com/alialjaffer/fai/backend/internal/reminders"
@@ -82,7 +83,11 @@ func main() {
 	if ntfyClient == nil {
 		log.Println("NTFY_URL/NTFY_TOPIC unset — reminder push notifications disabled")
 	}
-	scheduler := &reminders.Scheduler{Store: st, Ntfy: ntfyClient}
+	mailClient := mailer.New(cfg.SMTPAddr, cfg.SMTPFrom, cfg.SMTPTo)
+	if mailClient == nil {
+		log.Println("SMTP_ADDR/SMTP_FROM/SMTP_TO unset — email notifications disabled")
+	}
+	scheduler := &reminders.Scheduler{Store: st, Ntfy: ntfyClient, Mail: mailClient}
 	go scheduler.Run(context.Background())
 
 	addr := ":" + cfg.Port

@@ -6,6 +6,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/alialjaffer/fai/backend/internal/mailer"
 	"github.com/alialjaffer/fai/backend/internal/ntfy"
 	"github.com/alialjaffer/fai/backend/internal/store"
 )
@@ -13,10 +14,12 @@ import (
 type Scheduler struct {
 	Store store.Store
 	Ntfy  *ntfy.Client
+	Mail  *mailer.Mailer
 }
 
-// Run ticks every minute checking for due, unsent reminders and pushing them via ntfy.
-// No-ops gracefully if ntfy is unconfigured (Ntfy == nil). Blocks until ctx is cancelled.
+// Run ticks every minute checking for due, unsent reminders and delivering them
+// via whichever channels are configured. No-ops when both are unconfigured.
+// Blocks until ctx is cancelled.
 func (s *Scheduler) Run(ctx context.Context) {
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
@@ -32,7 +35,7 @@ func (s *Scheduler) Run(ctx context.Context) {
 }
 
 func (s *Scheduler) tick(ctx context.Context) {
-	if s.Ntfy == nil {
+	if s.Ntfy == nil && s.Mail == nil {
 		return
 	}
 
@@ -41,8 +44,7 @@ func (s *Scheduler) tick(ctx context.Context) {
 		log.Printf("reminders: list due: %v", err)
 	}
 	for _, r := range due {
-		if err := s.Ntfy.Publish("Reminder", r.Title); err != nil {
-			log.Printf("reminders: publish %d: %v", r.ID, err)
+		if !s.notify(ctx, "reminders", r.ID, "Reminder", r.Title) {
 			continue
 		}
 		if err := s.Store.MarkReminderSent(ctx, r.ID); err != nil {
@@ -60,12 +62,33 @@ func (s *Scheduler) tick(ctx context.Context) {
 		if title == "" {
 			title = "Untitled meeting"
 		}
-		if err := s.Ntfy.Publish("Meeting ended", fmt.Sprintf("'%s' just ended — log the outcome?", title)); err != nil {
-			log.Printf("meeting outcomes: publish %d: %v", m.ID, err)
+		if !s.notify(ctx, "meeting outcomes", m.ID, "Meeting ended", fmt.Sprintf("'%s' just ended — log the outcome?", title)) {
 			continue
 		}
 		if err := s.Store.MarkMeetingOutcomePromptSent(ctx, m.ID); err != nil {
 			log.Printf("meeting outcomes: mark prompt sent %d: %v", m.ID, err)
 		}
 	}
+}
+
+// notify attempts every configured channel and reports whether at least one
+// delivered. Marking the item sent after a partial failure avoids re-sending
+// the channel that already succeeded on the next tick.
+func (s *Scheduler) notify(ctx context.Context, kind string, id int64, subject, message string) bool {
+	delivered := false
+	if s.Ntfy != nil {
+		if err := s.Ntfy.Publish(subject, message); err != nil {
+			log.Printf("%s: ntfy %d: %v", kind, id, err)
+		} else {
+			delivered = true
+		}
+	}
+	if s.Mail != nil {
+		if err := s.Mail.Send(ctx, "fai: "+subject, message); err != nil {
+			log.Printf("%s: email %d: %v", kind, id, err)
+		} else {
+			delivered = true
+		}
+	}
+	return delivered
 }

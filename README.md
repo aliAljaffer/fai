@@ -44,6 +44,30 @@ Both are driven through the same `internal/store.Store` interface, so the API be
 identically regardless of which one is active — see `internal/store/pg` and
 `internal/store/lite`.
 
+## Notifications
+
+Reminders and meeting-outcome prompts go out over every configured channel; both are
+optional, and the scheduler no-ops when neither is set. If one channel fails while the
+other delivers, the item is marked sent so the working channel is not re-notified every
+minute.
+
+- **ntfy** — `NTFY_URL`, `NTFY_TOPIC`, `NTFY_USERNAME`, `NTFY_PASSWORD`. The
+  kubernetes deployment publishes to the in-cluster `ntfy` Service.
+- **Email** — `SMTP_ADDR`, `SMTP_FROM`, `SMTP_TO` (comma-separated recipients). The
+  kubernetes deployment points at the cluster's rate-limited
+  `smtp-relay.mail.svc.cluster.local:587`, which accepts unauthenticated mail from
+  allowed namespaces and handles the upstream provider's credentials; fai itself holds
+  no SMTP credentials.
+
+## Jira
+
+`JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN` enable the bridge.
+`JIRA_DEFAULT_PROJECT_KEY` is used when an import omits JQL and an export omits a
+project key; `JIRA_STATUS_COLUMN_MAP` is a comma-separated `Jira Status:Board Column`
+list applied on import (unmapped statuses fall into the board's first column). Jira
+Cloud's `/rest/api/3/search/jql` endpoint is required — the older `/rest/api/3/search`
+returns `410 Gone`.
+
 ## Docker Compose deployment
 
 A complete non-Kubernetes alternative: SQLite (no separate database container),
