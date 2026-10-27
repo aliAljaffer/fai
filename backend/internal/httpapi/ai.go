@@ -3,7 +3,7 @@ package httpapi
 import (
 	"net/http"
 
-	"github.com/alialjaffer/fai/backend/internal/db/sqlc"
+	"github.com/alialjaffer/fai/backend/internal/store"
 )
 
 func (s *Server) aiStatus(w http.ResponseWriter, r *http.Request) {
@@ -22,7 +22,7 @@ func (s *Server) aiBreakdown(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
-	task, err := s.Q.GetTask(ctx, taskID)
+	task, err := s.Store.GetTask(ctx, taskID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "task not found")
 		return
@@ -45,13 +45,9 @@ func (s *Server) aiBreakdown(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		sub, err := s.Q.CreateTask(ctx, sqlc.CreateTaskParams{
-			BoardID:      task.BoardID,
-			ColumnID:     task.ColumnID,
-			Title:        title,
-			Priority:     "medium",
-			Position:     position,
-			ParentTaskID: pgtypeInt8(task.ID),
+		sub, err := s.Store.CreateTask(ctx, store.CreateTaskParams{
+			BoardID: task.BoardID, ColumnID: task.ColumnID, Title: title,
+			Priority: "medium", Position: position, ParentTaskID: &task.ID,
 		})
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())

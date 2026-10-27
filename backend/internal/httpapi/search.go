@@ -9,12 +9,12 @@ func (s *Server) search(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tasks, err := s.Q.SearchTasks(r.Context(), q)
+	tasks, err := s.Store.SearchTasks(r.Context(), q)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	notes, err := s.Q.SearchNotes(r.Context(), q)
+	notes, err := s.Store.SearchNotes(r.Context(), q)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

@@ -5,16 +5,14 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/alialjaffer/fai/backend/internal/ai"
-	"github.com/alialjaffer/fai/backend/internal/db/sqlc"
 	"github.com/alialjaffer/fai/backend/internal/jira"
+	"github.com/alialjaffer/fai/backend/internal/store"
 )
 
 type Server struct {
-	Q                   *sqlc.Queries
-	Pool                *pgxpool.Pool
+	Store               store.Store
 	Jira                *jira.Client
 	JiraDefaultProject  string
 	JiraStatusColumnMap map[string]string

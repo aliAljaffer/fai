@@ -4,12 +4,10 @@ import (
 	"context"
 	"net/http"
 	"strconv"
-	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/alialjaffer/fai/backend/internal/db/sqlc"
+	"github.com/alialjaffer/fai/backend/internal/store"
 )
 
 const positionGap = 1024.0
@@ -20,28 +18,28 @@ func parseID(r *http.Request, param string) (int64, bool) {
 	return id, err == nil
 }
 
-func optionalInt64Param(r *http.Request, name string) pgtype.Int8 {
+func optionalInt64Param(r *http.Request, name string) *int64 {
 	v := r.URL.Query().Get(name)
 	if v == "" {
-		return pgtype.Int8{}
+		return nil
 	}
 	id, err := strconv.ParseInt(v, 10, 64)
 	if err != nil {
-		return pgtype.Int8{}
+		return nil
 	}
-	return pgtype.Int8{Int64: id, Valid: true}
+	return &id
 }
 
-func optionalTextParam(r *http.Request, name string) pgtype.Text {
+func optionalTextParam(r *http.Request, name string) *string {
 	v := r.URL.Query().Get(name)
 	if v == "" {
-		return pgtype.Text{}
+		return nil
 	}
-	return pgtype.Text{String: v, Valid: true}
+	return &v
 }
 
 func (s *Server) listTasks(w http.ResponseWriter, r *http.Request) {
-	tasks, err := s.Q.ListTasks(r.Context(), sqlc.ListTasksParams{
+	tasks, err := s.Store.ListTasks(r.Context(), store.ListTasksParams{
 		BoardID:  optionalInt64Param(r, "board_id"),
 		ColumnID: optionalInt64Param(r, "column_id"),
 		Tag:      optionalTextParam(r, "tag"),
@@ -63,24 +61,6 @@ type taskBody struct {
 	ParentTaskID  *int64  `json:"parent_task_id"`
 }
 
-func (b taskBody) parentTaskID() pgtype.Int8 {
-	if b.ParentTaskID == nil {
-		return pgtype.Int8{}
-	}
-	return pgtype.Int8{Int64: *b.ParentTaskID, Valid: true}
-}
-
-func (b taskBody) dueDate() pgtype.Date {
-	if b.DueDate == nil || *b.DueDate == "" {
-		return pgtype.Date{}
-	}
-	d, err := time.Parse("2006-01-02", *b.DueDate)
-	if err != nil {
-		return pgtype.Date{}
-	}
-	return pgtype.Date{Time: d, Valid: true}
-}
-
 func (s *Server) createTask(w http.ResponseWriter, r *http.Request) {
 	var body taskBody
 	if err := decodeJSON(r, &body); err != nil {
@@ -97,15 +77,15 @@ func (s *Server) createTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	task, err := s.Q.CreateTask(r.Context(), sqlc.CreateTaskParams{
+	task, err := s.Store.CreateTask(r.Context(), store.CreateTaskParams{
 		BoardID:       body.BoardID,
 		ColumnID:      body.ColumnID,
 		Title:         body.Title,
 		DescriptionMd: body.DescriptionMd,
 		Priority:      body.Priority,
-		DueDate:       body.dueDate(),
+		DueDate:       body.DueDate,
 		Position:      position,
-		ParentTaskID:  body.parentTaskID(),
+		ParentTaskID:  body.ParentTaskID,
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
@@ -120,7 +100,7 @@ func (s *Server) listSubtasks(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid task id")
 		return
 	}
-	subtasks, err := s.Q.ListSubtasks(r.Context(), pgtype.Int8{Int64: id, Valid: true})
+	subtasks, err := s.Store.ListSubtasks(r.Context(), id)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -134,7 +114,7 @@ func (s *Server) getTask(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid task id")
 		return
 	}
-	task, err := s.Q.GetTask(r.Context(), id)
+	task, err := s.Store.GetTask(r.Context(), id)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "task not found")
 		return
@@ -153,13 +133,7 @@ func (s *Server) updateTask(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid body")
 		return
 	}
-	task, err := s.Q.UpdateTask(r.Context(), sqlc.UpdateTaskParams{
-		ID:            id,
-		Title:         body.Title,
-		DescriptionMd: body.DescriptionMd,
-		Priority:      body.Priority,
-		DueDate:       body.dueDate(),
-	})
+	task, err := s.Store.UpdateTask(r.Context(), id, body.Title, body.DescriptionMd, body.Priority, body.DueDate)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -173,7 +147,7 @@ func (s *Server) deleteTask(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid task id")
 		return
 	}
-	if err := s.Q.ArchiveTask(r.Context(), id); err != nil {
+	if err := s.Store.ArchiveTask(r.Context(), id); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -199,7 +173,7 @@ func (s *Server) moveTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
-	siblings, err := s.Q.ListTasksByColumnOrdered(ctx, body.ColumnID)
+	siblings, err := s.Store.ListTasksByColumnOrdered(ctx, body.ColumnID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -216,7 +190,7 @@ func (s *Server) moveTask(w http.ResponseWriter, r *http.Request) {
 	if needsRenumber {
 		for i, t := range filtered {
 			newPos := float64(i+1) * positionGap
-			if err := s.Q.SetTaskPosition(ctx, sqlc.SetTaskPositionParams{ID: t.ID, Position: newPos}); err != nil {
+			if err := s.Store.SetTaskPosition(ctx, t.ID, newPos); err != nil {
 				writeError(w, http.StatusInternalServerError, err.Error())
 				return
 			}
@@ -224,7 +198,7 @@ func (s *Server) moveTask(w http.ResponseWriter, r *http.Request) {
 		position, _ = computePosition(filtered, body.AfterTaskID, body.BeforeTaskID)
 	}
 
-	task, err := s.Q.MoveTask(ctx, sqlc.MoveTaskParams{ID: id, ColumnID: body.ColumnID, Position: position})
+	task, err := s.Store.MoveTask(ctx, id, body.ColumnID, position)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -234,7 +208,7 @@ func (s *Server) moveTask(w http.ResponseWriter, r *http.Request) {
 
 // appendPosition returns the position for a new task at the end of columnID.
 func (s *Server) appendPosition(ctx context.Context, columnID int64) (float64, error) {
-	existing, err := s.Q.ListTasksByColumnOrdered(ctx, columnID)
+	existing, err := s.Store.ListTasksByColumnOrdered(ctx, columnID)
 	if err != nil {
 		return 0, err
 	}

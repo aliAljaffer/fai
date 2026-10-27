@@ -1,35 +1,16 @@
 package httpapi
 
 import (
-	"errors"
 	"fmt"
 	"net/http"
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/sahilm/fuzzy"
 
-	"github.com/alialjaffer/fai/backend/internal/db/sqlc"
+	"github.com/alialjaffer/fai/backend/internal/store"
 )
-
-func pgtypeInt8(v int64) pgtype.Int8 {
-	return pgtype.Int8{Int64: v, Valid: true}
-}
-
-func pgtypeText(s string) pgtype.Text {
-	if s == "" {
-		return pgtype.Text{}
-	}
-	return pgtype.Text{String: s, Valid: true}
-}
-
-func pgtypeTimestamptzNow() pgtype.Timestamptz {
-	return pgtype.Timestamptz{Time: time.Now(), Valid: true}
-}
 
 type jiraImportBody struct {
 	BoardID     int64  `json:"board_id"`
@@ -69,7 +50,7 @@ func (s *Server) jiraImport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	columns, err := s.Q.ListColumnsByBoard(ctx, body.BoardID)
+	columns, err := s.Store.ListColumnsByBoard(ctx, body.BoardID)
 	if err != nil || len(columns) == 0 {
 		writeError(w, http.StatusInternalServerError, "board has no columns")
 		return
@@ -96,32 +77,25 @@ func (s *Server) jiraImport(w http.ResponseWriter, r *http.Request) {
 
 	imported, updated, skipped := 0, 0, 0
 	for _, issue := range issues {
-		existing, err := s.Q.GetJiraLinkByKey(ctx, issue.Key)
-		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		existing, err := s.Store.GetJiraLinkByKey(ctx, issue.Key)
+		if err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		linked := err == nil
 
-		if linked && !body.ForceUpdate {
+		if existing != nil && !body.ForceUpdate {
 			skipped++
 			continue
 		}
 
 		columnID := resolveColumn(issue.Status)
 
-		if linked {
-			if err := s.Q.UpdateTaskTitle(ctx, sqlc.UpdateTaskTitleParams{
-				ID:    existing.TaskID,
-				Title: issue.Summary,
-			}); err != nil {
+		if existing != nil {
+			if err := s.Store.UpdateTaskTitle(ctx, existing.TaskID, issue.Summary); err != nil {
 				writeError(w, http.StatusInternalServerError, err.Error())
 				return
 			}
-			if err := s.Q.UpdateJiraLinkImported(ctx, sqlc.UpdateJiraLinkImportedParams{
-				TaskID:    existing.TaskID,
-				RawStatus: pgtypeText(issue.Status),
-			}); err != nil {
+			if err := s.Store.UpdateJiraLinkImported(ctx, existing.TaskID, issue.Status); err != nil {
 				writeError(w, http.StatusInternalServerError, err.Error())
 				return
 			}
@@ -134,26 +108,15 @@ func (s *Server) jiraImport(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		task, err := s.Q.CreateTask(ctx, sqlc.CreateTaskParams{
-			BoardID:  body.BoardID,
-			ColumnID: columnID,
-			Title:    issue.Summary,
-			Priority: "medium",
-			Position: position,
+		task, err := s.Store.CreateTask(ctx, store.CreateTaskParams{
+			BoardID: body.BoardID, ColumnID: columnID, Title: issue.Summary,
+			Priority: "medium", Position: position,
 		})
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		if _, err := s.Q.CreateJiraLink(ctx, sqlc.CreateJiraLinkParams{
-			TaskID:         task.ID,
-			JiraKey:        issue.Key,
-			JiraUrl:        s.Jira.IssueURL(issue.Key),
-			JiraProjectKey: s.JiraDefaultProject,
-			LinkOrigin:     "imported",
-			LastImportedAt: pgtypeTimestamptzNow(),
-			RawStatus:      pgtypeText(issue.Status),
-		}); err != nil {
+		if _, err := s.Store.CreateJiraLinkImported(ctx, task.ID, issue.Key, s.Jira.IssueURL(issue.Key), s.JiraDefaultProject, issue.Status); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
@@ -188,12 +151,12 @@ func (s *Server) jiraExport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
-	task, err := s.Q.GetTask(ctx, body.TaskID)
+	task, err := s.Store.GetTask(ctx, body.TaskID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "task not found")
 		return
 	}
-	if _, err := s.Q.GetJiraLinkByTask(ctx, task.ID); err == nil {
+	if existing, err := s.Store.GetJiraLinkByTask(ctx, task.ID); err == nil && existing != nil {
 		writeError(w, http.StatusConflict, "task is already linked to a jira issue")
 		return
 	}
@@ -204,13 +167,7 @@ func (s *Server) jiraExport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	link, err := s.Q.CreateJiraLinkExported(ctx, sqlc.CreateJiraLinkExportedParams{
-		TaskID:         task.ID,
-		JiraKey:        key,
-		JiraUrl:        s.Jira.IssueURL(key),
-		JiraProjectKey: projectKey,
-		LastExportedAt: pgtypeTimestamptzNow(),
-	})
+	link, err := s.Store.CreateJiraLinkExported(ctx, task.ID, key, s.Jira.IssueURL(key), projectKey)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -253,13 +210,7 @@ func (s *Server) jiraLink(w http.ResponseWriter, r *http.Request) {
 		projectKey = parts[0]
 	}
 
-	link, err := s.Q.CreateJiraLinkManual(r.Context(), sqlc.CreateJiraLinkManualParams{
-		TaskID:         taskID,
-		JiraKey:        issue.Key,
-		JiraUrl:        s.Jira.IssueURL(issue.Key),
-		JiraProjectKey: projectKey,
-		RawStatus:      pgtypeText(issue.Status),
-	})
+	link, err := s.Store.CreateJiraLinkManual(r.Context(), taskID, issue.Key, s.Jira.IssueURL(issue.Key), projectKey, issue.Status)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -273,11 +224,7 @@ func (s *Server) jiraGetLink(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid task id")
 		return
 	}
-	link, err := s.Q.GetJiraLinkByTask(r.Context(), taskID)
-	if errors.Is(err, pgx.ErrNoRows) {
-		writeJSON(w, http.StatusOK, nil)
-		return
-	}
+	link, err := s.Store.GetJiraLinkByTask(r.Context(), taskID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -291,7 +238,7 @@ func (s *Server) jiraUnlink(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid task id")
 		return
 	}
-	if err := s.Q.DeleteJiraLink(r.Context(), taskID); err != nil {
+	if err := s.Store.DeleteJiraLink(r.Context(), taskID); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -323,7 +270,7 @@ func (s *Server) jiraSuggestions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
-	task, err := s.Q.GetTask(ctx, taskID)
+	task, err := s.Store.GetTask(ctx, taskID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "task not found")
 		return

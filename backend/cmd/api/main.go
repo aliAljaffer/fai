@@ -11,11 +11,11 @@ import (
 	"github.com/alialjaffer/fai/backend/internal/ai"
 	"github.com/alialjaffer/fai/backend/internal/auth"
 	"github.com/alialjaffer/fai/backend/internal/config"
-	"github.com/alialjaffer/fai/backend/internal/db/sqlc"
 	"github.com/alialjaffer/fai/backend/internal/httpapi"
 	"github.com/alialjaffer/fai/backend/internal/jira"
 	"github.com/alialjaffer/fai/backend/internal/ntfy"
 	"github.com/alialjaffer/fai/backend/internal/reminders"
+	"github.com/alialjaffer/fai/backend/internal/store/pg"
 )
 
 func main() {
@@ -38,9 +38,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("connecting to database: %v", err)
 	}
-	defer pool.Close()
+	st := pg.New(pool)
+	defer st.Close()
 
-	queries := sqlc.New(pool)
 	jiraClient := jira.New(cfg.JiraBaseURL, cfg.JiraEmail, cfg.JiraAPIToken)
 	if jiraClient == nil {
 		log.Println("JIRA_BASE_URL/EMAIL/API_TOKEN unset — Jira import disabled")
@@ -50,8 +50,7 @@ func main() {
 		log.Println("AI_API_KEY unset — AI features disabled")
 	}
 	server := &httpapi.Server{
-		Q:                   queries,
-		Pool:                pool,
+		Store:               st,
 		Jira:                jiraClient,
 		JiraDefaultProject:  cfg.JiraDefaultProject,
 		JiraStatusColumnMap: jira.ParseStatusColumnMap(cfg.JiraStatusColumnMap),
@@ -64,7 +63,7 @@ func main() {
 	if ntfyClient == nil {
 		log.Println("NTFY_URL/NTFY_TOPIC unset — reminder push notifications disabled")
 	}
-	scheduler := &reminders.Scheduler{Q: queries, Ntfy: ntfyClient}
+	scheduler := &reminders.Scheduler{Store: st, Ntfy: ntfyClient}
 	go scheduler.Run(context.Background())
 
 	addr := ":" + cfg.Port

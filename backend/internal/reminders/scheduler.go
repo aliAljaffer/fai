@@ -6,13 +6,13 @@ import (
 	"log"
 	"time"
 
-	"github.com/alialjaffer/fai/backend/internal/db/sqlc"
 	"github.com/alialjaffer/fai/backend/internal/ntfy"
+	"github.com/alialjaffer/fai/backend/internal/store"
 )
 
 type Scheduler struct {
-	Q    *sqlc.Queries
-	Ntfy *ntfy.Client
+	Store store.Store
+	Ntfy  *ntfy.Client
 }
 
 // Run ticks every minute checking for due, unsent reminders and pushing them via ntfy.
@@ -36,7 +36,7 @@ func (s *Scheduler) tick(ctx context.Context) {
 		return
 	}
 
-	due, err := s.Q.ListDueUnsentReminders(ctx)
+	due, err := s.Store.ListDueUnsentReminders(ctx)
 	if err != nil {
 		log.Printf("reminders: list due: %v", err)
 	}
@@ -45,12 +45,12 @@ func (s *Scheduler) tick(ctx context.Context) {
 			log.Printf("reminders: publish %d: %v", r.ID, err)
 			continue
 		}
-		if err := s.Q.MarkReminderSent(ctx, r.ID); err != nil {
+		if err := s.Store.MarkReminderSent(ctx, r.ID); err != nil {
 			log.Printf("reminders: mark sent %d: %v", r.ID, err)
 		}
 	}
 
-	pending, err := s.Q.ListDueUnpromptedMeetingOutcomes(ctx)
+	pending, err := s.Store.ListDueUnpromptedMeetingOutcomes(ctx)
 	if err != nil {
 		log.Printf("meeting outcomes: list due: %v", err)
 		return
@@ -64,7 +64,7 @@ func (s *Scheduler) tick(ctx context.Context) {
 			log.Printf("meeting outcomes: publish %d: %v", m.ID, err)
 			continue
 		}
-		if err := s.Q.MarkMeetingOutcomePromptSent(ctx, m.ID); err != nil {
+		if err := s.Store.MarkMeetingOutcomePromptSent(ctx, m.ID); err != nil {
 			log.Printf("meeting outcomes: mark prompt sent %d: %v", m.ID, err)
 		}
 	}

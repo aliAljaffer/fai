@@ -5,13 +5,10 @@ import (
 	"net/url"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/jackc/pgx/v5/pgtype"
-
-	"github.com/alialjaffer/fai/backend/internal/db/sqlc"
 )
 
 func (s *Server) listNotes(w http.ResponseWriter, r *http.Request) {
-	notes, err := s.Q.ListNotes(r.Context())
+	notes, err := s.Store.ListNotes(r.Context())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -25,24 +22,13 @@ type noteBody struct {
 	TaskID *int64 `json:"task_id"`
 }
 
-func (b noteBody) taskID() pgtype.Int8 {
-	if b.TaskID == nil {
-		return pgtype.Int8{}
-	}
-	return pgtype.Int8{Int64: *b.TaskID, Valid: true}
-}
-
 func (s *Server) createNote(w http.ResponseWriter, r *http.Request) {
 	var body noteBody
 	if err := decodeJSON(r, &body); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid body")
 		return
 	}
-	note, err := s.Q.CreateNote(r.Context(), sqlc.CreateNoteParams{
-		Title:  body.Title,
-		BodyMd: body.BodyMd,
-		TaskID: body.taskID(),
-	})
+	note, err := s.Store.CreateNote(r.Context(), body.Title, body.BodyMd, body.TaskID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -56,12 +42,12 @@ func (s *Server) getNote(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid note id")
 		return
 	}
-	note, err := s.Q.GetNote(r.Context(), id)
+	note, err := s.Store.GetNote(r.Context(), id)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "note not found")
 		return
 	}
-	backlinks, err := s.Q.ListBacklinks(r.Context(), sqlc.ListBacklinksParams{ID: id, Column2: note.Title})
+	backlinks, err := s.Store.ListBacklinks(r.Context(), id, note.Title)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -75,7 +61,7 @@ func (s *Server) getNoteByTitle(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid title")
 		return
 	}
-	note, err := s.Q.GetNoteByTitle(r.Context(), title)
+	note, err := s.Store.GetNoteByTitle(r.Context(), title)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "note not found")
 		return
@@ -94,12 +80,7 @@ func (s *Server) updateNote(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid body")
 		return
 	}
-	note, err := s.Q.UpdateNote(r.Context(), sqlc.UpdateNoteParams{
-		ID:     id,
-		Title:  body.Title,
-		BodyMd: body.BodyMd,
-		TaskID: body.taskID(),
-	})
+	note, err := s.Store.UpdateNote(r.Context(), id, body.Title, body.BodyMd, body.TaskID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -113,7 +94,7 @@ func (s *Server) deleteNote(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid note id")
 		return
 	}
-	if err := s.Q.DeleteNote(r.Context(), id); err != nil {
+	if err := s.Store.DeleteNote(r.Context(), id); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}

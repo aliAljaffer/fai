@@ -7,14 +7,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgtype"
-
-	"github.com/alialjaffer/fai/backend/internal/db/sqlc"
+	"github.com/alialjaffer/fai/backend/internal/store"
 )
 
 func (s *Server) listMeetingOutcomes(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Query().Get("pending") == "true" {
-		outcomes, err := s.Q.ListPendingMeetingOutcomes(r.Context())
+		outcomes, err := s.Store.ListPendingMeetingOutcomes(r.Context())
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
@@ -23,13 +21,13 @@ func (s *Server) listMeetingOutcomes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var occurredOn pgtype.Date
+	var occurredOn *string
 	if v := r.URL.Query().Get("date"); v != "" {
-		if d, err := time.Parse("2006-01-02", v); err == nil {
-			occurredOn = pgtype.Date{Time: d, Valid: true}
+		if _, err := time.Parse("2006-01-02", v); err == nil {
+			occurredOn = &v
 		}
 	}
-	outcomes, err := s.Q.ListMeetingOutcomes(r.Context(), occurredOn)
+	outcomes, err := s.Store.ListMeetingOutcomes(r.Context(), occurredOn)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -44,15 +42,15 @@ type meetingOutcomeBody struct {
 	EndsAt     *string `json:"ends_at"`
 }
 
-func (b meetingOutcomeBody) endsAt() pgtype.Timestamptz {
+func (b meetingOutcomeBody) endsAt() *time.Time {
 	if b.EndsAt == nil || *b.EndsAt == "" {
-		return pgtype.Timestamptz{}
+		return nil
 	}
 	t, err := time.Parse(time.RFC3339, *b.EndsAt)
 	if err != nil {
-		return pgtype.Timestamptz{}
+		return nil
 	}
-	return pgtype.Timestamptz{Time: t, Valid: true}
+	return &t
 }
 
 func (s *Server) createMeetingOutcome(w http.ResponseWriter, r *http.Request) {
@@ -61,17 +59,11 @@ func (s *Server) createMeetingOutcome(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid body")
 		return
 	}
-	occurredOn, err := time.Parse("2006-01-02", body.OccurredOn)
-	if err != nil {
+	if _, err := time.Parse("2006-01-02", body.OccurredOn); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid occurred_on, expected YYYY-MM-DD")
 		return
 	}
-	outcome, err := s.Q.CreateMeetingOutcome(r.Context(), sqlc.CreateMeetingOutcomeParams{
-		OccurredOn: pgtype.Date{Time: occurredOn, Valid: true},
-		Title:      body.Title,
-		NotesMd:    body.NotesMd,
-		EndsAt:     body.endsAt(),
-	})
+	outcome, err := s.Store.CreateMeetingOutcome(r.Context(), body.OccurredOn, body.Title, body.NotesMd, body.endsAt())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -85,7 +77,7 @@ func (s *Server) getMeetingOutcome(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid id")
 		return
 	}
-	outcome, err := s.Q.GetMeetingOutcome(r.Context(), id)
+	outcome, err := s.Store.GetMeetingOutcome(r.Context(), id)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "meeting outcome not found")
 		return
@@ -104,12 +96,7 @@ func (s *Server) updateMeetingOutcome(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid body")
 		return
 	}
-	outcome, err := s.Q.UpdateMeetingOutcome(r.Context(), sqlc.UpdateMeetingOutcomeParams{
-		ID:      id,
-		Title:   body.Title,
-		NotesMd: body.NotesMd,
-		EndsAt:  body.endsAt(),
-	})
+	outcome, err := s.Store.UpdateMeetingOutcome(r.Context(), id, body.Title, body.NotesMd, body.endsAt())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -123,7 +110,7 @@ func (s *Server) deleteMeetingOutcome(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid id")
 		return
 	}
-	if err := s.Q.DeleteMeetingOutcome(r.Context(), id); err != nil {
+	if err := s.Store.DeleteMeetingOutcome(r.Context(), id); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -149,7 +136,7 @@ func (s *Server) createTaskFromOutcome(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
-	columns, err := s.Q.ListColumnsByBoard(ctx, body.BoardID)
+	columns, err := s.Store.ListColumnsByBoard(ctx, body.BoardID)
 	if err != nil || len(columns) == 0 {
 		writeError(w, http.StatusInternalServerError, "board has no columns")
 		return
@@ -169,13 +156,9 @@ func (s *Server) createTaskFromOutcome(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	task, err := s.Q.CreateTask(ctx, sqlc.CreateTaskParams{
-		BoardID:          body.BoardID,
-		ColumnID:         columnID,
-		Title:            body.Title,
-		Priority:         "medium",
-		Position:         position,
-		MeetingOutcomeID: pgtypeInt8(outcomeID),
+	task, err := s.Store.CreateTask(ctx, store.CreateTaskParams{
+		BoardID: body.BoardID, ColumnID: columnID, Title: body.Title,
+		Priority: "medium", Position: position, MeetingOutcomeID: &outcomeID,
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
@@ -199,7 +182,7 @@ func (s *Server) extractTasksFromOutcome(w http.ResponseWriter, r *http.Request)
 		writeError(w, http.StatusBadRequest, "invalid id")
 		return
 	}
-	outcome, err := s.Q.GetMeetingOutcome(r.Context(), id)
+	outcome, err := s.Store.GetMeetingOutcome(r.Context(), id)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "meeting outcome not found")
 		return

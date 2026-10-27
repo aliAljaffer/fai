@@ -5,12 +5,10 @@ import (
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
-
-	"github.com/alialjaffer/fai/backend/internal/db/sqlc"
 )
 
 func (s *Server) listBoards(w http.ResponseWriter, r *http.Request) {
-	boards, err := s.Q.ListBoards(r.Context())
+	boards, err := s.Store.ListBoards(r.Context())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -26,7 +24,7 @@ func (s *Server) createBoard(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid body")
 		return
 	}
-	board, err := s.Q.CreateBoard(r.Context(), body.Name)
+	board, err := s.Store.CreateBoard(r.Context(), body.Name)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -40,7 +38,7 @@ func (s *Server) listColumns(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid board id")
 		return
 	}
-	cols, err := s.Q.ListColumnsByBoard(r.Context(), boardID)
+	cols, err := s.Store.ListColumnsByBoard(r.Context(), boardID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -63,12 +61,7 @@ func (s *Server) createColumn(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid body")
 		return
 	}
-	col, err := s.Q.CreateColumn(r.Context(), sqlc.CreateColumnParams{
-		BoardID:  boardID,
-		Name:     body.Name,
-		Position: body.Position,
-		IsDone:   body.IsDone,
-	})
+	col, err := s.Store.CreateColumn(r.Context(), boardID, body.Name, body.Position, body.IsDone)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

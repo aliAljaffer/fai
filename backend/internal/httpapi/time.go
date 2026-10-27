@@ -5,9 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/jackc/pgx/v5"
-
-	"github.com/alialjaffer/fai/backend/internal/db/sqlc"
+	"github.com/alialjaffer/fai/backend/internal/store"
 )
 
 func (s *Server) startTime(w http.ResponseWriter, r *http.Request) {
@@ -16,26 +14,8 @@ func (s *Server) startTime(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid task id")
 		return
 	}
-
-	ctx := r.Context()
-	tx, err := s.Pool.Begin(ctx)
+	entry, err := s.Store.StartTimer(r.Context(), taskID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	defer tx.Rollback(ctx)
-
-	q := s.Q.WithTx(tx)
-	if err := q.StopRunningEntry(ctx); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	entry, err := q.StartEntry(ctx, taskID)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	if err := tx.Commit(ctx); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -48,8 +28,8 @@ func (s *Server) stopTime(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid task id")
 		return
 	}
-	entry, err := s.Q.StopEntryForTask(r.Context(), taskID)
-	if errors.Is(err, pgx.ErrNoRows) {
+	entry, err := s.Store.StopEntryForTask(r.Context(), taskID)
+	if errors.Is(err, store.ErrNotFound) {
 		writeError(w, http.StatusConflict, "no running timer for this task")
 		return
 	}
@@ -61,11 +41,7 @@ func (s *Server) stopTime(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) runningTime(w http.ResponseWriter, r *http.Request) {
-	entry, err := s.Q.GetRunningEntry(r.Context())
-	if errors.Is(err, pgx.ErrNoRows) {
-		writeJSON(w, http.StatusOK, nil)
-		return
-	}
+	entry, err := s.Store.GetRunningEntry(r.Context())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -79,7 +55,7 @@ func (s *Server) listTimeForTask(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid task id")
 		return
 	}
-	entries, err := s.Q.ListEntriesForTask(r.Context(), taskID)
+	entries, err := s.Store.ListEntriesForTask(r.Context(), taskID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -89,22 +65,13 @@ func (s *Server) listTimeForTask(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) statsTime(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
-	from := parseDateParam(r, "from", now.AddDate(0, 0, -30))
-	to := parseDateParam(r, "to", now)
+	from := dateParam(r, "from", now.AddDate(0, 0, -30))
+	to := dateParam(r, "to", now)
 
-	rows, err := s.Q.TimeByDay(r.Context(), sqlc.TimeByDayParams{FromDate: from, ToDate: to})
+	rows, err := s.Store.TimeByDay(r.Context(), from, to)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-
-	type point struct {
-		Date    string `json:"date"`
-		Seconds int64  `json:"seconds"`
-	}
-	out := make([]point, 0, len(rows))
-	for _, row := range rows {
-		out = append(out, point{Date: row.Day.Time.Format("2006-01-02"), Seconds: row.Seconds})
-	}
-	writeJSON(w, http.StatusOK, out)
+	writeJSON(w, http.StatusOK, rows)
 }
