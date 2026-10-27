@@ -1,14 +1,14 @@
 import { format, parse, startOfWeek, getDay } from 'date-fns'
 import { enUS } from 'date-fns/locale/en-US'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Calendar as BigCalendar, dateFnsLocalizer, type DateCellWrapperProps, type View } from 'react-big-calendar'
 import * as dragAndDropAddon from 'react-big-calendar/lib/addons/dragAndDrop'
 import type { EventInteractionArgs } from 'react-big-calendar/lib/addons/dragAndDrop'
 import 'react-big-calendar/lib/css/react-big-calendar.css'
 import 'react-big-calendar/lib/addons/dragAndDrop/styles.css'
-import { Button } from '@/components/ui/button'
 import { LogMeetingOutcomeDialog } from '../components/calendar/LogMeetingOutcomeDialog'
-import { useBoards, usePendingMeetingOutcomes, useTasks, useUpdateTask } from '../api/hooks'
+import { useBoards, useTasks, useUpdateTask } from '../api/hooks'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useUIStore } from '../store/ui'
 import type { MeetingOutcome, Task } from '../api/types'
 
@@ -46,10 +46,20 @@ export function Calendar() {
   const boardId = selectedBoardId ?? boards?.[0]?.id
   const { data: tasks } = useTasks(boardId)
   const updateTask = useUpdateTask(boardId)
-  const { data: pendingOutcomes } = usePendingMeetingOutcomes()
+  const location = useLocation()
+  const navigate = useNavigate()
 
   const [dialogDate, setDialogDate] = useState<string | null>(null)
   const [dialogOutcome, setDialogOutcome] = useState<MeetingOutcome | undefined>(undefined)
+
+  // The global pending-outcomes banner navigates here with the outcome in state.
+  useEffect(() => {
+    const outcome = (location.state as { outcome?: MeetingOutcome } | null)?.outcome
+    if (!outcome) return
+    setDialogOutcome(outcome)
+    setDialogDate(outcome.occurred_on)
+    navigate(location.pathname, { replace: true, state: null })
+  }, [location, navigate])
 
   const events = useMemo<CalendarEvent[]>(
     () =>
@@ -78,11 +88,6 @@ export function Calendar() {
     setDialogDate(format(date, 'yyyy-MM-dd'))
   }
 
-  function openPendingOutcome(outcome: MeetingOutcome) {
-    setDialogOutcome(outcome)
-    setDialogDate(outcome.occurred_on)
-  }
-
   function DateCellWrapper({ value, children }: DateCellWrapperProps) {
     return (
       <div className="group relative h-full w-full">
@@ -102,22 +107,6 @@ export function Calendar() {
 
   return (
     <div className="flex flex-col gap-3">
-      {pendingOutcomes && pendingOutcomes.length > 0 && (
-        <div className="flex flex-col gap-2">
-          {pendingOutcomes.map((o) => (
-            <div
-              key={o.id}
-              className="flex items-center justify-between rounded-md border bg-accent px-3 py-2 text-sm"
-            >
-              <span>Meeting "{o.title || 'Untitled'}" just ended — log the outcome?</span>
-              <Button size="sm" onClick={() => openPendingOutcome(o)}>
-                Log outcome
-              </Button>
-            </div>
-          ))}
-        </div>
-      )}
-
       <div className="h-[75vh] rounded-lg border p-3">
         <DnDCalendar
           localizer={localizer}

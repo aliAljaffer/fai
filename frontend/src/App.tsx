@@ -13,6 +13,7 @@ import { Search } from './pages/Search'
 import { Settings } from './pages/Settings'
 import { Stats } from './pages/Stats'
 import { CommandPalette } from './components/CommandPalette'
+import { PendingOutcomesBanner } from './components/calendar/PendingOutcomesBanner'
 import { TimerWidget } from './components/TimerWidget'
 import { TaskDetailSheet } from './components/board/TaskDetailSheet'
 import { useUIStore } from './store/ui'
@@ -100,6 +101,7 @@ export function App() {
           Settings
         </NavLink>
       </nav>
+      <PendingOutcomesBanner />
       <main className="p-6">
         <Routes>
           <Route path="/" element={<Board />} />
