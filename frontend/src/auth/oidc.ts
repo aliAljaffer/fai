@@ -1,9 +1,15 @@
 import { UserManager, WebStorageStateStore } from 'oidc-client-ts'
 
-export const authDisabled = import.meta.env.VITE_DISABLE_AUTH === 'true'
-
 const authority = import.meta.env.VITE_OIDC_AUTHORITY ?? ''
 const clientId = import.meta.env.VITE_OIDC_CLIENT_ID ?? 'fai'
+
+// Covers both local dev (VITE_DISABLE_AUTH=true) and the docker-compose deployment:
+// there, oauth2-proxy + Caddy's forward_auth gate every request — including the
+// initial page load — before the browser ever reaches this SPA, so no authority is
+// baked in at build time and the frontend correctly does no client-side auth of its
+// own (a second login flow here would conflict with the one oauth2-proxy already
+// completed). The kubernetes deployment's build bakes in a real authority instead.
+export const authDisabled = import.meta.env.VITE_DISABLE_AUTH === 'true' || !authority
 
 export const userManager = authDisabled
   ? null

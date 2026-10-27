@@ -1,0 +1,57 @@
+services:
+  backend:
+    image: ghcr.io/alialjaffer/fai-backend:latest
+    env_file: .env.prod
+    environment:
+      DATABASE_URL: sqlite:///data/fai.db
+      AUTH_MODE: proxy-header
+      PORT: "8080"
+      NTFY_URL: http://ntfy
+    volumes:
+      - faidata:/data
+    expose: ["8080"]
+    restart: unless-stopped
+
+  frontend:
+    image: ghcr.io/alialjaffer/fai-frontend:latest
+    expose: ["80"]
+    depends_on: [backend]
+    restart: unless-stopped
+
+  ntfy: # bundled, not shared cluster infra — there's no cluster here
+    image: binwiederhier/ntfy
+    command: serve
+    volumes: [ntfydata:/var/lib/ntfy]
+    environment:
+      NTFY_UPSTREAM_BASE_URL: "https://ntfy.sh"
+    restart: unless-stopped
+
+  oauth2-proxy:
+    image: quay.io/oauth2-proxy/oauth2-proxy:latest
+    env_file: .env.prod # OAUTH2_PROXY_CLIENT_ID, OAUTH2_PROXY_CLIENT_SECRET, OAUTH2_PROXY_OIDC_ISSUER_URL, OAUTH2_PROXY_COOKIE_SECRET
+    environment:
+      OAUTH2_PROXY_PROVIDER: oidc
+      OAUTH2_PROXY_HTTP_ADDRESS: "0.0.0.0:4180"
+      OAUTH2_PROXY_EMAIL_DOMAINS: "*"
+      OAUTH2_PROXY_SET_XAUTHREQUEST: "true"
+      OAUTH2_PROXY_PASS_USER_HEADERS: "true"
+      OAUTH2_PROXY_COOKIE_SECURE: "true"
+      OAUTH2_PROXY_REDIRECT_URL: "https://${FAI_DOMAIN}/oauth2/callback"
+      OAUTH2_PROXY_UPSTREAMS: "static://202"
+    expose: ["4180"]
+    restart: unless-stopped
+
+  caddy: # reverse proxy + automatic TLS + oauth2-proxy forward_auth gate
+    image: caddy:alpine
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./Caddyfile.prod:/etc/caddy/Caddyfile
+      - caddydata:/data
+    env_file: .env.prod # FAI_DOMAIN
+    depends_on: [backend, frontend, oauth2-proxy]
+    restart: unless-stopped
+
+volumes:
+  faidata: {}
+  ntfydata: {}
+  caddydata: {}

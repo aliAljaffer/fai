@@ -1,0 +1,24 @@
+{$FAI_DOMAIN} {
+	handle /oauth2/* {
+		reverse_proxy oauth2-proxy:4180
+	}
+
+	handle {
+		forward_auth oauth2-proxy:4180 {
+			uri /oauth2/auth
+			copy_headers X-Auth-Request-User X-Auth-Request-Email
+
+			@unauthenticated status 401
+			handle_response @unauthenticated {
+				redir * /oauth2/start?rd={http.request.orig_uri}
+			}
+		}
+
+		handle /api/* {
+			reverse_proxy backend:8080
+		}
+		handle {
+			reverse_proxy frontend:80
+		}
+	}
+}

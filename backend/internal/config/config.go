@@ -1,6 +1,9 @@
 package config
 
-import "os"
+import (
+	"os"
+	"strings"
+)
 
 type Config struct {
 	DatabaseURL         string
@@ -20,6 +23,23 @@ type Config struct {
 	AIProvider          string
 	AIAPIKey            string
 	AIModel             string
+	// AuthMode is "oidc" (default: backend validates bearer JWTs itself, used by the
+	// kubernetes deployment) or "proxy-header" (trusts X-Forwarded-User/-Email set by
+	// a fronting oauth2-proxy, used by the docker-compose deployment). Only safe in
+	// "proxy-header" mode if the backend is unreachable except through that proxy.
+	AuthMode string
+}
+
+// IsSQLite reports whether DatabaseURL names a SQLite file rather than a Postgres
+// connection string, selecting which store.Store implementation main.go constructs.
+func (c Config) IsSQLite() bool {
+	return strings.HasPrefix(c.DatabaseURL, "sqlite://") || strings.HasPrefix(c.DatabaseURL, "sqlite:")
+}
+
+// SQLitePath strips the sqlite:// (or sqlite:) scheme prefix to get the bare file path.
+func (c Config) SQLitePath() string {
+	s := strings.TrimPrefix(c.DatabaseURL, "sqlite://")
+	return strings.TrimPrefix(s, "sqlite:")
 }
 
 func Load() Config {
@@ -41,6 +61,7 @@ func Load() Config {
 		AIProvider:          os.Getenv("AI_PROVIDER"),
 		AIAPIKey:            os.Getenv("AI_API_KEY"),
 		AIModel:             os.Getenv("AI_MODEL"),
+		AuthMode:            envOr("AUTH_MODE", "oidc"),
 	}
 }
 
