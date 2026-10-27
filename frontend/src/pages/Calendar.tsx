@@ -2,7 +2,8 @@ import { format, parse, startOfWeek, getDay } from 'date-fns'
 import { enUS } from 'date-fns/locale/en-US'
 import { useMemo, useState } from 'react'
 import { Calendar as BigCalendar, dateFnsLocalizer, type DateCellWrapperProps, type View } from 'react-big-calendar'
-import withDragAndDrop, { type EventInteractionArgs } from 'react-big-calendar/lib/addons/dragAndDrop'
+import * as dragAndDropAddon from 'react-big-calendar/lib/addons/dragAndDrop'
+import type { EventInteractionArgs } from 'react-big-calendar/lib/addons/dragAndDrop'
 import 'react-big-calendar/lib/css/react-big-calendar.css'
 import 'react-big-calendar/lib/addons/dragAndDrop/styles.css'
 import { Button } from '@/components/ui/button'
@@ -18,6 +19,15 @@ const localizer = dateFnsLocalizer({
   getDay,
   locales: { 'en-US': enUS },
 })
+
+type WithDragAndDrop = typeof import('react-big-calendar/lib/addons/dragAndDrop').default
+
+// The addon ships CommonJS; the bundler's interop wraps its default export in
+// another default, so unwrap defensively rather than calling a namespace object.
+const dndDefault = (dragAndDropAddon as unknown as { default?: unknown }).default
+const withDragAndDrop = ((dndDefault as { default?: WithDragAndDrop })?.default ??
+  dndDefault ??
+  dragAndDropAddon) as WithDragAndDrop
 
 const DnDCalendar = withDragAndDrop<CalendarEvent>(BigCalendar)
 
