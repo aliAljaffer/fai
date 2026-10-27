@@ -9,6 +9,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Sheet, SheetContent, SheetFooter, SheetHeader } from '@/components/ui/sheet'
+import { JiraPanel } from './JiraPanel'
 import { MarkdownRenderer } from '../MarkdownRenderer'
 import { useRunningTime, useStartTime, useStopTime, useTaskTimeEntries } from '../../api/hooks'
 import { formatDuration } from '../../lib/format'
@@ -80,6 +81,7 @@ export function TaskDetail({
             <SelectItem value="high">high</SelectItem>
           </SelectContent>
         </Select>
+        <JiraPanel taskId={task.id} />
         <SheetFooter className="mt-auto flex-row justify-start px-0">
           <Button
             onClick={() => {

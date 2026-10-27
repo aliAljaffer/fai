@@ -15,6 +15,8 @@ type Querier interface {
 	CreateBoard(ctx context.Context, name string) (Board, error)
 	CreateColumn(ctx context.Context, arg CreateColumnParams) (BoardColumn, error)
 	CreateJiraLink(ctx context.Context, arg CreateJiraLinkParams) (JiraLink, error)
+	CreateJiraLinkExported(ctx context.Context, arg CreateJiraLinkExportedParams) (JiraLink, error)
+	CreateJiraLinkManual(ctx context.Context, arg CreateJiraLinkManualParams) (JiraLink, error)
 	CreateNote(ctx context.Context, arg CreateNoteParams) (CreateNoteRow, error)
 	CreateReminder(ctx context.Context, arg CreateReminderParams) (Reminder, error)
 	CreateTag(ctx context.Context, arg CreateTagParams) (Tag, error)

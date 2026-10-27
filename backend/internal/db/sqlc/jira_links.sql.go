@@ -52,6 +52,80 @@ func (q *Queries) CreateJiraLink(ctx context.Context, arg CreateJiraLinkParams) 
 	return i, err
 }
 
+const createJiraLinkExported = `-- name: CreateJiraLinkExported :one
+INSERT INTO jira_links (task_id, jira_key, jira_url, jira_project_key, link_origin, last_exported_at)
+VALUES ($1, $2, $3, $4, 'exported', $5)
+RETURNING task_id, jira_key, jira_url, jira_project_key, link_origin, last_imported_at, last_exported_at, raw_status, created_at
+`
+
+type CreateJiraLinkExportedParams struct {
+	TaskID         int64              `json:"task_id"`
+	JiraKey        string             `json:"jira_key"`
+	JiraUrl        string             `json:"jira_url"`
+	JiraProjectKey string             `json:"jira_project_key"`
+	LastExportedAt pgtype.Timestamptz `json:"last_exported_at"`
+}
+
+func (q *Queries) CreateJiraLinkExported(ctx context.Context, arg CreateJiraLinkExportedParams) (JiraLink, error) {
+	row := q.db.QueryRow(ctx, createJiraLinkExported,
+		arg.TaskID,
+		arg.JiraKey,
+		arg.JiraUrl,
+		arg.JiraProjectKey,
+		arg.LastExportedAt,
+	)
+	var i JiraLink
+	err := row.Scan(
+		&i.TaskID,
+		&i.JiraKey,
+		&i.JiraUrl,
+		&i.JiraProjectKey,
+		&i.LinkOrigin,
+		&i.LastImportedAt,
+		&i.LastExportedAt,
+		&i.RawStatus,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const createJiraLinkManual = `-- name: CreateJiraLinkManual :one
+INSERT INTO jira_links (task_id, jira_key, jira_url, jira_project_key, link_origin, raw_status)
+VALUES ($1, $2, $3, $4, 'manual', $5)
+RETURNING task_id, jira_key, jira_url, jira_project_key, link_origin, last_imported_at, last_exported_at, raw_status, created_at
+`
+
+type CreateJiraLinkManualParams struct {
+	TaskID         int64       `json:"task_id"`
+	JiraKey        string      `json:"jira_key"`
+	JiraUrl        string      `json:"jira_url"`
+	JiraProjectKey string      `json:"jira_project_key"`
+	RawStatus      pgtype.Text `json:"raw_status"`
+}
+
+func (q *Queries) CreateJiraLinkManual(ctx context.Context, arg CreateJiraLinkManualParams) (JiraLink, error) {
+	row := q.db.QueryRow(ctx, createJiraLinkManual,
+		arg.TaskID,
+		arg.JiraKey,
+		arg.JiraUrl,
+		arg.JiraProjectKey,
+		arg.RawStatus,
+	)
+	var i JiraLink
+	err := row.Scan(
+		&i.TaskID,
+		&i.JiraKey,
+		&i.JiraUrl,
+		&i.JiraProjectKey,
+		&i.LinkOrigin,
+		&i.LastImportedAt,
+		&i.LastExportedAt,
+		&i.RawStatus,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const deleteJiraLink = `-- name: DeleteJiraLink :exec
 DELETE FROM jira_links WHERE task_id = $1
 `

@@ -69,6 +69,11 @@ func NewRouter(s *Server) http.Handler {
 		r.Delete("/reminders/{reminderID}", s.deleteReminder)
 
 		r.Post("/jira/import", s.jiraImport)
+		r.Post("/jira/export", s.jiraExport)
+		r.Get("/tasks/{taskID}/jira/link", s.jiraGetLink)
+		r.Post("/tasks/{taskID}/jira/link", s.jiraLink)
+		r.Delete("/tasks/{taskID}/jira/link", s.jiraUnlink)
+		r.Get("/tasks/{taskID}/jira/suggestions", s.jiraSuggestions)
 	})
 
 	return r

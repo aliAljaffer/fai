@@ -28,6 +28,25 @@ export interface Note {
   updated_at: string
 }
 
+export interface JiraLink {
+  task_id: number
+  jira_key: string
+  jira_url: string
+  jira_project_key: string
+  link_origin: 'imported' | 'exported' | 'manual'
+  last_imported_at: string | null
+  last_exported_at: string | null
+  raw_status: string | null
+  created_at: string
+}
+
+export interface JiraSuggestion {
+  jira_key: string
+  summary: string
+  status: string
+  score: number
+}
+
 export interface Reminder {
   id: number
   title: string

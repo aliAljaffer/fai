@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from './client'
-import type { Board, BoardColumn, Note, Reminder, Tag, Task, TimeEntry } from './types'
+import type { Board, BoardColumn, JiraLink, JiraSuggestion, Note, Reminder, Tag, Task, TimeEntry } from './types'
 
 export function useBoards() {
   return useQuery({ queryKey: ['boards'], queryFn: () => api.get<Board[]>('/boards') })
@@ -188,6 +188,43 @@ export function useTimeStats(from: string, to: string) {
   return useQuery({
     queryKey: ['stats', 'time', from, to],
     queryFn: () => api.get<TimePoint[]>(`/stats/time?from=${from}&to=${to}`),
+  })
+}
+
+export function useJiraLink(taskId: number) {
+  return useQuery({
+    queryKey: ['jira', 'link', taskId],
+    queryFn: () => api.get<JiraLink | null>(`/tasks/${taskId}/jira/link`),
+  })
+}
+
+export function useJiraSuggestions(taskId: number) {
+  return useMutation({
+    mutationFn: () => api.get<JiraSuggestion[]>(`/tasks/${taskId}/jira/suggestions`),
+  })
+}
+
+export function useLinkJira(taskId: number) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (jiraKey: string) => api.post<JiraLink>(`/tasks/${taskId}/jira/link`, { jira_key: jiraKey }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['jira', 'link', taskId] }),
+  })
+}
+
+export function useUnlinkJira(taskId: number) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: () => api.delete<void>(`/tasks/${taskId}/jira/link`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['jira', 'link', taskId] }),
+  })
+}
+
+export function useExportJira(taskId: number) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: () => api.post<JiraLink>('/jira/export', { task_id: taskId }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['jira', 'link', taskId] }),
   })
 }
 
