@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import { App } from './App.tsx'
 import '@uiw/react-md-editor/markdown-editor.css'
+import 'react-calendar-heatmap/dist/styles.css'
 import './index.css'
 
 const queryClient = new QueryClient()

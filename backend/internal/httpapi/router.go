@@ -42,6 +42,7 @@ func NewRouter(s *Server) http.Handler {
 		r.Post("/tags", s.createTag)
 
 		r.Get("/search", s.search)
+		r.Get("/stats/completions", s.statsCompletions)
 
 		r.Get("/notes", s.listNotes)
 		r.Post("/notes", s.createNote)

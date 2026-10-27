@@ -109,6 +109,18 @@ export function useUpdateNote() {
   })
 }
 
+export interface CompletionPoint {
+  date: string
+  count: number
+}
+
+export function useCompletions(from: string, to: string) {
+  return useQuery({
+    queryKey: ['stats', 'completions', from, to],
+    queryFn: () => api.get<CompletionPoint[]>(`/stats/completions?from=${from}&to=${to}`),
+  })
+}
+
 export function useDeleteNote() {
   const qc = useQueryClient()
   return useMutation({

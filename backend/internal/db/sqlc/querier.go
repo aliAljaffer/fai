@@ -11,6 +11,7 @@ import (
 type Querier interface {
 	AddTaskTag(ctx context.Context, arg AddTaskTagParams) error
 	ArchiveTask(ctx context.Context, id int64) error
+	CompletionsByDay(ctx context.Context, arg CompletionsByDayParams) ([]CompletionsByDayRow, error)
 	CreateBoard(ctx context.Context, name string) (Board, error)
 	CreateColumn(ctx context.Context, arg CreateColumnParams) (BoardColumn, error)
 	CreateNote(ctx context.Context, arg CreateNoteParams) (CreateNoteRow, error)
