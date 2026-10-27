@@ -57,7 +57,7 @@ func (q *Queries) SearchNotes(ctx context.Context, websearchToTsquery string) ([
 }
 
 const searchTasks = `-- name: SearchTasks :many
-SELECT id, board_id, column_id, title, description_md, priority, due_date, position, parent_task_id, completed_at, archived, created_at, updated_at
+SELECT id, board_id, column_id, title, description_md, priority, due_date, position, parent_task_id, meeting_outcome_id, completed_at, archived, created_at, updated_at
 FROM tasks
 WHERE archived = false AND search_vector @@ websearch_to_tsquery('english', $1)
 ORDER BY ts_rank(search_vector, websearch_to_tsquery('english', $1)) DESC
@@ -65,19 +65,20 @@ LIMIT 20
 `
 
 type SearchTasksRow struct {
-	ID            int64              `json:"id"`
-	BoardID       int64              `json:"board_id"`
-	ColumnID      int64              `json:"column_id"`
-	Title         string             `json:"title"`
-	DescriptionMd string             `json:"description_md"`
-	Priority      string             `json:"priority"`
-	DueDate       pgtype.Date        `json:"due_date"`
-	Position      float64            `json:"position"`
-	ParentTaskID  pgtype.Int8        `json:"parent_task_id"`
-	CompletedAt   pgtype.Timestamptz `json:"completed_at"`
-	Archived      bool               `json:"archived"`
-	CreatedAt     time.Time          `json:"created_at"`
-	UpdatedAt     time.Time          `json:"updated_at"`
+	ID               int64              `json:"id"`
+	BoardID          int64              `json:"board_id"`
+	ColumnID         int64              `json:"column_id"`
+	Title            string             `json:"title"`
+	DescriptionMd    string             `json:"description_md"`
+	Priority         string             `json:"priority"`
+	DueDate          pgtype.Date        `json:"due_date"`
+	Position         float64            `json:"position"`
+	ParentTaskID     pgtype.Int8        `json:"parent_task_id"`
+	MeetingOutcomeID pgtype.Int8        `json:"meeting_outcome_id"`
+	CompletedAt      pgtype.Timestamptz `json:"completed_at"`
+	Archived         bool               `json:"archived"`
+	CreatedAt        time.Time          `json:"created_at"`
+	UpdatedAt        time.Time          `json:"updated_at"`
 }
 
 func (q *Queries) SearchTasks(ctx context.Context, websearchToTsquery string) ([]SearchTasksRow, error) {
@@ -99,6 +100,7 @@ func (q *Queries) SearchTasks(ctx context.Context, websearchToTsquery string) ([
 			&i.DueDate,
 			&i.Position,
 			&i.ParentTaskID,
+			&i.MeetingOutcomeID,
 			&i.CompletedAt,
 			&i.Archived,
 			&i.CreatedAt,

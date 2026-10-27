@@ -47,6 +47,21 @@ export interface JiraSuggestion {
   score: number
 }
 
+export interface MeetingOutcome {
+  id: number
+  occurred_on: string
+  title: string
+  notes_md: string
+  ends_at: string | null
+  outcome_prompt_sent: boolean
+  created_at: string
+}
+
+export interface ExtractedTask {
+  title: string
+  suggested_done: boolean
+}
+
 export interface Reminder {
   id: number
   title: string
@@ -74,6 +89,7 @@ export interface Task {
   due_date: string | null
   position: number
   parent_task_id: number | null
+  meeting_outcome_id: number | null
   completed_at: string | null
   archived: boolean
   created_at: string

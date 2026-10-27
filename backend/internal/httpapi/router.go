@@ -83,7 +83,15 @@ func NewRouter(s *Server) http.Handler {
 			r.Use(rateLimitByUser(10, 5))
 			r.Post("/tasks/{taskID}/ai/breakdown", s.aiBreakdown)
 			r.Post("/ai/chat", s.aiChat)
+			r.Post("/meeting-outcomes/{outcomeID}/ai/extract-tasks", s.extractTasksFromOutcome)
 		})
+
+		r.Get("/meeting-outcomes", s.listMeetingOutcomes)
+		r.Post("/meeting-outcomes", s.createMeetingOutcome)
+		r.Get("/meeting-outcomes/{outcomeID}", s.getMeetingOutcome)
+		r.Patch("/meeting-outcomes/{outcomeID}", s.updateMeetingOutcome)
+		r.Delete("/meeting-outcomes/{outcomeID}", s.deleteMeetingOutcome)
+		r.Post("/meeting-outcomes/{outcomeID}/tasks", s.createTaskFromOutcome)
 	})
 
 	return r

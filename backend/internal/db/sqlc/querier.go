@@ -19,11 +19,13 @@ type Querier interface {
 	CreateJiraLink(ctx context.Context, arg CreateJiraLinkParams) (JiraLink, error)
 	CreateJiraLinkExported(ctx context.Context, arg CreateJiraLinkExportedParams) (JiraLink, error)
 	CreateJiraLinkManual(ctx context.Context, arg CreateJiraLinkManualParams) (JiraLink, error)
+	CreateMeetingOutcome(ctx context.Context, arg CreateMeetingOutcomeParams) (MeetingOutcome, error)
 	CreateNote(ctx context.Context, arg CreateNoteParams) (CreateNoteRow, error)
 	CreateReminder(ctx context.Context, arg CreateReminderParams) (Reminder, error)
 	CreateTag(ctx context.Context, arg CreateTagParams) (Tag, error)
 	CreateTask(ctx context.Context, arg CreateTaskParams) (CreateTaskRow, error)
 	DeleteJiraLink(ctx context.Context, taskID int64) error
+	DeleteMeetingOutcome(ctx context.Context, id int64) error
 	DeleteNote(ctx context.Context, id int64) error
 	DeleteReminder(ctx context.Context, id int64) error
 	DeleteTask(ctx context.Context, id int64) error
@@ -31,6 +33,7 @@ type Querier interface {
 	GetColumn(ctx context.Context, id int64) (BoardColumn, error)
 	GetJiraLinkByKey(ctx context.Context, jiraKey string) (JiraLink, error)
 	GetJiraLinkByTask(ctx context.Context, taskID int64) (JiraLink, error)
+	GetMeetingOutcome(ctx context.Context, id int64) (MeetingOutcome, error)
 	GetNote(ctx context.Context, id int64) (GetNoteRow, error)
 	GetNoteByTitle(ctx context.Context, title string) (GetNoteByTitleRow, error)
 	GetReminder(ctx context.Context, id int64) (Reminder, error)
@@ -39,15 +42,19 @@ type Querier interface {
 	ListBacklinks(ctx context.Context, arg ListBacklinksParams) ([]ListBacklinksRow, error)
 	ListBoards(ctx context.Context) ([]Board, error)
 	ListColumnsByBoard(ctx context.Context, boardID int64) ([]BoardColumn, error)
+	ListDueUnpromptedMeetingOutcomes(ctx context.Context) ([]MeetingOutcome, error)
 	ListDueUnsentReminders(ctx context.Context) ([]Reminder, error)
 	ListEntriesForTask(ctx context.Context, taskID int64) ([]TaskTimeEntry, error)
+	ListMeetingOutcomes(ctx context.Context, occurredOn pgtype.Date) ([]MeetingOutcome, error)
 	ListNotes(ctx context.Context) ([]ListNotesRow, error)
+	ListPendingMeetingOutcomes(ctx context.Context) ([]MeetingOutcome, error)
 	ListReminders(ctx context.Context) ([]Reminder, error)
 	ListSubtasks(ctx context.Context, parentTaskID pgtype.Int8) ([]ListSubtasksRow, error)
 	ListTags(ctx context.Context) ([]Tag, error)
 	ListTagsForTask(ctx context.Context, taskID int64) ([]Tag, error)
 	ListTasks(ctx context.Context, arg ListTasksParams) ([]ListTasksRow, error)
 	ListTasksByColumnOrdered(ctx context.Context, columnID int64) ([]ListTasksByColumnOrderedRow, error)
+	MarkMeetingOutcomePromptSent(ctx context.Context, id int64) error
 	MarkReminderSent(ctx context.Context, id int64) error
 	MoveTask(ctx context.Context, arg MoveTaskParams) (MoveTaskRow, error)
 	RemoveTaskTag(ctx context.Context, arg RemoveTaskTagParams) error
@@ -59,6 +66,7 @@ type Querier interface {
 	StopRunningEntry(ctx context.Context) error
 	TimeByDay(ctx context.Context, arg TimeByDayParams) ([]TimeByDayRow, error)
 	UpdateJiraLinkImported(ctx context.Context, arg UpdateJiraLinkImportedParams) error
+	UpdateMeetingOutcome(ctx context.Context, arg UpdateMeetingOutcomeParams) (MeetingOutcome, error)
 	UpdateNote(ctx context.Context, arg UpdateNoteParams) (UpdateNoteRow, error)
 	UpdateReminder(ctx context.Context, arg UpdateReminderParams) (Reminder, error)
 	UpdateTask(ctx context.Context, arg UpdateTaskParams) (UpdateTaskRow, error)

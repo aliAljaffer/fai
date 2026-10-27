@@ -37,6 +37,16 @@ type JiraLink struct {
 	CreatedAt      time.Time          `json:"created_at"`
 }
 
+type MeetingOutcome struct {
+	ID                int64              `json:"id"`
+	OccurredOn        pgtype.Date        `json:"occurred_on"`
+	Title             string             `json:"title"`
+	NotesMd           string             `json:"notes_md"`
+	EndsAt            pgtype.Timestamptz `json:"ends_at"`
+	OutcomePromptSent bool               `json:"outcome_prompt_sent"`
+	CreatedAt         time.Time          `json:"created_at"`
+}
+
 type Note struct {
 	ID           int64       `json:"id"`
 	Title        string      `json:"title"`
@@ -68,20 +78,21 @@ type Tag struct {
 }
 
 type Task struct {
-	ID            int64              `json:"id"`
-	BoardID       int64              `json:"board_id"`
-	ColumnID      int64              `json:"column_id"`
-	Title         string             `json:"title"`
-	DescriptionMd string             `json:"description_md"`
-	Priority      string             `json:"priority"`
-	DueDate       pgtype.Date        `json:"due_date"`
-	Position      float64            `json:"position"`
-	CompletedAt   pgtype.Timestamptz `json:"completed_at"`
-	Archived      bool               `json:"archived"`
-	CreatedAt     time.Time          `json:"created_at"`
-	UpdatedAt     time.Time          `json:"updated_at"`
-	SearchVector  interface{}        `json:"search_vector"`
-	ParentTaskID  pgtype.Int8        `json:"parent_task_id"`
+	ID               int64              `json:"id"`
+	BoardID          int64              `json:"board_id"`
+	ColumnID         int64              `json:"column_id"`
+	Title            string             `json:"title"`
+	DescriptionMd    string             `json:"description_md"`
+	Priority         string             `json:"priority"`
+	DueDate          pgtype.Date        `json:"due_date"`
+	Position         float64            `json:"position"`
+	CompletedAt      pgtype.Timestamptz `json:"completed_at"`
+	Archived         bool               `json:"archived"`
+	CreatedAt        time.Time          `json:"created_at"`
+	UpdatedAt        time.Time          `json:"updated_at"`
+	SearchVector     interface{}        `json:"search_vector"`
+	ParentTaskID     pgtype.Int8        `json:"parent_task_id"`
+	MeetingOutcomeID pgtype.Int8        `json:"meeting_outcome_id"`
 }
 
 type TaskTag struct {

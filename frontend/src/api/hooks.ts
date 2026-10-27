@@ -1,6 +1,18 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from './client'
-import type { Board, BoardColumn, JiraLink, JiraSuggestion, Note, Reminder, Tag, Task, TimeEntry } from './types'
+import type {
+  Board,
+  BoardColumn,
+  ExtractedTask,
+  JiraLink,
+  JiraSuggestion,
+  MeetingOutcome,
+  Note,
+  Reminder,
+  Tag,
+  Task,
+  TimeEntry,
+} from './types'
 
 export function useBoards() {
   return useQuery({ queryKey: ['boards'], queryFn: () => api.get<Board[]>('/boards') })
@@ -256,6 +268,55 @@ export function useAIBreakdown(taskId: number) {
 export function useAIChat() {
   return useMutation({
     mutationFn: (prompt: string) => api.post<{ reply: string }>('/ai/chat', { prompt }),
+  })
+}
+
+export function usePendingMeetingOutcomes() {
+  return useQuery({
+    queryKey: ['meeting-outcomes', 'pending'],
+    queryFn: () => api.get<MeetingOutcome[]>('/meeting-outcomes?pending=true'),
+    refetchOnWindowFocus: true,
+    refetchInterval: 60_000,
+  })
+}
+
+export function useCreateMeetingOutcome() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { occurred_on: string; title: string; notes_md: string; ends_at?: string }) =>
+      api.post<MeetingOutcome>('/meeting-outcomes', body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['meeting-outcomes'] }),
+  })
+}
+
+export function useUpdateMeetingOutcome() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      id,
+      ...body
+    }: {
+      id: number
+      title: string
+      notes_md: string
+      ends_at?: string
+    }) => api.patch<MeetingOutcome>(`/meeting-outcomes/${id}`, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['meeting-outcomes'] }),
+  })
+}
+
+export function useExtractTasksFromOutcome(outcomeId: number) {
+  return useMutation({
+    mutationFn: () => api.post<ExtractedTask[]>(`/meeting-outcomes/${outcomeId}/ai/extract-tasks`),
+  })
+}
+
+export function useCreateTaskFromOutcome(outcomeId: number) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { title: string; mark_done: boolean; board_id: number }) =>
+      api.post<Task>(`/meeting-outcomes/${outcomeId}/tasks`, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['tasks'] }),
   })
 }
 

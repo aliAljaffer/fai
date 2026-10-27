@@ -2,6 +2,7 @@ package reminders
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"time"
 
@@ -38,9 +39,7 @@ func (s *Scheduler) tick(ctx context.Context) {
 	due, err := s.Q.ListDueUnsentReminders(ctx)
 	if err != nil {
 		log.Printf("reminders: list due: %v", err)
-		return
 	}
-
 	for _, r := range due {
 		if err := s.Ntfy.Publish("Reminder", r.Title); err != nil {
 			log.Printf("reminders: publish %d: %v", r.ID, err)
@@ -48,6 +47,25 @@ func (s *Scheduler) tick(ctx context.Context) {
 		}
 		if err := s.Q.MarkReminderSent(ctx, r.ID); err != nil {
 			log.Printf("reminders: mark sent %d: %v", r.ID, err)
+		}
+	}
+
+	pending, err := s.Q.ListDueUnpromptedMeetingOutcomes(ctx)
+	if err != nil {
+		log.Printf("meeting outcomes: list due: %v", err)
+		return
+	}
+	for _, m := range pending {
+		title := m.Title
+		if title == "" {
+			title = "Untitled meeting"
+		}
+		if err := s.Ntfy.Publish("Meeting ended", fmt.Sprintf("'%s' just ended — log the outcome?", title)); err != nil {
+			log.Printf("meeting outcomes: publish %d: %v", m.ID, err)
+			continue
+		}
+		if err := s.Q.MarkMeetingOutcomePromptSent(ctx, m.ID); err != nil {
+			log.Printf("meeting outcomes: mark prompt sent %d: %v", m.ID, err)
 		}
 	}
 }
