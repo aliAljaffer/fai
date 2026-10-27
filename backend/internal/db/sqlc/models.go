@@ -25,6 +25,18 @@ type BoardColumn struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+type JiraLink struct {
+	TaskID         int64              `json:"task_id"`
+	JiraKey        string             `json:"jira_key"`
+	JiraUrl        string             `json:"jira_url"`
+	JiraProjectKey string             `json:"jira_project_key"`
+	LinkOrigin     string             `json:"link_origin"`
+	LastImportedAt pgtype.Timestamptz `json:"last_imported_at"`
+	LastExportedAt pgtype.Timestamptz `json:"last_exported_at"`
+	RawStatus      pgtype.Text        `json:"raw_status"`
+	CreatedAt      time.Time          `json:"created_at"`
+}
+
 type Note struct {
 	ID           int64       `json:"id"`
 	Title        string      `json:"title"`

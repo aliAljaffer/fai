@@ -8,11 +8,15 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/alialjaffer/fai/backend/internal/db/sqlc"
+	"github.com/alialjaffer/fai/backend/internal/jira"
 )
 
 type Server struct {
-	Q    *sqlc.Queries
-	Pool *pgxpool.Pool
+	Q                   *sqlc.Queries
+	Pool                *pgxpool.Pool
+	Jira                *jira.Client
+	JiraDefaultProject  string
+	JiraStatusColumnMap map[string]string
 }
 
 func NewRouter(s *Server) http.Handler {
@@ -63,6 +67,8 @@ func NewRouter(s *Server) http.Handler {
 		r.Post("/reminders", s.createReminder)
 		r.Patch("/reminders/{reminderID}", s.updateReminder)
 		r.Delete("/reminders/{reminderID}", s.deleteReminder)
+
+		r.Post("/jira/import", s.jiraImport)
 	})
 
 	return r

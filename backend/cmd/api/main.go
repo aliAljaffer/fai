@@ -11,6 +11,7 @@ import (
 	"github.com/alialjaffer/fai/backend/internal/config"
 	"github.com/alialjaffer/fai/backend/internal/db/sqlc"
 	"github.com/alialjaffer/fai/backend/internal/httpapi"
+	"github.com/alialjaffer/fai/backend/internal/jira"
 	"github.com/alialjaffer/fai/backend/internal/ntfy"
 	"github.com/alialjaffer/fai/backend/internal/reminders"
 )
@@ -30,7 +31,17 @@ func main() {
 	defer pool.Close()
 
 	queries := sqlc.New(pool)
-	server := &httpapi.Server{Q: queries, Pool: pool}
+	jiraClient := jira.New(cfg.JiraBaseURL, cfg.JiraEmail, cfg.JiraAPIToken)
+	if jiraClient == nil {
+		log.Println("JIRA_BASE_URL/EMAIL/API_TOKEN unset — Jira import disabled")
+	}
+	server := &httpapi.Server{
+		Q:                   queries,
+		Pool:                pool,
+		Jira:                jiraClient,
+		JiraDefaultProject:  cfg.JiraDefaultProject,
+		JiraStatusColumnMap: jira.ParseStatusColumnMap(cfg.JiraStatusColumnMap),
+	}
 	router := httpapi.NewRouter(server)
 
 	ntfyClient := ntfy.New(cfg.NtfyURL, cfg.NtfyTopic, cfg.NtfyUsername, cfg.NtfyPassword)

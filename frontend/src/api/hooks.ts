@@ -191,6 +191,19 @@ export function useTimeStats(from: string, to: string) {
   })
 }
 
+export interface JiraImportResult {
+  imported: number
+  updated: number
+  skipped: number
+}
+
+export function useJiraImport() {
+  return useMutation({
+    mutationFn: (body: { board_id: number; jql?: string; force_update?: boolean }) =>
+      api.post<JiraImportResult>('/jira/import', body),
+  })
+}
+
 export interface CompletionPoint {
   date: string
   count: number

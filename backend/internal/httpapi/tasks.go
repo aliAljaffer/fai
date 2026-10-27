@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 	"time"
@@ -82,14 +83,10 @@ func (s *Server) createTask(w http.ResponseWriter, r *http.Request) {
 		body.Priority = "medium"
 	}
 
-	existing, err := s.Q.ListTasksByColumnOrdered(r.Context(), body.ColumnID)
+	position, err := s.appendPosition(r.Context(), body.ColumnID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
-	}
-	position := positionGap
-	if len(existing) > 0 {
-		position = existing[len(existing)-1].Position + positionGap
 	}
 
 	task, err := s.Q.CreateTask(r.Context(), sqlc.CreateTaskParams{
@@ -210,6 +207,18 @@ func (s *Server) moveTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, task)
+}
+
+// appendPosition returns the position for a new task at the end of columnID.
+func (s *Server) appendPosition(ctx context.Context, columnID int64) (float64, error) {
+	existing, err := s.Q.ListTasksByColumnOrdered(ctx, columnID)
+	if err != nil {
+		return 0, err
+	}
+	if len(existing) == 0 {
+		return positionGap, nil
+	}
+	return existing[len(existing)-1].Position + positionGap, nil
 }
 
 type idPos struct {

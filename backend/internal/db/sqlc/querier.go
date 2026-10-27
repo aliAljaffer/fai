@@ -14,15 +14,19 @@ type Querier interface {
 	CompletionsByDay(ctx context.Context, arg CompletionsByDayParams) ([]CompletionsByDayRow, error)
 	CreateBoard(ctx context.Context, name string) (Board, error)
 	CreateColumn(ctx context.Context, arg CreateColumnParams) (BoardColumn, error)
+	CreateJiraLink(ctx context.Context, arg CreateJiraLinkParams) (JiraLink, error)
 	CreateNote(ctx context.Context, arg CreateNoteParams) (CreateNoteRow, error)
 	CreateReminder(ctx context.Context, arg CreateReminderParams) (Reminder, error)
 	CreateTag(ctx context.Context, arg CreateTagParams) (Tag, error)
 	CreateTask(ctx context.Context, arg CreateTaskParams) (CreateTaskRow, error)
+	DeleteJiraLink(ctx context.Context, taskID int64) error
 	DeleteNote(ctx context.Context, id int64) error
 	DeleteReminder(ctx context.Context, id int64) error
 	DeleteTask(ctx context.Context, id int64) error
 	GetBoard(ctx context.Context, id int64) (Board, error)
 	GetColumn(ctx context.Context, id int64) (BoardColumn, error)
+	GetJiraLinkByKey(ctx context.Context, jiraKey string) (JiraLink, error)
+	GetJiraLinkByTask(ctx context.Context, taskID int64) (JiraLink, error)
 	GetNote(ctx context.Context, id int64) (GetNoteRow, error)
 	GetNoteByTitle(ctx context.Context, title string) (GetNoteByTitleRow, error)
 	GetReminder(ctx context.Context, id int64) (Reminder, error)
@@ -49,9 +53,11 @@ type Querier interface {
 	StopEntryForTask(ctx context.Context, taskID int64) (TaskTimeEntry, error)
 	StopRunningEntry(ctx context.Context) error
 	TimeByDay(ctx context.Context, arg TimeByDayParams) ([]TimeByDayRow, error)
+	UpdateJiraLinkImported(ctx context.Context, arg UpdateJiraLinkImportedParams) error
 	UpdateNote(ctx context.Context, arg UpdateNoteParams) (UpdateNoteRow, error)
 	UpdateReminder(ctx context.Context, arg UpdateReminderParams) (Reminder, error)
 	UpdateTask(ctx context.Context, arg UpdateTaskParams) (UpdateTaskRow, error)
+	UpdateTaskTitle(ctx context.Context, arg UpdateTaskTitleParams) error
 }
 
 var _ Querier = (*Queries)(nil)

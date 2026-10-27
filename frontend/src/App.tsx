@@ -8,6 +8,7 @@ import { Notes } from './pages/Notes'
 import { NoteEditor } from './pages/NoteEditor'
 import { Reminders } from './pages/Reminders'
 import { Search } from './pages/Search'
+import { Settings } from './pages/Settings'
 import { Stats } from './pages/Stats'
 import { TimerWidget } from './components/TimerWidget'
 
@@ -74,6 +75,14 @@ export function App() {
         >
           Search
         </NavLink>
+        <NavLink
+          to="/settings"
+          className={({ isActive }) =>
+            cn('text-muted-foreground hover:text-foreground', isActive && 'font-semibold text-foreground')
+          }
+        >
+          Settings
+        </NavLink>
       </nav>
       <main className="p-6">
         <Routes>
@@ -85,6 +94,7 @@ export function App() {
           <Route path="/stats" element={<Stats />} />
           <Route path="/reminders" element={<Reminders />} />
           <Route path="/search" element={<Search />} />
+          <Route path="/settings" element={<Settings />} />
         </Routes>
       </main>
       <Toaster />
