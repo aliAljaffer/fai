@@ -84,6 +84,13 @@ minute.
   allowed namespaces and handles the upstream provider's credentials; fai itself holds
   no SMTP credentials.
 
+## AI
+
+`AI_API_KEY` enables the optional task-breakdown and chat features; `AI_PROVIDER=opencode-zen`
+talks to OpenCode Zen's OpenAI-compatible endpoint with `AI_MODEL` (for example
+`claude-haiku-4-5`), while any other value uses Anthropic's Messages API. The endpoints
+are rate-limited per authenticated subject. Unset means the UI hides the AI actions.
+
 ## Jira
 
 `JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN` enable the bridge.
