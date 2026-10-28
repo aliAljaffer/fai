@@ -13,6 +13,10 @@ env:
   REGISTRY: ghcr.io
   OWNER: alialjaffer
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   backend:
     runs-on: ubuntu-latest
@@ -107,8 +111,14 @@ jobs:
         env:
           BACKEND_DIGEST: ${{ needs.backend.outputs.digest }}
           FRONTEND_DIGEST: ${{ needs.frontend.outputs.digest }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          latest=$(gh api "repos/${GITHUB_REPOSITORY}/commits/main" --jq .sha)
+          if [ "$latest" != "$GITHUB_SHA" ]; then
+            echo "Skipping: main moved to $latest."
+            exit 0
+          fi
           test -n "$BACKEND_DIGEST"
           test -n "$FRONTEND_DIGEST"
           sed -i -E "s|ghcr.io/alialjaffer/fai-backend@sha256:[0-9a-f]{64}|ghcr.io/alialjaffer/fai-backend@${BACKEND_DIGEST}|" kubernetes/apps/fai/backend-deployment.yaml
