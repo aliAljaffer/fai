@@ -48,6 +48,7 @@ type Store interface {
 	CreateTag(ctx context.Context, name, color string) (Tag, error)
 	AddTaskTag(ctx context.Context, taskID, tagID int64) error
 	RemoveTaskTag(ctx context.Context, taskID, tagID int64) error
+	ListTagsForTask(ctx context.Context, taskID int64) ([]Tag, error)
 
 	// Tasks
 	CreateTask(ctx context.Context, p CreateTaskParams) (Task, error)

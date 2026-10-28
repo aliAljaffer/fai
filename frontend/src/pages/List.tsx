@@ -104,6 +104,7 @@ export function List() {
               Title{arrow('title')}
             </TableHead>
             <TableHead>Column</TableHead>
+            <TableHead>Labels</TableHead>
             <TableHead className="cursor-pointer" onClick={() => toggleSort('priority')}>
               Priority{arrow('priority')}
             </TableHead>
@@ -121,13 +122,29 @@ export function List() {
             >
               <TableCell>{t.title}</TableCell>
               <TableCell>{columnName.get(t.column_id)}</TableCell>
+              <TableCell>
+                <div className="flex flex-wrap gap-1">
+                  {(t.tags ?? []).map((tag) => (
+                    <span
+                      key={tag.id}
+                      className="inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[0.65rem] text-muted-foreground"
+                    >
+                      <span
+                        className="size-1.5 rounded-full"
+                        style={{ backgroundColor: tag.color || undefined }}
+                      />
+                      {tag.name}
+                    </span>
+                  ))}
+                </div>
+              </TableCell>
               <TableCell>{t.priority}</TableCell>
               <TableCell>{t.due_date ?? '—'}</TableCell>
             </TableRow>
           ))}
           {!sorted.length && (
             <TableRow>
-              <TableCell colSpan={4} className="py-8 text-center text-muted-foreground">
+              <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
                 No tasks match these filters.
               </TableCell>
             </TableRow>

@@ -13,6 +13,7 @@ import { Search } from './pages/Search'
 import { Settings } from './pages/Settings'
 import { Stats } from './pages/Stats'
 import { CommandPalette } from './components/CommandPalette'
+import { ThemeToggle } from './components/ThemeToggle'
 import { PendingOutcomesBanner } from './components/calendar/PendingOutcomesBanner'
 import { TimerWidget } from './components/TimerWidget'
 import { TaskDetailSheet } from './components/board/TaskDetailSheet'
@@ -75,6 +76,7 @@ export function App() {
           Reminders
         </NavLink>
         <TimerWidget />
+        <ThemeToggle />
         <Button
           variant="ghost"
           size="sm"

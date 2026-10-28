@@ -13,9 +13,8 @@ import {
 } from 'lucide-react'
 import { useHotkeys } from 'react-hotkeys-hook'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { toast } from 'sonner'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
-import { useBoards, useColumns, useCreateTask, useTasks } from '../api/hooks'
+import { useBoards, useTasks } from '../api/hooks'
 import { useUIStore } from '../store/ui'
 
 const pages = [
@@ -30,14 +29,12 @@ const pages = [
 ]
 
 export function CommandPalette() {
-  const { commandOpen, setCommandOpen, selectedBoardId } = useUIStore()
+  const { commandOpen, setCommandOpen, selectedBoardId, requestNewTask } = useUIStore()
   const navigate = useNavigate()
   const location = useLocation()
   const { data: boards } = useBoards()
   const boardId = selectedBoardId ?? boards?.[0]?.id
-  const { data: columns } = useColumns(boardId)
   const { data: tasks } = useTasks(boardId)
-  const createTask = useCreateTask(boardId)
 
   const taskOpen = new URLSearchParams(location.search).has('task')
 
@@ -58,17 +55,9 @@ export function CommandPalette() {
   }
 
   function newTask() {
-    const title = window.prompt('Task title?')
-    if (!title) return
-    const column = [...(columns ?? [])].sort((a, b) => a.position - b.position)[0]
-    if (!boardId || !column) {
-      toast.error('No board column available')
-      return
-    }
-    createTask.mutate(
-      { board_id: boardId, column_id: column.id, title },
-      { onSuccess: (task) => toast.success(`Added “${task.title}”`) },
-    )
+    close()
+    navigate('/')
+    requestNewTask()
   }
 
   useHotkeys('mod+k', () => setCommandOpen(!commandOpen), {

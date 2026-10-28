@@ -148,42 +148,64 @@
   font-size: 6px;
 }
 
-.rbc-calendar {
-  color: var(--foreground);
+.fai-calendar {
+  --fc-border-color: var(--border);
+  --fc-page-bg-color: transparent;
+  --fc-neutral-bg-color: var(--muted);
+  --fc-today-bg-color: color-mix(in oklch, var(--primary) 12%, transparent);
+  --fc-button-bg-color: var(--card);
+  --fc-button-border-color: var(--border);
+  --fc-button-text-color: var(--foreground);
+  --fc-button-hover-bg-color: var(--accent);
+  --fc-button-hover-border-color: var(--border);
+  --fc-button-active-bg-color: var(--primary);
+  --fc-button-active-border-color: var(--primary);
+  --fc-event-bg-color: var(--primary);
+  --fc-event-border-color: var(--primary);
+  --fc-event-text-color: var(--primary-foreground);
 }
-.rbc-off-range-bg {
-  background: var(--muted);
+.fai-calendar .fc {
+  font-size: 0.85rem;
 }
-.rbc-today {
-  background: color-mix(in oklch, var(--primary) 12%, transparent);
+.fai-calendar .fc-toolbar-title {
+  font-size: 1.05rem;
+  font-weight: 600;
 }
-.rbc-header,
-.rbc-month-view,
-.rbc-month-row,
-.rbc-day-bg + .rbc-day-bg,
-.rbc-header + .rbc-header,
-.rbc-toolbar button {
-  border-color: var(--border);
+.fai-calendar .fc-button {
+  box-shadow: none;
+  text-transform: capitalize;
 }
-.rbc-toolbar button {
-  color: var(--foreground);
-  background: var(--card);
+.fai-calendar .fc-daygrid-day-top {
+  flex-direction: row;
+  align-items: center;
+  padding: 1px 4px;
 }
-.rbc-toolbar button:hover {
-  background: var(--accent);
+.fai-calendar .fc-day-top-row {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
 }
-.rbc-toolbar button.rbc-active {
+.fai-calendar .fc-day-add {
+  opacity: 0;
+  display: inline-flex;
+  height: 1rem;
+  width: 1rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
   background: var(--primary);
   color: var(--primary-foreground);
+  font-size: 0.65rem;
+  line-height: 1;
+  transition: opacity 120ms;
 }
-.rbc-event {
-  background: var(--primary);
-  color: var(--primary-foreground);
+.fai-calendar .fc-daygrid-day:hover .fc-day-add {
+  opacity: 1;
 }
-.rbc-off-range {
-  color: var(--muted-foreground);
-}
-.rbc-show-more {
-  color: var(--primary);
-  background: transparent;
+.fai-calendar .fc-event {
+  cursor: pointer;
+  border-radius: 4px;
+  padding: 0 4px;
 }

@@ -279,14 +279,21 @@ func (s *Server) jiraSuggestions(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	ctx := r.Context()
-	task, err := s.Store.GetTask(ctx, taskID)
-	if err != nil {
-		writeError(w, http.StatusNotFound, "task not found")
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
+	if query == "" {
+		ctx := r.Context()
+		task, err := s.Store.GetTask(ctx, taskID)
+		if err != nil {
+			writeError(w, http.StatusNotFound, "task not found")
+			return
+		}
+		query = task.Title
+	} else if len([]rune(query)) < 2 {
+		writeJSON(w, http.StatusOK, []jiraSuggestion{})
 		return
 	}
 
-	issues, err := s.Jira.SearchByText(task.Title, s.JiraDefaultProject, 25)
+	issues, err := s.Jira.SearchByText(query, s.JiraDefaultProject, 25)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
@@ -294,9 +301,9 @@ func (s *Server) jiraSuggestions(w http.ResponseWriter, r *http.Request) {
 
 	summaries := make([]string, len(issues))
 	for i, issue := range issues {
-		summaries[i] = issue.Summary
+		summaries[i] = issue.Key + " " + issue.Summary
 	}
-	matches := fuzzy.Find(task.Title, summaries)
+	matches := fuzzy.Find(query, summaries)
 	sort.Sort(matches)
 
 	if limit > len(matches) {

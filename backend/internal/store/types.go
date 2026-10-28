@@ -43,6 +43,7 @@ type Task struct {
 	MeetingOutcomeID *int64     `json:"meeting_outcome_id"`
 	CompletedAt      *time.Time `json:"completed_at"`
 	Archived         bool       `json:"archived"`
+	Tags             []Tag      `json:"tags"`
 	CreatedAt        time.Time  `json:"created_at"`
 	UpdatedAt        time.Time  `json:"updated_at"`
 }

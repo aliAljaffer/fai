@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom'
+import rehypeHighlight from 'rehype-highlight'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { wikilinksToMarkdownLinks } from '../lib/wikilinks'
@@ -8,9 +9,10 @@ export function MarkdownRenderer({ source }: { source: string }) {
   const navigate = useNavigate()
 
   return (
-    <div className="prose prose-invert prose-sm max-w-none">
+    <div className="prose prose-sm max-w-none dark:prose-invert">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
+        rehypePlugins={[rehypeHighlight]}
         components={{
           a: ({ href, children }) => {
             if (href?.startsWith('wikilink:')) {

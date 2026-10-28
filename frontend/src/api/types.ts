@@ -102,6 +102,7 @@ export interface Task {
   meeting_outcome_id: number | null
   completed_at: string | null
   archived: boolean
+  tags: Tag[]
   created_at: string
   updated_at: string
 }

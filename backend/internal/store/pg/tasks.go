@@ -21,18 +21,25 @@ func (s *Store) CreateTask(ctx context.Context, p store.CreateTaskParams) (store
 		ID: t.ID, BoardID: t.BoardID, ColumnID: t.ColumnID, Title: t.Title,
 		DescriptionMd: t.DescriptionMd, Priority: t.Priority, DueDate: dateToPtr(t.DueDate),
 		Position: t.Position, ParentTaskID: int8ToPtr(t.ParentTaskID), MeetingOutcomeID: int8ToPtr(t.MeetingOutcomeID),
-		CompletedAt: tsToPtr(t.CompletedAt), Archived: t.Archived, CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt,
+		CompletedAt: tsToPtr(t.CompletedAt), Archived: t.Archived, Tags: []store.Tag{}, CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt,
 	}, err
 }
 
 func (s *Store) GetTask(ctx context.Context, id int64) (store.Task, error) {
 	t, err := s.q.GetTask(ctx, id)
-	return store.Task{
+	if err != nil {
+		return store.Task{}, err
+	}
+	tasks := []store.Task{{
 		ID: t.ID, BoardID: t.BoardID, ColumnID: t.ColumnID, Title: t.Title,
 		DescriptionMd: t.DescriptionMd, Priority: t.Priority, DueDate: dateToPtr(t.DueDate),
 		Position: t.Position, ParentTaskID: int8ToPtr(t.ParentTaskID), MeetingOutcomeID: int8ToPtr(t.MeetingOutcomeID),
-		CompletedAt: tsToPtr(t.CompletedAt), Archived: t.Archived, CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt,
-	}, err
+		CompletedAt: tsToPtr(t.CompletedAt), Archived: t.Archived, Tags: []store.Tag{}, CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt,
+	}}
+	if err := s.attachTags(ctx, tasks); err != nil {
+		return store.Task{}, err
+	}
+	return tasks[0], nil
 }
 
 func (s *Store) ListTasks(ctx context.Context, p store.ListTasksParams) ([]store.Task, error) {
@@ -48,8 +55,11 @@ func (s *Store) ListTasks(ctx context.Context, p store.ListTasksParams) ([]store
 			ID: t.ID, BoardID: t.BoardID, ColumnID: t.ColumnID, Title: t.Title,
 			DescriptionMd: t.DescriptionMd, Priority: t.Priority, DueDate: dateToPtr(t.DueDate),
 			Position: t.Position, ParentTaskID: int8ToPtr(t.ParentTaskID), MeetingOutcomeID: int8ToPtr(t.MeetingOutcomeID),
-			CompletedAt: tsToPtr(t.CompletedAt), Archived: t.Archived, CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt,
+			CompletedAt: tsToPtr(t.CompletedAt), Archived: t.Archived, Tags: []store.Tag{}, CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt,
 		}
+	}
+	if err := s.attachTags(ctx, out); err != nil {
+		return nil, err
 	}
 	return out, nil
 }
@@ -65,8 +75,11 @@ func (s *Store) ListSubtasks(ctx context.Context, parentTaskID int64) ([]store.T
 			ID: t.ID, BoardID: t.BoardID, ColumnID: t.ColumnID, Title: t.Title,
 			DescriptionMd: t.DescriptionMd, Priority: t.Priority, DueDate: dateToPtr(t.DueDate),
 			Position: t.Position, ParentTaskID: int8ToPtr(t.ParentTaskID), MeetingOutcomeID: int8ToPtr(t.MeetingOutcomeID),
-			CompletedAt: tsToPtr(t.CompletedAt), Archived: t.Archived, CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt,
+			CompletedAt: tsToPtr(t.CompletedAt), Archived: t.Archived, Tags: []store.Tag{}, CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt,
 		}
+	}
+	if err := s.attachTags(ctx, out); err != nil {
+		return nil, err
 	}
 	return out, nil
 }
@@ -83,7 +96,7 @@ func (s *Store) UpdateTask(ctx context.Context, id int64, title, descriptionMd, 
 		ID: t.ID, BoardID: t.BoardID, ColumnID: t.ColumnID, Title: t.Title,
 		DescriptionMd: t.DescriptionMd, Priority: t.Priority, DueDate: dateToPtr(t.DueDate),
 		Position: t.Position, ParentTaskID: int8ToPtr(t.ParentTaskID), MeetingOutcomeID: int8ToPtr(t.MeetingOutcomeID),
-		CompletedAt: tsToPtr(t.CompletedAt), Archived: t.Archived, CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt,
+		CompletedAt: tsToPtr(t.CompletedAt), Archived: t.Archived, Tags: []store.Tag{}, CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt,
 	}, err
 }
 
@@ -97,7 +110,7 @@ func (s *Store) MoveTask(ctx context.Context, id, columnID int64, position float
 		ID: t.ID, BoardID: t.BoardID, ColumnID: t.ColumnID, Title: t.Title,
 		DescriptionMd: t.DescriptionMd, Priority: t.Priority, DueDate: dateToPtr(t.DueDate),
 		Position: t.Position, ParentTaskID: int8ToPtr(t.ParentTaskID), MeetingOutcomeID: int8ToPtr(t.MeetingOutcomeID),
-		CompletedAt: tsToPtr(t.CompletedAt), Archived: t.Archived, CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt,
+		CompletedAt: tsToPtr(t.CompletedAt), Archived: t.Archived, Tags: []store.Tag{}, CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt,
 	}, err
 }
 
@@ -112,8 +125,11 @@ func (s *Store) ListTasksByColumnOrdered(ctx context.Context, columnID int64) ([
 			ID: t.ID, BoardID: t.BoardID, ColumnID: t.ColumnID, Title: t.Title,
 			DescriptionMd: t.DescriptionMd, Priority: t.Priority, DueDate: dateToPtr(t.DueDate),
 			Position: t.Position, ParentTaskID: int8ToPtr(t.ParentTaskID), MeetingOutcomeID: int8ToPtr(t.MeetingOutcomeID),
-			CompletedAt: tsToPtr(t.CompletedAt), Archived: t.Archived, CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt,
+			CompletedAt: tsToPtr(t.CompletedAt), Archived: t.Archived, Tags: []store.Tag{}, CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt,
 		}
+	}
+	if err := s.attachTags(ctx, out); err != nil {
+		return nil, err
 	}
 	return out, nil
 }

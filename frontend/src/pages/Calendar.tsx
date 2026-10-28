@@ -1,43 +1,21 @@
-import { format, parse, startOfWeek, getDay } from 'date-fns'
-import { enUS } from 'date-fns/locale/en-US'
+import dayGridPlugin from '@fullcalendar/daygrid'
+import interactionPlugin, { type DateClickArg } from '@fullcalendar/interaction'
+import FullCalendar from '@fullcalendar/react'
+import type { DayCellContentArg, EventClickArg, EventDropArg, EventInput } from '@fullcalendar/core'
+import { format } from 'date-fns'
 import { useEffect, useMemo, useState } from 'react'
-import { Calendar as BigCalendar, dateFnsLocalizer, type DateCellWrapperProps, type View } from 'react-big-calendar'
-import * as dragAndDropAddon from 'react-big-calendar/lib/addons/dragAndDrop'
-import type { EventInteractionArgs } from 'react-big-calendar/lib/addons/dragAndDrop'
-import 'react-big-calendar/lib/css/react-big-calendar.css'
-import 'react-big-calendar/lib/addons/dragAndDrop/styles.css'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { LogMeetingOutcomeDialog } from '../components/calendar/LogMeetingOutcomeDialog'
 import { useBoards, useTasks, useUpdateTask } from '../api/hooks'
-import { useLocation, useNavigate } from 'react-router-dom'
 import { useUIStore } from '../store/ui'
 import type { MeetingOutcome, Task } from '../api/types'
 
-const localizer = dateFnsLocalizer({
-  format,
-  parse,
-  startOfWeek: () => startOfWeek(new Date(), { weekStartsOn: 1 }),
-  getDay,
-  locales: { 'en-US': enUS },
-})
-
-type WithDragAndDrop = typeof import('react-big-calendar/lib/addons/dragAndDrop').default
-
-// The addon ships CommonJS; the bundler's interop wraps its default export in
-// another default, so unwrap defensively rather than calling a namespace object.
-const dndDefault = (dragAndDropAddon as unknown as { default?: unknown }).default
-const withDragAndDrop = ((dndDefault as { default?: WithDragAndDrop })?.default ??
-  dndDefault ??
-  dragAndDropAddon) as WithDragAndDrop
-
-const DnDCalendar = withDragAndDrop<CalendarEvent>(BigCalendar)
-
-interface CalendarEvent {
-  id: number
+interface CalendarTaskEvent extends EventInput {
+  id: string
   title: string
-  start: Date
-  end: Date
-  allDay: true
-  task: Task
+  start: string
+  allDay: boolean
+  extendedProps: { task: Task }
 }
 
 export function Calendar() {
@@ -52,7 +30,6 @@ export function Calendar() {
   const [dialogDate, setDialogDate] = useState<string | null>(null)
   const [dialogOutcome, setDialogOutcome] = useState<MeetingOutcome | undefined>(undefined)
 
-  // The global pending-outcomes banner navigates here with the outcome in state.
   useEffect(() => {
     const outcome = (location.state as { outcome?: MeetingOutcome } | null)?.outcome
     if (!outcome) return
@@ -61,26 +38,45 @@ export function Calendar() {
     navigate(location.pathname, { replace: true, state: null })
   }, [location, navigate])
 
-  const events = useMemo<CalendarEvent[]>(
+  const events = useMemo<CalendarTaskEvent[]>(
     () =>
       (tasks ?? [])
         .filter((t) => t.due_date)
-        .map((t) => {
-          const date = new Date(`${t.due_date}T00:00:00`)
-          return { id: t.id, title: t.title, start: date, end: date, allDay: true, task: t }
-        }),
+        .map((t) => ({
+          id: String(t.id),
+          title: t.title,
+          start: t.due_date!,
+          allDay: true,
+          extendedProps: { task: t },
+        })),
     [tasks],
   )
 
-  function handleEventDrop({ event, start }: EventInteractionArgs<CalendarEvent>) {
-    const due = format(start as Date, 'yyyy-MM-dd')
-    updateTask.mutate({
-      id: event.task.id,
-      title: event.task.title,
-      description_md: event.task.description_md,
-      priority: event.task.priority,
-      due_date: due,
-    })
+  function handleEventDrop(info: EventDropArg) {
+    const task = (info.event.extendedProps as { task: Task }).task
+    if (!info.event.start) return
+    updateTask.mutate(
+      {
+        id: task.id,
+        title: task.title,
+        description_md: task.description_md,
+        priority: task.priority,
+        due_date: format(info.event.start, 'yyyy-MM-dd'),
+      },
+      { onError: () => info.revert() },
+    )
+  }
+
+  function handleEventClick(info: EventClickArg) {
+    info.jsEvent.preventDefault()
+    const task = (info.event.extendedProps as { task: Task }).task
+    const params = new URLSearchParams(location.search)
+    params.set('task', String(task.id))
+    navigate({ pathname: location.pathname, search: params.toString() })
+  }
+
+  function handleDateClick(info: DateClickArg) {
+    openNewOutcome(info.date)
   }
 
   function openNewOutcome(date: Date) {
@@ -88,15 +84,16 @@ export function Calendar() {
     setDialogDate(format(date, 'yyyy-MM-dd'))
   }
 
-  function DateCellWrapper({ value, children }: DateCellWrapperProps) {
+  function renderDayCell(arg: DayCellContentArg) {
     return (
-      <div className="group relative h-full w-full">
-        {children}
+      <div className="fc-day-top-row">
+        <span>{arg.dayNumberText}</span>
         <button
-          className="absolute right-1 bottom-1 hidden h-5 w-5 items-center justify-center rounded bg-primary text-xs text-primary-foreground group-hover:flex"
-          onClick={(e) => {
-            e.stopPropagation()
-            openNewOutcome(value)
+          className="fc-day-add"
+          aria-label={`Log meeting outcome on ${format(arg.date, 'd MMM yyyy')}`}
+          onClick={(event) => {
+            event.stopPropagation()
+            openNewOutcome(arg.date)
           }}
         >
           +
@@ -107,17 +104,22 @@ export function Calendar() {
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="h-[75vh] rounded-lg border p-3">
-        <DnDCalendar
-          localizer={localizer}
+      <div className="fai-calendar rounded-lg border p-3">
+        <FullCalendar
+          plugins={[dayGridPlugin, interactionPlugin]}
+          initialView="dayGridMonth"
+          headerToolbar={{ left: 'prev,next today', center: 'title', right: '' }}
+          firstDay={1}
+          height="75vh"
+          fixedWeekCount={false}
+          dayMaxEventRows={3}
           events={events}
-          views={['month'] as View[]}
-          defaultView="month"
-          onEventDrop={handleEventDrop}
-          draggableAccessor={() => true}
-          resizable={false}
-          popup
-          components={{ dateCellWrapper: DateCellWrapper }}
+          editable
+          eventDrop={handleEventDrop}
+          eventClick={handleEventClick}
+          dateClick={handleDateClick}
+          dayCellContent={renderDayCell}
+          eventDisplay="block"
         />
       </div>
 

@@ -14,8 +14,19 @@ func toTask(t sqlitedb.Task) store.Task {
 		ID: t.ID, BoardID: t.BoardID, ColumnID: t.ColumnID, Title: t.Title,
 		DescriptionMd: t.DescriptionMd, Priority: t.Priority, DueDate: nullStringToPtr(t.DueDate),
 		Position: t.Position, ParentTaskID: nullInt64ToPtr(t.ParentTaskID), MeetingOutcomeID: nullInt64ToPtr(t.MeetingOutcomeID),
-		CompletedAt: nullTimeToPtr(t.CompletedAt), Archived: t.Archived, CreatedAt: createdAt, UpdatedAt: updatedAt,
+		CompletedAt: nullTimeToPtr(t.CompletedAt), Archived: t.Archived, Tags: []store.Tag{}, CreatedAt: createdAt, UpdatedAt: updatedAt,
 	}
+}
+
+func (s *Store) attachTags(ctx context.Context, tasks []store.Task) error {
+	for i := range tasks {
+		tags, err := s.ListTagsForTask(ctx, tasks[i].ID)
+		if err != nil {
+			return err
+		}
+		tasks[i].Tags = tags
+	}
+	return nil
 }
 
 func (s *Store) CreateTask(ctx context.Context, p store.CreateTaskParams) (store.Task, error) {
@@ -29,7 +40,15 @@ func (s *Store) CreateTask(ctx context.Context, p store.CreateTaskParams) (store
 
 func (s *Store) GetTask(ctx context.Context, id int64) (store.Task, error) {
 	t, err := s.q.GetTask(ctx, id)
-	return toTask(t), err
+	if err != nil {
+		return store.Task{}, err
+	}
+	task := toTask(t)
+	tasks := []store.Task{task}
+	if err := s.attachTags(ctx, tasks); err != nil {
+		return store.Task{}, err
+	}
+	return tasks[0], nil
 }
 
 func (s *Store) ListTasks(ctx context.Context, p store.ListTasksParams) ([]store.Task, error) {
@@ -43,6 +62,9 @@ func (s *Store) ListTasks(ctx context.Context, p store.ListTasksParams) ([]store
 	for i, t := range rows {
 		out[i] = toTask(t)
 	}
+	if err := s.attachTags(ctx, out); err != nil {
+		return nil, err
+	}
 	return out, nil
 }
 
@@ -54,6 +76,9 @@ func (s *Store) ListSubtasks(ctx context.Context, parentTaskID int64) ([]store.T
 	out := make([]store.Task, len(rows))
 	for i, t := range rows {
 		out[i] = toTask(t)
+	}
+	if err := s.attachTags(ctx, out); err != nil {
+		return nil, err
 	}
 	return out, nil
 }

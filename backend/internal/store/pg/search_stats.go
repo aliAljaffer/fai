@@ -18,8 +18,11 @@ func (s *Store) SearchTasks(ctx context.Context, query string) ([]store.Task, er
 			ID: t.ID, BoardID: t.BoardID, ColumnID: t.ColumnID, Title: t.Title,
 			DescriptionMd: t.DescriptionMd, Priority: t.Priority, DueDate: dateToPtr(t.DueDate),
 			Position: t.Position, ParentTaskID: int8ToPtr(t.ParentTaskID), MeetingOutcomeID: int8ToPtr(t.MeetingOutcomeID),
-			CompletedAt: tsToPtr(t.CompletedAt), Archived: t.Archived, CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt,
+			CompletedAt: tsToPtr(t.CompletedAt), Archived: t.Archived, Tags: []store.Tag{}, CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt,
 		}
+	}
+	if err := s.attachTags(ctx, out); err != nil {
+		return nil, err
 	}
 	return out, nil
 }

@@ -1,10 +1,12 @@
 import MDEditor from '@uiw/react-md-editor'
+import { useTheme } from 'next-themes'
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { AttachmentsPanel } from '../components/AttachmentsPanel'
 import { MarkdownRenderer } from '../components/MarkdownRenderer'
 import { useDeleteNote, useNote, useUpdateNote } from '../api/hooks'
+import { toast } from 'sonner'
 
 export function NoteEditor() {
   const { id } = useParams()
@@ -13,9 +15,11 @@ export function NoteEditor() {
   const { data } = useNote(noteId)
   const updateNote = useUpdateNote()
   const deleteNote = useDeleteNote()
+  const { resolvedTheme } = useTheme()
 
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
+  const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     if (data?.note) {
@@ -23,6 +27,17 @@ export function NoteEditor() {
       setBody(data.note.body_md)
     }
   }, [data?.note])
+
+  async function save() {
+    setSaving(true)
+    try {
+      await updateNote.mutateAsync({ id: noteId, title, body_md: body })
+      navigate('/notes')
+    } catch (error) {
+      toast.error((error as Error).message)
+      setSaving(false)
+    }
+  }
 
   if (!data) return null
 
@@ -35,7 +50,9 @@ export function NoteEditor() {
           onChange={(e) => setTitle(e.target.value)}
         />
         <div className="flex gap-2">
-          <Button onClick={() => updateNote.mutate({ id: noteId, title, body_md: body })}>Save</Button>
+          <Button disabled={saving} onClick={() => void save()}>
+            {saving ? 'Saving…' : 'Save'}
+          </Button>
           <Button
             variant="destructive"
             onClick={async () => {
@@ -54,7 +71,7 @@ export function NoteEditor() {
           onChange={(v) => setBody(v ?? '')}
           height={400}
           preview="edit"
-          data-color-mode="dark"
+          data-color-mode={resolvedTheme === "light" ? "light" : "dark"}
         />
         <div className="rounded-lg border p-4">
           <MarkdownRenderer source={body} />

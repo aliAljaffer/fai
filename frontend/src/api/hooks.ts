@@ -61,6 +61,36 @@ export function useTags() {
   return useQuery({ queryKey: ['tags'], queryFn: () => api.get<Tag[]>('/tags') })
 }
 
+export function useCreateTag() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { name: string; color?: string }) => api.post<Tag>('/tags', body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['tags'] }),
+  })
+}
+
+export function useAddTaskTag(taskId: number, boardId: number | undefined) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (tagId: number) => api.put<void>(`/tasks/${taskId}/tags/${tagId}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['task', taskId] })
+      qc.invalidateQueries({ queryKey: ['tasks', boardId] })
+    },
+  })
+}
+
+export function useRemoveTaskTag(taskId: number, boardId: number | undefined) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (tagId: number) => api.delete<void>(`/tasks/${taskId}/tags/${tagId}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['task', taskId] })
+      qc.invalidateQueries({ queryKey: ['tasks', boardId] })
+    },
+  })
+}
+
 export function useCreateTask(boardId: number | undefined) {
   const qc = useQueryClient()
   return useMutation({
@@ -87,8 +117,36 @@ export function useUpdateTask(boardId: number | undefined) {
   })
 }
 
+function reorderTasks(
+  tasks: Task[],
+  move: { id: number; column_id: number; before_task_id?: number },
+) {
+  const moving = tasks.find((t) => t.id === move.id)
+  if (!moving) return tasks
+
+  const rest = tasks.filter((t) => t.id !== move.id)
+  const movingUpdated = { ...moving, column_id: move.column_id }
+  const target = rest
+    .filter((t) => t.column_id === move.column_id)
+    .sort((a, b) => a.position - b.position)
+
+  let insertAt = target.length
+  if (move.before_task_id !== undefined) {
+    const index = target.findIndex((t) => t.id === move.before_task_id)
+    if (index !== -1) insertAt = index
+  }
+
+  const ordered = [...target.slice(0, insertAt), movingUpdated, ...target.slice(insertAt)]
+  const positions = new Map(ordered.map((t, i) => [t.id, (i + 1) * 1024]))
+  return [...rest, movingUpdated].map((t) => {
+    const position = positions.get(t.id)
+    return position === undefined ? t : { ...t, position }
+  })
+}
+
 export function useMoveTask(boardId: number | undefined) {
   const qc = useQueryClient()
+  const key = ['tasks', boardId, '', null, ''] as const
   return useMutation({
     mutationFn: ({
       id,
@@ -99,7 +157,22 @@ export function useMoveTask(boardId: number | undefined) {
       after_task_id?: number
       before_task_id?: number
     }) => api.post<Task>(`/tasks/${id}/move`, body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['tasks', boardId] }),
+    onMutate: async (move) => {
+      await qc.cancelQueries({ queryKey: key })
+      const previous = qc.getQueryData<Task[]>(key)
+      if (previous) qc.setQueryData<Task[]>(key, reorderTasks(previous, move))
+      return { previous }
+    },
+    onError: (_error, _move, context) => {
+      if (context?.previous) qc.setQueryData(key, context.previous)
+    },
+    onSuccess: (task) => {
+      qc.setQueryData<Task[]>(key, (current) =>
+        current?.map((t) =>
+          t.id === task.id ? { ...task, tags: task.tags?.length ? task.tags : t.tags } : t,
+        ),
+      )
+    },
   })
 }
 
@@ -233,9 +306,17 @@ export function useJiraLink(taskId: number) {
   })
 }
 
-export function useJiraSuggestions(taskId: number) {
-  return useMutation({
-    mutationFn: () => api.get<JiraSuggestion[]>(`/tasks/${taskId}/jira/suggestions`),
+export function useJiraSuggestions(taskId: number, query: string) {
+  const trimmed = query.trim()
+  return useQuery({
+    queryKey: ['jira', 'suggestions', taskId, trimmed],
+    queryFn: () =>
+      api.get<JiraSuggestion[]>(
+        `/tasks/${taskId}/jira/suggestions?q=${encodeURIComponent(trimmed)}`,
+      ),
+    enabled: trimmed.length >= 2,
+    staleTime: 30_000,
+    retry: false,
   })
 }
 

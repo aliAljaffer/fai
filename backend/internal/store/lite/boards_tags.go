@@ -84,3 +84,26 @@ func (s *Store) AddTaskTag(ctx context.Context, taskID, tagID int64) error {
 func (s *Store) RemoveTaskTag(ctx context.Context, taskID, tagID int64) error {
 	return s.q.RemoveTaskTag(ctx, sqlitedb.RemoveTaskTagParams{TaskID: taskID, TagID: tagID})
 }
+
+func (s *Store) ListTagsForTask(ctx context.Context, taskID int64) ([]store.Tag, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT t.id, t.name, t.color
+		FROM tags t
+		JOIN task_tags tt ON tt.tag_id = t.id
+		WHERE tt.task_id = ?
+		ORDER BY t.name`, taskID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	tags := []store.Tag{}
+	for rows.Next() {
+		var t store.Tag
+		if err := rows.Scan(&t.ID, &t.Name, &t.Color); err != nil {
+			return nil, err
+		}
+		tags = append(tags, t)
+	}
+	return tags, rows.Err()
+}

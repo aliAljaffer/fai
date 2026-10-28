@@ -65,9 +65,10 @@ existing subscriptions. In docker-compose, Caddy routes this one path around
 
 ## Navigation
 
-`⌘K`/`Ctrl+K` opens the command palette (pages, tasks, new task). `n` creates a task,
+`⌘K`/`Ctrl+K` opens the command palette (pages, tasks, new task). `n` opens the inline task composer,
 `e` focuses the open task's title, and `Esc` closes sheets/dialogs. The List page
-filters by text, column, and tag; rows open the task sheet.
+filters by text, column, and tag; rows open the task sheet. The nav has a persisted
+dark/light theme toggle.
 
 ## Notifications
 
