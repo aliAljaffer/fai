@@ -40,9 +40,10 @@ type importedEvent struct {
 }
 
 type importedCalendar struct {
-	Source store.CalendarSource `json:"source"`
-	Events []importedEvent      `json:"events"`
-	Error  string               `json:"error,omitempty"`
+	Source       store.CalendarSource `json:"source"`
+	Events       []importedEvent      `json:"events"`
+	Error        string               `json:"error,omitempty"`
+	LastSyncedAt string               `json:"last_synced_at,omitempty"`
 }
 
 func (s *Server) listCalendarSources(w http.ResponseWriter, r *http.Request) {
@@ -166,12 +167,17 @@ func (s *Server) listImportedCalendars(w http.ResponseWriter, r *http.Request) {
 	out := make([]importedCalendar, 0, len(sources))
 	for _, source := range sources {
 		item := importedCalendar{Source: source, Events: []importedEvent{}}
-		data, err := s.calendarFeedData(r.Context(), source, false)
+		data, fetchedAt, err := s.calendarFeedData(r.Context(), source, false)
+		if !fetchedAt.IsZero() {
+			item.LastSyncedAt = fetchedAt.UTC().Format(time.RFC3339)
+		}
 		if err == nil {
 			item.Events, err = parseImportedEvents(source, data, from, to)
 		}
 		if err != nil {
 			item.Error = err.Error()
+		} else {
+			item.Error = s.calendarSyncError(source.ID)
 		}
 		out = append(out, item)
 	}
@@ -210,26 +216,47 @@ func importedRange(r *http.Request) (time.Time, time.Time, error) {
 // calendarFeedData returns the stored feed, refetching it over https when it is
 // missing, older than CalendarSyncInterval, or force is set. A failed refresh
 // keeps serving the stored copy so a flaky feed does not blank the calendar.
-func (s *Server) calendarFeedData(ctx context.Context, source store.CalendarSource, force bool) ([]byte, error) {
+func (s *Server) calendarFeedData(ctx context.Context, source store.CalendarSource, force bool) ([]byte, time.Time, error) {
 	data, fetchedAt, ok, err := s.Store.GetCalendarFeed(ctx, source.ID)
 	if err != nil {
-		return nil, err
+		return nil, time.Time{}, err
 	}
 	if ok && !force && time.Since(fetchedAt) < CalendarSyncInterval {
-		return data, nil
+		return data, fetchedAt, nil
 	}
 	fresh, err := fetchCalendarFeed(ctx, source)
 	if err != nil {
+		s.recordCalendarError(source.ID, err)
 		if ok {
-			return data, nil
+			return data, fetchedAt, nil
 		}
-		return nil, err
+		return nil, time.Time{}, err
 	}
+	s.recordCalendarError(source.ID, nil)
 	fetchedAt = time.Now().UTC()
 	if err := s.Store.SetCalendarFeed(ctx, source.ID, fresh, fetchedAt); err != nil {
 		log.Printf("storing calendar feed %s: %v", source.Name, err)
 	}
-	return fresh, nil
+	return fresh, fetchedAt, nil
+}
+
+func (s *Server) recordCalendarError(sourceID int64, err error) {
+	s.syncMu.Lock()
+	defer s.syncMu.Unlock()
+	if s.calendarErr == nil {
+		s.calendarErr = map[int64]string{}
+	}
+	if err == nil {
+		delete(s.calendarErr, sourceID)
+		return
+	}
+	s.calendarErr[sourceID] = err.Error()
+}
+
+func (s *Server) calendarSyncError(sourceID int64) string {
+	s.syncMu.Lock()
+	defer s.syncMu.Unlock()
+	return s.calendarErr[sourceID]
 }
 
 // RunCalendarSync keeps stored Outlook and other iCalendar feeds current by
@@ -255,7 +282,7 @@ func (s *Server) syncCalendarFeeds(ctx context.Context) {
 		return
 	}
 	for _, source := range sources {
-		if _, err := s.calendarFeedData(ctx, source, true); err != nil {
+		if _, _, err := s.calendarFeedData(ctx, source, true); err != nil {
 			log.Printf("syncing calendar feed %s: %v", source.Name, err)
 		}
 	}

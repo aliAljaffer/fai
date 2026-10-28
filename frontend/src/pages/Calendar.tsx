@@ -213,8 +213,16 @@ export function Calendar() {
             </span>
           ))}
           {importErrors.map((calendar) => (
-            <span key={calendar.source.id} className="text-destructive">
-              Could not import {calendar.source.name}.
+            <span
+              key={calendar.source.id}
+              className="text-amber-600 dark:text-amber-400"
+              title={calendar.error}
+            >
+              {calendar.source.name}: sync failed
+              {calendar.last_synced_at
+                ? `, showing events from ${format(new Date(calendar.last_synced_at), 'd MMM, HH:mm')}`
+                : ''}
+              .
             </span>
           ))}
           {draggingTitle && (

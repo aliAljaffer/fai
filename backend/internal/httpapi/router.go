@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"net/http"
+	"sync"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -26,6 +27,11 @@ type Server struct {
 	// AuthMiddleware validates bearer tokens on every /api/* route when set.
 	// Left nil under DISABLE_AUTH for local dev.
 	AuthMiddleware func(http.Handler) http.Handler
+
+	// Last poll result per calendar source, so a failed background sync is
+	// visible in the UI even while cached events are served.
+	syncMu      sync.Mutex
+	calendarErr map[int64]string
 }
 
 func NewRouter(s *Server) http.Handler {

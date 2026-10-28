@@ -131,4 +131,5 @@ export interface ImportedCalendar {
   source: CalendarSource
   events: ImportedEvent[]
   error?: string
+  last_synced_at?: string
 }

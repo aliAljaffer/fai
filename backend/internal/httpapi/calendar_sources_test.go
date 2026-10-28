@@ -95,7 +95,8 @@ func TestImportedCalendarsSyncAndCache(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	server := httptest.NewServer(NewRouter(&Server{Store: st}))
+	srv := &Server{Store: st}
+	server := httptest.NewServer(NewRouter(srv))
 	defer server.Close()
 
 	fetch := func() []importedCalendar {
@@ -130,12 +131,25 @@ func TestImportedCalendarsSyncAndCache(t *testing.T) {
 	}
 
 	feed.Close()
+	srv.syncCalendarFeeds(ctx)
+
+	failed := fetch()
+	if len(failed) != 1 || len(failed[0].Events) != 1 || failed[0].Error == "" {
+		t.Fatalf("failed poll was not surfaced with cached events: %+v", failed)
+	}
+	if failed[0].LastSyncedAt == "" {
+		t.Fatalf("failed poll did not report the last successful sync time: %+v", failed[0])
+	}
+	if got := hits.Load(); got != 1 {
+		t.Fatalf("fresh cache refetched during a failed poll (%d hits)", got)
+	}
+
 	if err := st.SetCalendarFeed(ctx, source.ID, stored, time.Now().Add(-time.Hour)); err != nil {
 		t.Fatal(err)
 	}
 	offline := fetch()
-	if len(offline) != 1 || len(offline[0].Events) != 1 || offline[0].Error != "" {
-		t.Fatalf("stale cache was not served when the feed was unreachable: %+v", offline)
+	if len(offline) != 1 || len(offline[0].Events) != 1 || offline[0].Error == "" {
+		t.Fatalf("stale cache was not served with a sync error when the feed was unreachable: %+v", offline)
 	}
 	if got := hits.Load(); got != 1 {
 		t.Fatalf("closed feed still counted %d hits", got)
