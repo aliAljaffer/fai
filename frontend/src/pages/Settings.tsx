@@ -3,6 +3,13 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import {
   useBoards,
@@ -194,13 +201,21 @@ function WorkspacesCard() {
 export function Settings() {
   const workspaceId = useWorkspaceStore((state) => state.activeWorkspaceId)
   const { data: boards } = useBoards(workspaceId)
+  const { data: workspaces } = useWorkspaces()
   const jiraImport = useJiraImport()
   const { data: feed } = useCalendarFeedURL()
   const selectedBoardId = useUIStore((state) => state.selectedBoardId)
-  const boardId =
-    boards?.find((board) => board.id === selectedBoardId)?.id ?? boards?.[0]?.id
+  const board =
+    boards?.find((b) => b.id === selectedBoardId) ?? boards?.[0]
+  const boardId = board?.id
   const { data: columns } = useColumns(boardId)
   const { colors, setColor } = useColumnColors()
+  const { data: allBoards } = useBoards()
+  const [targetBoardId, setTargetBoardId] = useState<number>()
+  const importBoard =
+    allBoards?.find((b) => b.id === (targetBoardId ?? boardId)) ?? allBoards?.[0]
+  const workspaceName = (id: number) =>
+    workspaces?.find((w) => w.id === id)?.name ?? 'Unknown workspace'
   const [jql, setJql] = useState('')
   const [forceUpdate, setForceUpdate] = useState(false)
 
@@ -214,10 +229,36 @@ export function Settings() {
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
           <p className="text-sm text-muted-foreground">
-            Imports issues from Jira as tasks on the first board. Leave the JQL field blank to use
-            the server-configured default project. Already-imported issues are skipped unless
-            "force update" is checked.
+            Imports only Jira issues assigned to you. Tasks go to the selected board and its
+            workspace. Leave the JQL field blank to use the server-configured default project.
+            Already-imported issues are skipped unless "force update" is checked. Completion dates
+            are taken from Jira.
           </p>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium" htmlFor="jira-import-board">
+              Target board
+            </label>
+            <Select
+              items={(allBoards ?? []).map((b) => ({
+                value: String(b.id),
+                label: `${workspaceName(b.workspace_id)} / ${b.name}`,
+              }))}
+              value={importBoard ? String(importBoard.id) : undefined}
+              onValueChange={(value) => value && setTargetBoardId(Number(value))}
+            >
+              <SelectTrigger id="jira-import-board" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {allBoards?.map((b) => (
+                  <SelectItem key={b.id} value={String(b.id)}>
+                    {workspaceName(b.workspace_id)}
+                    <span className="text-muted-foreground">/ {b.name}</span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           <Textarea
             placeholder='Optional JQL, e.g. project = "DEV" AND status != Done'
             value={jql}
@@ -234,11 +275,11 @@ export function Settings() {
             Force update already-imported issues
           </label>
           <Button
-            disabled={!boardId || jiraImport.isPending}
+            disabled={!importBoard || jiraImport.isPending}
             onClick={() => {
-              if (!boardId) return
+              if (!importBoard) return
               jiraImport.mutate(
-                { board_id: boardId, jql: jql || undefined, force_update: forceUpdate },
+                { board_id: importBoard.id, jql: jql || undefined, force_update: forceUpdate },
                 {
                   onSuccess: (result) =>
                     toast.success(

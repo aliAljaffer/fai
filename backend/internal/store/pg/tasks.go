@@ -3,6 +3,7 @@ package pg
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -162,6 +163,11 @@ func (s *Store) UpdateTaskTitle(ctx context.Context, id int64, title string) err
 
 func (s *Store) SetTaskParent(ctx context.Context, id int64, parentTaskID *int64) error {
 	return s.q.SetTaskParent(ctx, sqlc.SetTaskParentParams{ID: id, ParentTaskID: ptrToInt8(parentTaskID)})
+}
+
+func (s *Store) SetTaskCompletedAt(ctx context.Context, id int64, at time.Time) error {
+	_, err := s.pool.Exec(ctx, `UPDATE tasks SET completed_at = $2, updated_at = now() WHERE id = $1`, id, at)
+	return err
 }
 
 func (s *Store) MoveTask(ctx context.Context, id, columnID int64, position float64) (store.Task, error) {

@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/sahilm/fuzzy"
 
@@ -18,6 +19,33 @@ type jiraImportBody struct {
 	BoardID     int64  `json:"board_id"`
 	JQL         string `json:"jql"`
 	ForceUpdate bool   `json:"force_update"`
+}
+
+// onlyAssigned keeps every import scoped to the configured Jira account, so a
+// project-wide or custom JQL cannot pull in someone else's issues. An ORDER BY
+// has to stay outside the grouped expression to remain valid JQL.
+func onlyAssigned(jql string) string {
+	const filter = "assignee = currentUser()"
+	if i := strings.Index(strings.ToLower(jql), "order by"); i >= 0 {
+		return "(" + strings.TrimSpace(jql[:i]) + ") AND " + filter + " " + jql[i:]
+	}
+	return "(" + jql + ") AND " + filter
+}
+
+// completionTime returns Jira's resolution time, or the last update when the
+// workflow leaves the resolution empty, so stats reflect history rather than
+// the moment the import ran.
+func completionTime(issue jira.Issue) *time.Time {
+	raw := issue.ResolutionDate
+	if raw == "" {
+		raw = issue.Updated
+	}
+	for _, layout := range []string{time.RFC3339, "2006-01-02T15:04:05.000-0700"} {
+		if t, err := time.Parse(layout, raw); err == nil {
+			return &t
+		}
+	}
+	return nil
 }
 
 func (s *Server) jiraImport(w http.ResponseWriter, r *http.Request) {
@@ -42,7 +70,11 @@ func (s *Server) jiraImport(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "jql is required (no JIRA_DEFAULT_PROJECT_KEY configured)")
 			return
 		}
-		jql = fmt.Sprintf(`project = "%s" ORDER BY updated DESC`, s.JiraDefaultProject)
+		jql = fmt.Sprintf(`project = "%s"`, s.JiraDefaultProject)
+	}
+	jql = onlyAssigned(jql)
+	if !strings.Contains(strings.ToLower(jql), "order by") {
+		jql += " ORDER BY updated DESC"
 	}
 
 	ctx := r.Context()
@@ -64,8 +96,10 @@ func (s *Server) jiraImport(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	columnIDByName := map[string]int64{}
+	columnIsDone := map[int64]bool{}
 	for _, c := range columns {
 		columnIDByName[c.Name] = c.ID
+		columnIsDone[c.ID] = c.IsDone
 	}
 
 	resolveColumn := func(status string) int64 {
@@ -126,8 +160,27 @@ func (s *Server) jiraImport(w http.ResponseWriter, r *http.Request) {
 		}
 
 		columnID := resolveColumn(issue.Status)
+		resolvedAt := completionTime(issue)
 
 		if existing != nil {
+			task, err := s.Store.GetTask(ctx, existing.TaskID)
+			if err != nil {
+				return err
+			}
+			if task.ColumnID != columnID {
+				position, err := s.appendPosition(ctx, columnID)
+				if err != nil {
+					return err
+				}
+				if _, err := s.Store.MoveTask(ctx, existing.TaskID, columnID, position); err != nil {
+					return err
+				}
+			}
+			if resolvedAt != nil && columnIsDone[columnID] {
+				if err := s.Store.SetTaskCompletedAt(ctx, existing.TaskID, *resolvedAt); err != nil {
+					return err
+				}
+			}
 			if err := s.Store.UpdateTaskTitle(ctx, existing.TaskID, issue.Summary); err != nil {
 				return err
 			}
@@ -151,6 +204,11 @@ func (s *Server) jiraImport(w http.ResponseWriter, r *http.Request) {
 		})
 		if err != nil {
 			return err
+		}
+		if resolvedAt != nil && columnIsDone[columnID] {
+			if err := s.Store.SetTaskCompletedAt(ctx, task.ID, *resolvedAt); err != nil {
+				return err
+			}
 		}
 		if _, err := s.Store.CreateJiraLinkImported(ctx, task.ID, issue.Key, s.Jira.IssueURL(issue.Key), s.JiraDefaultProject, issue.Status); err != nil {
 			return err

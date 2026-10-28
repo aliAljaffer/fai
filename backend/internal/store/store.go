@@ -67,6 +67,7 @@ type Store interface {
 	UpdateTask(ctx context.Context, id int64, title, descriptionMd, priority string, dueDate *string) (Task, error)
 	UpdateTaskTitle(ctx context.Context, id int64, title string) error
 	SetTaskParent(ctx context.Context, id int64, parentTaskID *int64) error
+	SetTaskCompletedAt(ctx context.Context, id int64, at time.Time) error
 	MoveTask(ctx context.Context, id, columnID int64, position float64) (Task, error)
 	ListTasksByColumnOrdered(ctx context.Context, columnID int64) ([]Task, error)
 	SetTaskPosition(ctx context.Context, id int64, position float64) error

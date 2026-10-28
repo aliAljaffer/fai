@@ -25,18 +25,22 @@ func New(baseURL, email, apiToken string) *Client {
 }
 
 type Issue struct {
-	Key       string
-	Summary   string
-	Status    string
-	ParentKey string
+	Key            string
+	Summary        string
+	Status         string
+	ParentKey      string
+	ResolutionDate string
+	Updated        string
 }
 
 type searchResponse struct {
 	Issues []struct {
 		Key    string `json:"key"`
 		Fields struct {
-			Summary string `json:"summary"`
-			Status  struct {
+			Summary        string `json:"summary"`
+			ResolutionDate string `json:"resolutiondate"`
+			Updated        string `json:"updated"`
+			Status         struct {
 				Name string `json:"name"`
 			} `json:"status"`
 			Parent *struct {
@@ -76,7 +80,7 @@ func (c *Client) searchIssuesPage(jql string, maxResults int, pageToken string) 
 	params := url.Values{
 		"jql":        {jql},
 		"maxResults": {fmt.Sprint(maxResults)},
-		"fields":     {"summary,status,parent,subtasks"},
+		"fields":     {"summary,status,parent,subtasks,resolutiondate,updated"},
 	}
 	if pageToken != "" {
 		params.Set("nextPageToken", pageToken)
@@ -106,7 +110,10 @@ func (c *Client) searchIssuesPage(jql string, maxResults int, pageToken string) 
 
 	issues := make([]Issue, 0, len(parsed.Issues))
 	for _, i := range parsed.Issues {
-		issue := Issue{Key: i.Key, Summary: i.Fields.Summary, Status: i.Fields.Status.Name}
+		issue := Issue{
+			Key: i.Key, Summary: i.Fields.Summary, Status: i.Fields.Status.Name,
+			ResolutionDate: i.Fields.ResolutionDate, Updated: i.Fields.Updated,
+		}
 		if i.Fields.Parent != nil {
 			issue.ParentKey = i.Fields.Parent.Key
 		}

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 
@@ -110,6 +111,63 @@ func TestJiraImportNestsSubtasks(t *testing.T) {
 	child = tasks["Child"]
 	if child.ParentTaskID == nil || *child.ParentTaskID != tasks["Other parent"].ID {
 		t.Fatalf("moved child task = %#v", child)
+	}
+}
+
+func TestJiraImportOnlyAssignedAndBackfillsCompletion(t *testing.T) {
+	st, err := lite.New(filepath.Join(t.TempDir(), "fai.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	var gotJQL string
+	searchBody := `{"issues":[
+	  {"key":"DEV-7","fields":{"summary":"Done issue","status":{"name":"Done"},
+	    "resolutiondate":"2026-03-04T10:00:00.000+0000","updated":"2026-03-05T08:00:00.000+0000"}}
+	],"isLast":true}`
+	jiraServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/rest/api/3/search/jql" {
+			http.NotFound(w, r)
+			return
+		}
+		gotJQL = r.URL.Query().Get("jql")
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(searchBody))
+	}))
+	defer jiraServer.Close()
+
+	server := httptest.NewServer(NewRouter(&Server{
+		Store:               st,
+		Jira:                jira.New(jiraServer.URL, "me@example.com", "token"),
+		JiraDefaultProject:  "DEV",
+		JiraStatusColumnMap: map[string]string{"Done": "Done"},
+	}))
+	defer server.Close()
+
+	res := postJSON(t, server.URL+"/api/jira/import", `{"board_id":1}`)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("import status = %d", res.StatusCode)
+	}
+
+	if !strings.Contains(gotJQL, "assignee = currentUser()") {
+		t.Errorf("import JQL = %q, want current-user filter", gotJQL)
+	}
+
+	tasks, err := st.ListTasks(context.Background(), store.ListTasksParams{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tasks) != 1 {
+		t.Fatalf("imported %d tasks, want 1", len(tasks))
+	}
+	task := tasks[0]
+	if task.ColumnID != 3 {
+		t.Errorf("done issue column = %d, want 3", task.ColumnID)
+	}
+	if task.CompletedAt == nil || task.CompletedAt.Format("2006-01-02") != "2026-03-04" {
+		t.Errorf("completed_at = %v, want 2026-03-04", task.CompletedAt)
 	}
 }
 
