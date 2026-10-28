@@ -19,6 +19,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
     steps:
       - uses: actions/checkout@v4
 
@@ -29,6 +31,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: docker/build-push-action@v6
+        id: build
         with:
           context: backend
           push: true
@@ -41,6 +44,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
     steps:
       - uses: actions/checkout@v4
 
@@ -51,6 +56,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: docker/build-push-action@v6
+        id: build
         with:
           context: frontend
           push: true
@@ -72,3 +78,55 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ env.OWNER }}/fai-frontend:compose
             ${{ env.REGISTRY }}/${{ env.OWNER }}/fai-frontend:compose-${{ github.sha }}
+
+  update-manifests:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [backend, frontend]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Create a GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.HOMELAB_APP_ID }}
+          private-key: ${{ secrets.HOMELAB_APP_PRIVATE_KEY }}
+          owner: aliAljaffer
+          repositories: homelab
+
+      - name: Check out the homelab manifests
+        uses: actions/checkout@v4
+        with:
+          repository: aliAljaffer/homelab
+          token: ${{ steps.app-token.outputs.token }}
+          path: homelab
+
+      - name: Pin the Fai image digests
+        working-directory: homelab
+        env:
+          BACKEND_DIGEST: ${{ needs.backend.outputs.digest }}
+          FRONTEND_DIGEST: ${{ needs.frontend.outputs.digest }}
+        run: |
+          set -euo pipefail
+          test -n "$BACKEND_DIGEST"
+          test -n "$FRONTEND_DIGEST"
+          sed -i -E "s|ghcr.io/alialjaffer/fai-backend@sha256:[0-9a-f]{64}|ghcr.io/alialjaffer/fai-backend@${BACKEND_DIGEST}|" kubernetes/apps/fai/backend-deployment.yaml
+          sed -i -E "s|ghcr.io/alialjaffer/fai-frontend@sha256:[0-9a-f]{64}|ghcr.io/alialjaffer/fai-frontend@${FRONTEND_DIGEST}|" kubernetes/apps/fai/frontend-deployment.yaml
+          grep -q "ghcr.io/alialjaffer/fai-backend@${BACKEND_DIGEST}" kubernetes/apps/fai/backend-deployment.yaml
+          grep -q "ghcr.io/alialjaffer/fai-frontend@${FRONTEND_DIGEST}" kubernetes/apps/fai/frontend-deployment.yaml
+          if git diff --quiet; then
+            echo "Fai images are already pinned."
+            exit 0
+          fi
+          git config user.name "fai-manifest-bot"
+          git config user.email "fai-manifest-bot@users.noreply.github.com"
+          git add kubernetes/apps/fai/backend-deployment.yaml kubernetes/apps/fai/frontend-deployment.yaml
+          git commit -m "fai: pin images for ${GITHUB_SHA:0:7}"
+          for _ in 1 2 3; do
+            if git push; then
+              exit 0
+            fi
+            git pull --rebase
+          done
+          exit 1
