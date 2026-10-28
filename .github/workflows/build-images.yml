@@ -19,7 +19,7 @@ concurrency:
 
 jobs:
   backend:
-    runs-on: ubuntu-latest
+    runs-on: arc-runner-fai
     permissions:
       contents: read
       packages: write
@@ -44,7 +44,7 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.OWNER }}/fai-backend:${{ github.sha }}
 
   frontend:
-    runs-on: ubuntu-latest
+    runs-on: arc-runner-fai
     permissions:
       contents: read
       packages: write
@@ -86,7 +86,7 @@ jobs:
   update-manifests:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: [backend, frontend]
-    runs-on: ubuntu-latest
+    runs-on: arc-runner-fai
     permissions:
       contents: read
     steps:
@@ -114,9 +114,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          latest=$(gh api "repos/${GITHUB_REPOSITORY}/commits/main" --jq .sha)
+          latest=$(curl -fsSL \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/commits/main" | jq -r .sha)
           if [ "$latest" != "$GITHUB_SHA" ]; then
-            if ! changed=$(gh api "repos/${GITHUB_REPOSITORY}/compare/${GITHUB_SHA}...${latest}" --jq '.files[]?.filename'); then
+            if ! changed=$(curl -fsSL \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/${GITHUB_REPOSITORY}/compare/${GITHUB_SHA}...${latest}" | jq -r '.files[]?.filename'); then
               echo "Skipping: could not compare $GITHUB_SHA with $latest."
               exit 0
             fi
