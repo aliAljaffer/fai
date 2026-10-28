@@ -86,10 +86,16 @@ full segregation: any work item can be referenced from any workspace.
   `workspaces` and no title edits. Titles stay as typed.
 - Rename support: keep a `workspace_tag_aliases` row for each retired tag so old `@TAG-123` text
   keeps resolving. Drop an alias when a new workspace takes that tag.
-- `@text` is the search form: it queries `/api/search` with the text and shows a picker of matches.
-  Selecting a match inserts the `@TAG-123` reference, so stored text is always resolvable.
+- `@text` is the search form. It accepts spaces and is case-insensitive: `@cloud migration`
+  searches for "cloud migration". The query runs on each keystroke after the `@`, so the picker
+  narrows as the user types. Selecting a match replaces the typed query with the resolved
+  `@TAG-123` reference, so stored text stays resolvable.
+- Typing `@` or `#` opens the picker immediately, before any character follows it. The picker
+  filters against the typed text on every keystroke, debounced the same way the Jira issue search
+  already is, and closes on Escape or when the caret leaves the token.
 - One parser serves every body: task description, note body, reminder title, meeting summary
-  notes, and chat input. Render `@TAG-123` and `@text` as links to the task sheet.
+  notes, and chat input. Render `@TAG-123` and resolved `@text` matches as links to the task
+  sheet.
 - Back-links: when a note, reminder, task, meeting summary, or chat message contains a reference,
   the task sheet lists the referring item. Reuse the rendering idea already used for note
   backlinks and `[[Title]]` wikilinks.
@@ -99,6 +105,8 @@ full segregation: any work item can be referenced from any workspace.
 - Typing `#label` in a task body attaches that tag. Reuse `tags` and `task_tags` with a
   case-insensitive match, and create the tag when it does not exist. Suggest existing tags while
   typing, the same way Jira linking already suggests matches.
+- A label cannot contain spaces. A typed space becomes a dash, so `#code review` is stored as
+  `code-review`. The picker only offers dash-separated labels.
 - Labels and workspace tags are separate concepts. Labels are global today and stay global.
 - AI inference: ask the provider for 3 to 6 keyword labels from the task title and body, prefer
   existing tags, and show them as accept or reject chips in the task sheet. Never write a label
