@@ -18,6 +18,15 @@ func (s *Server) listMeetingOutcomes(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
+		if workspaceID := optionalInt64Param(r, "workspace_id"); workspaceID != nil {
+			scoped := outcomes[:0]
+			for _, outcome := range outcomes {
+				if outcome.WorkspaceID == *workspaceID {
+					scoped = append(scoped, outcome)
+				}
+			}
+			outcomes = scoped
+		}
 		writeJSON(w, http.StatusOK, outcomes)
 		return
 	}

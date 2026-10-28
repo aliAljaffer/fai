@@ -103,6 +103,14 @@ func (p *openAICompatProvider) GenerateSubtasks(ctx context.Context, title, desc
 	return parseJSONStringArray(text)
 }
 
+func (p *openAICompatProvider) SuggestLabels(ctx context.Context, title, descriptionMD string, existing []string) ([]string, error) {
+	text, err := p.Chat(ctx, FaiSystem, []ChatMessage{{Role: "user", Content: labelsPrompt(title, descriptionMD, existing)}})
+	if err != nil {
+		return nil, err
+	}
+	return parseJSONStringArray(text)
+}
+
 func (p *openAICompatProvider) PlanTask(ctx context.Context, title, body string) (TaskPlan, error) {
 	text, err := p.Chat(ctx, FaiSystem, []ChatMessage{{Role: "user", Content: planPrompt(title, body)}})
 	if err != nil {

@@ -5,13 +5,16 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Input } from '@/components/ui/input'
 import { useBoards, useRunningTime, useStartTime, useStopTime, useTasks } from '../api/hooks'
 import { useUIStore } from '../store/ui'
+import { useWorkspaceStore } from '../store/workspace'
 import { formatDuration } from '../lib/format'
 
 export function TimerWidget() {
   const { data: running } = useRunningTime()
-  const { data: boards } = useBoards()
+  const workspaceId = useWorkspaceStore((state) => state.activeWorkspaceId)
+  const { data: boards } = useBoards(workspaceId)
   const { selectedBoardId } = useUIStore()
-  const boardId = selectedBoardId ?? boards?.[0]?.id
+  const boardId =
+    boards?.find((board) => board.id === selectedBoardId)?.id ?? boards?.[0]?.id
   const { data: tasks } = useTasks(boardId)
   const startTime = useStartTime()
   const stopTime = useStopTime()

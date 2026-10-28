@@ -1,16 +1,21 @@
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { usePendingMeetingOutcomes } from '../../api/hooks'
+import { useWorkspaceStore } from '../../store/workspace'
 
 export function PendingOutcomesBanner() {
-  const { data } = usePendingMeetingOutcomes()
+  const workspaceId = useWorkspaceStore((state) => state.activeWorkspaceId)
+  const { data } = usePendingMeetingOutcomes(workspaceId)
   const navigate = useNavigate()
+  const pending = data?.filter(
+    (outcome) => workspaceId === undefined || outcome.workspace_id === workspaceId,
+  )
 
-  if (!data?.length) return null
+  if (!pending?.length) return null
 
   return (
     <div className="flex flex-col gap-2 px-6 pt-3">
-      {data.map((outcome) => (
+      {pending.map((outcome) => (
         <div
           key={outcome.id}
           className="flex items-center justify-between rounded-md border bg-accent px-3 py-2 text-sm"

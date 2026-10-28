@@ -21,6 +21,8 @@ type fakeAI struct {
 	system   string
 	messages []ai.ChatMessage
 	reply    string
+	labels   []string
+	existing []string
 }
 
 func (f *fakeAI) Chat(_ context.Context, system string, messages []ai.ChatMessage) (string, error) {
@@ -34,6 +36,11 @@ func (f *fakeAI) Chat(_ context.Context, system string, messages []ai.ChatMessag
 
 func (f *fakeAI) GenerateSubtasks(context.Context, string, string) ([]string, error) {
 	return []string{"One", "Two"}, nil
+}
+
+func (f *fakeAI) SuggestLabels(_ context.Context, _ string, _ string, existing []string) ([]string, error) {
+	f.existing = existing
+	return f.labels, nil
 }
 
 func (f *fakeAI) PlanTask(context.Context, string, string) (ai.TaskPlan, error) {
@@ -253,6 +260,88 @@ func TestChatCreatesTaskFromAction(t *testing.T) {
 	}
 	if task.Title != "Refresh the Cloudflare token" || task.DueDate == nil || *task.DueDate != "2099-01-07" {
 		t.Errorf("task = %#v", task)
+	}
+}
+
+func TestAISuggestLabelsSanitisesOutput(t *testing.T) {
+	st, err := lite.New(filepath.Join(t.TempDir(), "fai.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	ctx := context.Background()
+	task, err := st.CreateTask(ctx, store.CreateTaskParams{
+		BoardID: 1, ColumnID: 1, Title: "Fix the invoice export", Priority: "medium", Position: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.CreateTag(ctx, "billing", "#888888"); err != nil {
+		t.Fatal(err)
+	}
+
+	provider := &fakeAI{labels: []string{
+		"#Sales Ops", "sales ops", "  ", "code-review", "#urgent", "one", "two", "three", "four",
+	}}
+	server := httptest.NewServer(NewRouter(&Server{Store: st, AI: provider}))
+	defer server.Close()
+
+	res := postJSON(t, server.URL+"/api/tasks/"+strconv.FormatInt(task.ID, 10)+"/ai/labels", "{}")
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("labels status = %d", res.StatusCode)
+	}
+	var body struct {
+		Labels []string `json:"labels"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+
+	want := []string{"sales-ops", "code-review", "urgent", "one", "two", "three"}
+	if len(body.Labels) != len(want) {
+		t.Fatalf("labels = %#v", body.Labels)
+	}
+	for i := range want {
+		if body.Labels[i] != want[i] {
+			t.Errorf("label %d = %q, want %q", i, body.Labels[i], want[i])
+		}
+	}
+
+	if len(provider.existing) != 1 || provider.existing[0] != "billing" {
+		t.Errorf("existing labels passed to the provider = %#v", provider.existing)
+	}
+
+	stored, err := st.GetTask(ctx, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(stored.Tags) != 0 {
+		t.Errorf("endpoint attached labels without an accept: %#v", stored.Tags)
+	}
+
+	res = postJSON(t, server.URL+"/api/tasks/9999/ai/labels", "{}")
+	res.Body.Close()
+	if res.StatusCode != http.StatusNotFound {
+		t.Errorf("missing task status = %d", res.StatusCode)
+	}
+}
+
+func TestAISuggestLabelsUnconfigured(t *testing.T) {
+	st, err := lite.New(filepath.Join(t.TempDir(), "fai.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	server := httptest.NewServer(NewRouter(&Server{Store: st}))
+	defer server.Close()
+
+	res := postJSON(t, server.URL+"/api/tasks/1/ai/labels", "{}")
+	res.Body.Close()
+	if res.StatusCode != http.StatusServiceUnavailable {
+		t.Errorf("unconfigured status = %d", res.StatusCode)
 	}
 }
 

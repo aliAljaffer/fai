@@ -1,8 +1,11 @@
 import MDEditor from '@uiw/react-md-editor'
-import { Play, Square } from 'lucide-react'
+import { Check, Play, Sparkles, Square, X } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { useRef, useState } from 'react'
 import { useHotkeys } from 'react-hotkeys-hook'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { toast } from 'sonner'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
   Select,
@@ -14,14 +17,27 @@ import {
 import { Sheet, SheetContent, SheetFooter, SheetHeader } from '@/components/ui/sheet'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { AttachmentsPanel } from '../AttachmentsPanel'
+import { RefPicker } from '../refs/RefPicker'
+import { useRefPicker } from '../refs/useRefPicker'
 import { AIPanel } from './AIPanel'
 import { JiraPanel } from './JiraPanel'
 import { LabelEditor } from './LabelEditor'
 import { SubtasksPanel } from './SubtasksPanel'
 import { MarkdownRenderer } from '../MarkdownRenderer'
-import { useRunningTime, useStartTime, useStopTime, useTaskTimeEntries } from '../../api/hooks'
+import {
+  useAddTaskTag,
+  useAIStatus,
+  useCreateTag,
+  useRunningTime,
+  useStartTime,
+  useStopTime,
+  useSuggestLabels,
+  useTags,
+  useTaskReferences,
+  useTaskTimeEntries,
+} from '../../api/hooks'
 import { formatDuration } from '../../lib/format'
-import type { Task } from '../../api/types'
+import type { Task, TaskBacklink } from '../../api/types'
 
 export function TaskDetail({
   task,
@@ -39,6 +55,7 @@ export function TaskDetail({
   const [priority, setPriority] = useState(task.priority)
   const titleRef = useRef<HTMLInputElement>(null)
   const { resolvedTheme } = useTheme()
+  const refs = useRefPicker({ value: description, onChange: setDescription })
 
   useHotkeys('e', () => titleRef.current?.focus(), { preventDefault: true })
 
@@ -63,6 +80,11 @@ export function TaskDetail({
               value={title}
               onChange={(e) => setTitle(e.target.value)}
             />
+            {task.ref && (
+              <Badge variant="outline" className="shrink-0 font-mono text-[0.65rem] text-muted-foreground">
+                {task.ref}
+              </Badge>
+            )}
             <Button
               size="icon-sm"
               variant={isRunning ? 'destructive' : 'outline'}
@@ -91,11 +113,20 @@ export function TaskDetail({
           <TabsContent value="details" className="flex flex-col gap-4">
             <MDEditor
               value={description}
-              onChange={(v) => setDescription(v ?? '')}
+              onChange={(value, event) => {
+                setDescription(value ?? '')
+                refs.handleChange(value ?? '', event?.target ?? null)
+              }}
+              textareaProps={{
+                onKeyDown: refs.handleKeyDown,
+                onBlur: refs.handleBlur,
+                onSelect: refs.sync,
+              }}
               height={220}
               preview="edit"
               data-color-mode={resolvedTheme === "light" ? "light" : "dark"}
             />
+            <RefPicker picker={refs} />
             {description && (
               <div className="rounded-lg border p-3">
                 <MarkdownRenderer source={description} />
@@ -104,6 +135,7 @@ export function TaskDetail({
             <div className="flex flex-col gap-1.5">
               <span className="text-xs font-medium text-muted-foreground">Labels</span>
               <LabelEditor task={task} />
+              <LabelSuggestions task={task} />
             </div>
             <Select value={priority} onValueChange={(value) => value && setPriority(value)}>
               <SelectTrigger className="w-32">
@@ -142,6 +174,8 @@ export function TaskDetail({
           </TabsContent>
         </Tabs>
 
+        <TaskMentions taskId={task.id} />
+
         <SheetFooter className="mt-auto flex-row justify-start px-0">
           <Button
             onClick={() => {
@@ -160,5 +194,140 @@ export function TaskDetail({
         </SheetFooter>
       </SheetContent>
     </Sheet>
+  )
+}
+
+function LabelSuggestions({ task }: { task: Task }) {
+  const { data: status } = useAIStatus()
+  const { data: allTags } = useTags()
+  const suggest = useSuggestLabels(task.id)
+  const createTag = useCreateTag()
+  const addTag = useAddTaskTag(task.id, task.board_id)
+  const [suggested, setSuggested] = useState<string[]>([])
+  const [done, setDone] = useState<string[]>([])
+
+  if (!status?.configured) return null
+
+  const attached = new Set((task.tags ?? []).map((tag) => tag.name.toLowerCase()))
+  const visible = suggested.filter((label) => !done.includes(label) && !attached.has(label))
+
+  function dismiss(label: string) {
+    setDone((current) => [...current, label])
+  }
+
+  async function accept(label: string) {
+    dismiss(label)
+    try {
+      const existing = (allTags ?? []).find((tag) => tag.name.toLowerCase() === label)
+      const tag = existing ?? (await createTag.mutateAsync({ name: label }))
+      await addTag.mutateAsync(tag.id)
+    } catch (error) {
+      toast.error((error as Error).message)
+    }
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <Button
+        size="xs"
+        variant="outline"
+        disabled={suggest.isPending}
+        onClick={() =>
+          suggest.mutate(undefined, {
+            onSuccess: (result) => {
+              setSuggested(result.labels)
+              setDone([])
+            },
+            onError: (error) => toast.error(error.message),
+          })
+        }
+      >
+        <Sparkles />
+        {suggest.isPending ? 'Thinking…' : 'Suggest labels'}
+      </Button>
+      {visible.map((label) => (
+        <span
+          key={label}
+          className="inline-flex items-center gap-0.5 rounded-full border border-dashed py-0.5 pr-0.5 pl-2 text-xs text-muted-foreground"
+        >
+          {label}
+          <button
+            className="rounded-full p-0.5 hover:bg-muted hover:text-foreground"
+            aria-label={`Accept ${label}`}
+            title="Accept"
+            onClick={() => void accept(label)}
+          >
+            <Check className="size-3" />
+          </button>
+          <button
+            className="rounded-full p-0.5 hover:bg-muted hover:text-foreground"
+            aria-label={`Reject ${label}`}
+            title="Reject"
+            onClick={() => dismiss(label)}
+          >
+            <X className="size-3" />
+          </button>
+        </span>
+      ))}
+    </div>
+  )
+}
+
+const MENTION_KINDS = [
+  { kind: 'task', label: 'Tasks' },
+  { kind: 'note', label: 'Notes' },
+  { kind: 'reminder', label: 'Reminders' },
+] as const
+
+function TaskMentions({ taskId }: { taskId: number }) {
+  const { data } = useTaskReferences(taskId)
+  const navigate = useNavigate()
+  const [params, setParams] = useSearchParams()
+  const mentions = data ?? []
+
+  if (!mentions.length) return null
+
+  function open(item: TaskBacklink) {
+    if (item.kind === 'task') {
+      const next = new URLSearchParams(params)
+      next.set('task', String(item.id))
+      setParams(next, { replace: true })
+      return
+    }
+    if (item.kind === 'note') {
+      navigate(`/notes/${item.id}`)
+      return
+    }
+    navigate('/')
+  }
+
+  return (
+    <div className="flex flex-col gap-2 border-t pt-3">
+      <span className="text-xs font-medium text-muted-foreground">Mentioned in</span>
+      {MENTION_KINDS.map((group) => {
+        const items = mentions.filter((item) => item.kind === group.kind)
+        if (!items.length) return null
+        return (
+          <div key={group.kind} className="flex flex-col gap-1">
+            <span className="text-[0.65rem] tracking-wide text-muted-foreground uppercase">
+              {group.label}
+            </span>
+            <ul className="flex flex-col gap-1">
+              {items.map((item) => (
+                <li key={`${item.kind}-${item.id}`}>
+                  <button
+                    type="button"
+                    className="text-left text-sm text-primary underline"
+                    onClick={() => open(item)}
+                  >
+                    {item.title}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )
+      })}
+    </div>
   )
 }

@@ -11,6 +11,8 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
+import { RefPicker } from '../refs/RefPicker'
+import { useRefPicker } from '../refs/useRefPicker'
 import {
   useAIReminder,
   useAIStatus,
@@ -20,6 +22,7 @@ import {
 } from '../../api/hooks'
 import type { Reminder } from '../../api/types'
 import { formatDueIn } from '../../lib/format'
+import { useWorkspaceStore } from '../../store/workspace'
 
 const SNOOZE_OPTIONS = [
   { label: '+1 hour', ms: 60 * 60 * 1000 },
@@ -28,12 +31,14 @@ const SNOOZE_OPTIONS = [
 ]
 
 export function RemindersColumn() {
-  const { data: reminders } = useReminders()
+  const workspaceId = useWorkspaceStore((state) => state.activeWorkspaceId)
+  const { data: reminders } = useReminders(workspaceId)
   const { data: aiStatus } = useAIStatus()
   const updateReminder = useUpdateReminder()
   const deleteReminder = useDeleteReminder()
-  const aiReminder = useAIReminder()
+  const aiReminder = useAIReminder(workspaceId)
   const [text, setText] = useState('')
+  const refs = useRefPicker({ value: text, onChange: setText })
 
   const upcoming = [...(reminders ?? [])]
     .filter((reminder) => !reminder.sent)
@@ -149,15 +154,22 @@ export function RemindersColumn() {
               placeholder="Remind me in 10 minutes to…"
               aria-label="New reminder in natural language"
               disabled={aiReminder.isPending}
-              onChange={(event) => setText(event.target.value)}
+              onChange={(event) => {
+                setText(event.target.value)
+                refs.handleChange(event.target.value, event.currentTarget)
+              }}
               onKeyDown={(event) => {
+                if (refs.handleKeyDown(event)) return
                 if (event.nativeEvent.isComposing) return
                 if (event.key === 'Enter') {
                   event.preventDefault()
                   submit()
                 }
               }}
+              onBlur={refs.handleBlur}
+              onSelect={refs.sync}
             />
+            <RefPicker picker={refs} />
             <Button
               size="icon-sm"
               className="shrink-0 bg-amber-500 text-amber-950 hover:bg-amber-500/80"

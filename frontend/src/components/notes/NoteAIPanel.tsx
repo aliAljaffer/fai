@@ -12,6 +12,7 @@ import {
   useNoteTaskPlan,
 } from '../../api/hooks'
 import { useUIStore } from '../../store/ui'
+import { useWorkspaceStore } from '../../store/workspace'
 
 export function NoteAIPanel({
   noteId,
@@ -23,7 +24,8 @@ export function NoteAIPanel({
   body: string
 }) {
   const { data: status } = useAIStatus()
-  const { data: boards } = useBoards()
+  const workspaceId = useWorkspaceStore((state) => state.activeWorkspaceId)
+  const { data: boards } = useBoards(workspaceId)
   const { selectedBoardId, setSelectedBoardId } = useUIStore()
   const board = boards?.find((item) => item.id === selectedBoardId) ?? boards?.[0]
   const generate = useNoteTaskPlan(noteId)

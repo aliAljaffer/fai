@@ -1,6 +1,14 @@
+export interface Workspace {
+  id: number
+  name: string
+  tag: string
+  created_at: string
+}
+
 export interface Board {
   id: number
   name: string
+  workspace_id: number
   created_at: string
 }
 
@@ -24,6 +32,7 @@ export interface Note {
   title: string
   body_md: string
   task_id: number | null
+  workspace_id: number
   created_at: string
   updated_at: string
 }
@@ -79,6 +88,7 @@ export interface MeetingOutcome {
   title: string
   notes_md: string
   ends_at: string | null
+  workspace_id: number
   outcome_prompt_sent: boolean
   created_at: string
 }
@@ -94,6 +104,7 @@ export interface Reminder {
   title: string
   remind_at: string
   task_id: number | null
+  workspace_id: number
   sent: boolean
   created_at: string
 }
@@ -110,6 +121,9 @@ export interface Task {
   id: number
   board_id: number
   column_id: number
+  workspace_id: number
+  ref_num: number
+  ref: string
   title: string
   description_md: string
   priority: string
@@ -129,6 +143,7 @@ export interface CalendarSource {
   name: string
   url: string
   color: string
+  workspace_id: number
   created_at: string
 }
 
@@ -149,4 +164,25 @@ export interface ImportedCalendar {
   events: ImportedEvent[]
   error?: string
   last_synced_at?: string
+}
+
+export interface TaskRef {
+  kind: 'task'
+  id: number
+  title: string
+  ref: string
+  ref_num: number
+  workspace_tag: string
+  workspace_name: string
+}
+
+export interface TaskBacklink {
+  id: number
+  kind: 'task' | 'note' | 'reminder'
+  title: string
+  workspace_tag: string
+}
+
+export interface LabelSuggestions {
+  labels: string[]
 }

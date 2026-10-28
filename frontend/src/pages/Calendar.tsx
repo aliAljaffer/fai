@@ -27,6 +27,7 @@ import { LogMeetingOutcomeDialog } from '../components/calendar/LogMeetingOutcom
 import { useBoards, useCalendarSources, useImportedCalendars, useTasks, useUpdateTask } from '../api/hooks'
 import { useCalendarPrefs } from '../store/calendarPrefs'
 import { useUIStore } from '../store/ui'
+import { useWorkspaceStore } from '../store/workspace'
 import type { ImportedEvent, MeetingOutcome, Task } from '../api/types'
 
 const WEEK_DAYS = {
@@ -60,11 +61,13 @@ function initialRange() {
 }
 
 export function Calendar() {
-  const { data: boards } = useBoards()
+  const workspaceId = useWorkspaceStore((state) => state.activeWorkspaceId)
+  const { data: boards } = useBoards(workspaceId)
   const { selectedBoardId } = useUIStore()
-  const boardId = selectedBoardId ?? boards?.[0]?.id
+  const boardId =
+    boards?.find((board) => board.id === selectedBoardId)?.id ?? boards?.[0]?.id
   const { data: tasks } = useTasks(boardId)
-  const { data: sources } = useCalendarSources()
+  const { data: sources } = useCalendarSources(workspaceId)
   const updateTask = useUpdateTask(boardId)
   const location = useLocation()
   const navigate = useNavigate()
@@ -83,7 +86,7 @@ export function Calendar() {
   const calendarRef = useRef<HTMLDivElement>(null)
   const { firstDay, setFirstDay } = useCalendarPrefs()
 
-  const { data: importedCalendars } = useImportedCalendars(range.from, range.to)
+  const { data: importedCalendars } = useImportedCalendars(range.from, range.to, workspaceId)
 
   useEffect(() => {
     const outcome = (location.state as { outcome?: MeetingOutcome } | null)?.outcome

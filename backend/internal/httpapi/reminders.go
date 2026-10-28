@@ -41,6 +41,12 @@ func (s *Server) createReminder(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid remind_at, expected RFC3339")
 		return
 	}
+	if body.WorkspaceID != 0 {
+		if _, err := s.Store.GetWorkspace(r.Context(), body.WorkspaceID); err != nil {
+			writeError(w, http.StatusBadRequest, "unknown workspace_id")
+			return
+		}
+	}
 	reminder, err := s.Store.CreateReminder(r.Context(), body.Title, remindAt, body.TaskID, body.WorkspaceID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
@@ -136,8 +142,9 @@ func (s *Server) aiReminder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		Text     string `json:"text"`
-		TZOffset *int   `json:"tz_offset"`
+		Text        string `json:"text"`
+		TZOffset    *int   `json:"tz_offset"`
+		WorkspaceID int64  `json:"workspace_id"`
 	}
 	if err := decodeJSON(r, &body); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid body")
@@ -151,6 +158,12 @@ func (s *Server) aiReminder(w http.ResponseWriter, r *http.Request) {
 	if len([]rune(text)) > 500 {
 		writeError(w, http.StatusBadRequest, "text is too long")
 		return
+	}
+	if body.WorkspaceID != 0 {
+		if _, err := s.Store.GetWorkspace(r.Context(), body.WorkspaceID); err != nil {
+			writeError(w, http.StatusBadRequest, "unknown workspace_id")
+			return
+		}
 	}
 
 	now := localNow(body.TZOffset)
@@ -168,7 +181,7 @@ func (s *Server) aiReminder(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
-	reminder, err := s.Store.CreateReminder(r.Context(), title, remindAt, nil, 0)
+	reminder, err := s.Store.CreateReminder(r.Context(), title, remindAt, nil, body.WorkspaceID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

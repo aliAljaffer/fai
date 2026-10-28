@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
+import { RefPicker } from '../components/refs/RefPicker'
+import { useRefPicker } from '../components/refs/useRefPicker'
 import { useAIChat, useAIStatus, type AIChatMessage } from '../api/hooks'
 
 export function Chat() {
@@ -11,6 +13,7 @@ export function Chat() {
   const [messages, setMessages] = useState<AIChatMessage[]>([])
   const [draft, setDraft] = useState('')
   const transcriptRef = useRef<HTMLDivElement>(null)
+  const refs = useRefPicker({ value: draft, onChange: setDraft })
 
   useEffect(() => {
     const node = transcriptRef.current
@@ -95,13 +98,20 @@ export function Chat() {
           rows={3}
           aria-label="Message"
           placeholder="Ask Fai about your tasks or notes"
-          onChange={(event) => setDraft(event.target.value)}
+          onChange={(event) => {
+            setDraft(event.target.value)
+            refs.handleChange(event.target.value, event.currentTarget)
+          }}
           onKeyDown={(event) => {
+            if (refs.handleKeyDown(event)) return
             if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return
             event.preventDefault()
             void send()
           }}
+          onBlur={refs.handleBlur}
+          onSelect={refs.sync}
         />
+        <RefPicker picker={refs} />
         <div className="flex items-center justify-between gap-2">
           <p className="text-xs text-muted-foreground">Enter sends. Shift and Enter adds a line.</p>
           <Button disabled={!draft.trim() || chat.isPending} onClick={() => void send()}>

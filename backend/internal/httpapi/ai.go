@@ -64,6 +64,63 @@ func (s *Server) aiBreakdown(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, created)
 }
 
+func (s *Server) aiSuggestLabels(w http.ResponseWriter, r *http.Request) {
+	if s.AI == nil {
+		writeError(w, http.StatusServiceUnavailable, "AI is not configured")
+		return
+	}
+	taskID, ok := parseID(r, "taskID")
+	if !ok {
+		writeError(w, http.StatusBadRequest, "invalid task id")
+		return
+	}
+	ctx := r.Context()
+	task, err := s.Store.GetTask(ctx, taskID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "task not found")
+		return
+	}
+
+	tags, err := s.Store.ListTags(ctx)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	existing := make([]string, 0, len(tags))
+	for _, tag := range tags {
+		existing = append(existing, tag.Name)
+	}
+
+	labels, err := s.AI.SuggestLabels(ctx, task.Title, task.DescriptionMd, existing)
+	if err != nil {
+		writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string][]string{"labels": sanitiseLabels(labels)})
+}
+
+func sanitiseLabels(raw []string) []string {
+	seen := make(map[string]struct{}, len(raw))
+	out := make([]string, 0, len(raw))
+	for _, value := range raw {
+		label := strings.ToLower(strings.TrimSpace(value))
+		label = strings.ReplaceAll(label, " ", "-")
+		label = strings.TrimPrefix(label, "#")
+		if label == "" {
+			continue
+		}
+		if _, duplicate := seen[label]; duplicate {
+			continue
+		}
+		seen[label] = struct{}{}
+		out = append(out, label)
+		if len(out) == 6 {
+			break
+		}
+	}
+	return out
+}
+
 type aiChatBody struct {
 	Messages []ai.ChatMessage `json:"messages"`
 	Prompt   string           `json:"prompt"`

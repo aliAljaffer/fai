@@ -13,6 +13,8 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import { RefPicker } from '../refs/RefPicker'
+import { useRefPicker } from '../refs/useRefPicker'
 import {
   useAIStatus,
   useCreateMeetingOutcome,
@@ -44,6 +46,7 @@ export function LogMeetingOutcomeDialog({
   const [endsAt, setEndsAt] = useState('')
   const [savedOutcome, setSavedOutcome] = useState<MeetingOutcome | undefined>(outcome)
   const [suggestions, setSuggestions] = useState<(ExtractedTask & { selected: boolean })[]>([])
+  const refs = useRefPicker({ value: notes, onChange: setNotes })
 
   const extractTasks = useExtractTasksFromOutcome()
   const createTask = useCreateTaskFromOutcome(savedOutcome?.id ?? 0)
@@ -141,9 +144,16 @@ export function LogMeetingOutcomeDialog({
             placeholder="What happened, decisions, action items…"
             aria-label="Meeting notes"
             value={notes}
-            onChange={(event) => setNotes(event.target.value)}
+            onChange={(event) => {
+              setNotes(event.target.value)
+              refs.handleChange(event.target.value, event.currentTarget)
+            }}
+            onKeyDown={refs.handleKeyDown}
+            onBlur={refs.handleBlur}
+            onSelect={refs.sync}
             rows={6}
           />
+          <RefPicker picker={refs} />
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" onClick={() => void save()} disabled={!title.trim()}>
               Save summary

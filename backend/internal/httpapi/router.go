@@ -136,6 +136,7 @@ func NewRouter(s *Server) http.Handler {
 			r.Group(func(r chi.Router) {
 				r.Use(rateLimitByUser(10, 5))
 				r.Post("/tasks/{taskID}/ai/breakdown", s.aiBreakdown)
+				r.Post("/tasks/{taskID}/ai/labels", s.aiSuggestLabels)
 				r.Post("/ai/chat", s.aiChat)
 				r.Post("/meeting-outcomes/{outcomeID}/ai/extract-tasks", s.extractTasksFromOutcome)
 				r.Post("/notes/{noteID}/ai/plan", s.planNoteTask)

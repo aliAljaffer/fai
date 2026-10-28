@@ -23,6 +23,7 @@ const FaiSystem = "You are Fai, the assistant built into a personal task, note, 
 type Provider interface {
 	Chat(ctx context.Context, system string, messages []ChatMessage) (string, error)
 	GenerateSubtasks(ctx context.Context, title, descriptionMD string) ([]string, error)
+	SuggestLabels(ctx context.Context, title, descriptionMD string, existing []string) ([]string, error)
 	PlanTask(ctx context.Context, title, body string) (TaskPlan, error)
 }
 

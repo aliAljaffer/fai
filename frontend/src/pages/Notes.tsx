@@ -5,10 +5,12 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { useCreateNote, useNotes } from '../api/hooks'
+import { useWorkspaceStore } from '../store/workspace'
 
 export function Notes() {
-  const { data: notes } = useNotes()
-  const createNote = useCreateNote()
+  const workspaceId = useWorkspaceStore((state) => state.activeWorkspaceId)
+  const { data: notes } = useNotes(workspaceId)
+  const createNote = useCreateNote(workspaceId)
   const navigate = useNavigate()
   const [adding, setAdding] = useState(false)
   const [title, setTitle] = useState('')

@@ -2,7 +2,7 @@ import { create } from 'zustand'
 
 interface UIState {
   selectedBoardId: number | undefined
-  setSelectedBoardId: (id: number) => void
+  setSelectedBoardId: (id: number | undefined) => void
   commandOpen: boolean
   setCommandOpen: (open: boolean) => void
   newTaskRequest: number

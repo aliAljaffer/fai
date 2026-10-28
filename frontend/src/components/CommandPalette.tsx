@@ -15,6 +15,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { useBoards, useTasks } from '../api/hooks'
 import { useUIStore } from '../store/ui'
+import { useWorkspaceStore } from '../store/workspace'
 
 const pages = [
   { label: 'Board', path: '/', icon: LayoutDashboard },
@@ -30,8 +31,10 @@ export function CommandPalette() {
   const { commandOpen, setCommandOpen, selectedBoardId, requestNewTask } = useUIStore()
   const navigate = useNavigate()
   const location = useLocation()
-  const { data: boards } = useBoards()
-  const boardId = selectedBoardId ?? boards?.[0]?.id
+  const workspaceId = useWorkspaceStore((state) => state.activeWorkspaceId)
+  const { data: boards } = useBoards(workspaceId)
+  const boardId =
+    boards?.find((board) => board.id === selectedBoardId)?.id ?? boards?.[0]?.id
   const { data: tasks } = useTasks(boardId)
 
   const taskOpen = new URLSearchParams(location.search).has('task')

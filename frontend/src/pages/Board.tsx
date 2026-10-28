@@ -49,6 +49,7 @@ import { RemindersColumn } from '../components/board/RemindersColumn'
 import { TaskCard } from '../components/board/TaskCard'
 import { isPastDue } from '../lib/format'
 import { useUIStore } from '../store/ui'
+import { useWorkspaceStore } from '../store/workspace'
 import type { Board as BoardType, Task } from '../api/types'
 
 const collisionDetection: CollisionDetection = (args) => {
@@ -73,7 +74,8 @@ function NewBoardDialog({
   onCreated: (board: BoardType) => void
 }) {
   const [name, setName] = useState('')
-  const createBoard = useCreateBoard()
+  const workspaceId = useWorkspaceStore((state) => state.activeWorkspaceId)
+  const createBoard = useCreateBoard(workspaceId)
 
   async function submit() {
     const value = name.trim()
@@ -171,7 +173,8 @@ function BoardSkeleton({ columns = 4 }: { columns?: number }) {
 }
 
 export function Board() {
-  const boardsQuery = useBoards()
+  const workspaceId = useWorkspaceStore((state) => state.activeWorkspaceId)
+  const boardsQuery = useBoards(workspaceId)
   const boards = boardsQuery.data
   const { selectedBoardId, setSelectedBoardId, newTaskRequest } = useUIStore()
   const board = boards?.find((item) => item.id === selectedBoardId) ?? boards?.[0]

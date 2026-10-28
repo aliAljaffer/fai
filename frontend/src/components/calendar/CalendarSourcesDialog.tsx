@@ -16,6 +16,7 @@ import {
   useDeleteCalendarSource,
   useUpdateCalendarSourceColor,
 } from '../../api/hooks'
+import { useWorkspaceStore } from '../../store/workspace'
 
 export function CalendarSourcesDialog({
   open,
@@ -24,13 +25,14 @@ export function CalendarSourcesDialog({
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
-  const { data: sources, isError, refetch } = useCalendarSources()
-  const createSource = useCreateCalendarSource()
+  const workspaceId = useWorkspaceStore((state) => state.activeWorkspaceId)
+  const { data: sources, isError, refetch } = useCalendarSources(workspaceId)
+  const createSource = useCreateCalendarSource(workspaceId)
   const deleteSource = useDeleteCalendarSource()
   const updateColor = useUpdateCalendarSourceColor()
   const [name, setName] = useState('')
   const [url, setURL] = useState('')
-  const [color, setColor] = useState('#2563eb')
+  const [color, setColor] = useState('#5B84AE')
 
   async function submit() {
     const trimmedName = name.trim()

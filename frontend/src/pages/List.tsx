@@ -8,8 +8,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useBoards, useColumns, useJiraLink, useTags, useTasks } from '../api/hooks'
 import { BulkTaskBar } from '../components/board/BulkTaskBar'
 import { useDebounced } from '../lib/useDebounced'
+import { labelChipStyle } from '../lib/palette'
 import { columnColor, useColumnColors } from '../store/columnColors'
 import { useUIStore } from '../store/ui'
+import { useWorkspaceStore } from '../store/workspace'
 import { cn } from '@/lib/utils'
 import type { Task } from '../api/types'
 
@@ -43,9 +45,11 @@ function JiraKey({ taskId }: { taskId: number }) {
 }
 
 export function List() {
-  const { data: boards } = useBoards()
+  const workspaceId = useWorkspaceStore((state) => state.activeWorkspaceId)
+  const { data: boards } = useBoards(workspaceId)
   const { selectedBoardId } = useUIStore()
-  const boardId = selectedBoardId ?? boards?.[0]?.id
+  const boardId =
+    boards?.find((board) => board.id === selectedBoardId)?.id ?? boards?.[0]?.id
 
   const { data: columns } = useColumns(boardId)
   const { data: tags } = useTags()
@@ -204,7 +208,11 @@ export function List() {
           </div>
         </TableCell>
         <TableCell>
-          <span style={{ color: columnColor(columnById.get(task.column_id), colors) }}>
+          <span className="inline-flex items-center gap-1.5">
+            <span
+              className="size-1.5 shrink-0 rounded-full"
+              style={{ backgroundColor: columnColor(columnById.get(task.column_id), colors) }}
+            />
             {columnById.get(task.column_id)?.name}
           </span>
         </TableCell>
@@ -214,6 +222,7 @@ export function List() {
               <span
                 key={tag.id}
                 className="inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[0.65rem] text-muted-foreground"
+                style={labelChipStyle(tag.color)}
               >
                 <span
                   className="size-1.5 rounded-full"
@@ -227,7 +236,14 @@ export function List() {
         <TableCell>{task.priority}</TableCell>
         <TableCell>{task.due_date ?? '—'}</TableCell>
         <TableCell>
-          <JiraKey taskId={task.id} />
+          <div className="flex items-center gap-2">
+            <JiraKey taskId={task.id} />
+            {task.ref && (
+              <span className="rounded border px-1 font-mono text-[0.65rem] text-muted-foreground">
+                {task.ref}
+              </span>
+            )}
+          </div>
         </TableCell>
       </TableRow>
     )

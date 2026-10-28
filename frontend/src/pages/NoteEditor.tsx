@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/button'
 import { AttachmentsPanel } from '../components/AttachmentsPanel'
 import { NoteAIPanel } from '../components/notes/NoteAIPanel'
 import { MarkdownRenderer } from '../components/MarkdownRenderer'
+import { RefPicker } from '../components/refs/RefPicker'
+import { useRefPicker } from '../components/refs/useRefPicker'
 import { useDeleteNote, useNote, useUpdateNote } from '../api/hooks'
 import { toast } from 'sonner'
 
@@ -21,6 +23,7 @@ export function NoteEditor() {
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
   const [saving, setSaving] = useState(false)
+  const refs = useRefPicker({ value: body, onChange: setBody })
 
   useEffect(() => {
     if (data?.note) {
@@ -69,11 +72,20 @@ export function NoteEditor() {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <MDEditor
           value={body}
-          onChange={(v) => setBody(v ?? '')}
+          onChange={(value, event) => {
+            setBody(value ?? '')
+            refs.handleChange(value ?? '', event?.target ?? null)
+          }}
+          textareaProps={{
+            onKeyDown: refs.handleKeyDown,
+            onBlur: refs.handleBlur,
+            onSelect: refs.sync,
+          }}
           height={400}
           preview="edit"
           data-color-mode={resolvedTheme === "light" ? "light" : "dark"}
         />
+        <RefPicker picker={refs} />
         <div className="rounded-lg border p-4">
           <MarkdownRenderer source={body} />
         </div>

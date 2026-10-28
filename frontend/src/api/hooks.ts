@@ -10,16 +10,54 @@ import type {
   JiraExportResponse,
   JiraLink,
   JiraSuggestion,
+  LabelSuggestions,
   MeetingOutcome,
   Note,
   Reminder,
   Tag,
   Task,
+  TaskBacklink,
+  TaskRef,
   TimeEntry,
+  Workspace,
 } from './types'
+import { useWorkspaceStore } from '../store/workspace'
 
-export function useBoards() {
-  return useQuery({ queryKey: ['boards'], queryFn: () => api.get<Board[]>('/boards') })
+function workspaceParam(workspaceId: number | undefined) {
+  return workspaceId === undefined ? '' : `?workspace_id=${workspaceId}`
+}
+
+export function useWorkspaces() {
+  return useQuery({ queryKey: ['workspaces'], queryFn: () => api.get<Workspace[]>('/workspaces') })
+}
+
+export function useCreateWorkspace() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { name: string; tag: string }) => api.post<Workspace>('/workspaces', body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['workspaces'] }),
+  })
+}
+
+export function useUpdateWorkspace() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, ...body }: { id: number; name?: string; tag?: string }) =>
+      api.patch<Workspace>(`/workspaces/${id}`, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['workspaces'] })
+      qc.invalidateQueries({ queryKey: ['boards'] })
+      qc.invalidateQueries({ queryKey: ['tasks'] })
+      qc.invalidateQueries({ queryKey: ['notes'] })
+    },
+  })
+}
+
+export function useBoards(workspaceId?: number) {
+  return useQuery({
+    queryKey: ['boards', workspaceId ?? null],
+    queryFn: () => api.get<Board[]>(`/boards${workspaceParam(workspaceId)}`),
+  })
 }
 
 export function useColumns(boardId: number | undefined) {
@@ -30,10 +68,10 @@ export function useColumns(boardId: number | undefined) {
   })
 }
 
-export function useCreateBoard() {
+export function useCreateBoard(workspaceId?: number) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (name: string) => api.post<Board>('/boards', { name }),
+    mutationFn: (name: string) => api.post<Board>('/boards', { name, workspace_id: workspaceId }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['boards'] }),
   })
 }
@@ -74,6 +112,25 @@ export function useTask(id: number | undefined) {
     queryKey: ['task', id],
     queryFn: () => api.get<Task>(`/tasks/${id}`),
     enabled: id !== undefined,
+  })
+}
+
+export function useResolveRefs(q: string) {
+  const trimmed = q.trim()
+  return useQuery({
+    queryKey: ['refs', trimmed.toLowerCase()],
+    queryFn: () => api.get<TaskRef[]>(`/refs/resolve?q=${encodeURIComponent(trimmed)}`),
+    enabled: trimmed.length > 0,
+    staleTime: 30_000,
+    retry: false,
+  })
+}
+
+export function useTaskReferences(taskId: number | undefined) {
+  return useQuery({
+    queryKey: ['task', taskId, 'references'],
+    queryFn: () => api.get<TaskBacklink[]>(`/tasks/${taskId}/references`),
+    enabled: taskId !== undefined,
   })
 }
 
@@ -137,7 +194,11 @@ export function useUpdateTask(boardId: number | undefined) {
       priority: string
       due_date?: string | null
     }) => api.patch<Task>(`/tasks/${id}`, body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['tasks', boardId] }),
+    onSuccess: (task) => {
+      qc.invalidateQueries({ queryKey: ['tasks', boardId] })
+      qc.invalidateQueries({ queryKey: ['task', task.id] })
+      qc.invalidateQueries({ queryKey: ['tags'] })
+    },
   })
 }
 
@@ -263,8 +324,28 @@ export function useBulkTaskActions() {
   })
 }
 
-export function useNotes() {
-  return useQuery({ queryKey: ['notes'], queryFn: () => api.get<Note[]>('/notes') })
+export interface SearchResults {
+  tasks: Task[]
+  notes: Note[]
+}
+
+export function useSearch(q: string, workspaceId?: number) {
+  return useQuery({
+    queryKey: ['search', q, workspaceId ?? null],
+    queryFn: () => {
+      const params = new URLSearchParams({ q })
+      if (workspaceId !== undefined) params.set('workspace_id', String(workspaceId))
+      return api.get<SearchResults>(`/search?${params}`)
+    },
+    enabled: q.length > 0,
+  })
+}
+
+export function useNotes(workspaceId?: number) {
+  return useQuery({
+    queryKey: ['notes', 'list', workspaceId ?? null],
+    queryFn: () => api.get<Note[]>(`/notes${workspaceParam(workspaceId)}`),
+  })
 }
 
 export function useNote(id: number | undefined) {
@@ -284,10 +365,11 @@ export function useNoteByTitle(title: string | undefined) {
   })
 }
 
-export function useCreateNote() {
+export function useCreateNote(workspaceId?: number) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (body: { title: string; body_md: string }) => api.post<Note>('/notes', body),
+    mutationFn: (body: { title: string; body_md: string }) =>
+      api.post<Note>('/notes', { ...body, workspace_id: workspaceId }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['notes'] }),
   })
 }
@@ -304,19 +386,19 @@ export function useUpdateNote() {
   })
 }
 
-export function useReminders() {
+export function useReminders(workspaceId?: number) {
   return useQuery({
-    queryKey: ['reminders'],
-    queryFn: () => api.get<Reminder[]>('/reminders'),
+    queryKey: ['reminders', workspaceId ?? null],
+    queryFn: () => api.get<Reminder[]>(`/reminders${workspaceParam(workspaceId)}`),
     refetchInterval: 60_000,
   })
 }
 
-export function useCreateReminder() {
+export function useCreateReminder(workspaceId?: number) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (body: { title: string; remind_at: string; task_id?: number }) =>
-      api.post<Reminder>('/reminders', body),
+      api.post<Reminder>('/reminders', { ...body, workspace_id: workspaceId }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['reminders'] }),
   })
 }
@@ -338,13 +420,14 @@ export function useDeleteReminder() {
   })
 }
 
-export function useAIReminder() {
+export function useAIReminder(workspaceId?: number) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (text: string) =>
       api.post<Reminder>('/reminders/ai', {
         text,
         tz_offset: -new Date().getTimezoneOffset(),
+        workspace_id: workspaceId,
       }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['reminders'] }),
   })
@@ -464,6 +547,12 @@ export function useAIBreakdown(taskId: number) {
   })
 }
 
+export function useSuggestLabels(taskId: number) {
+  return useMutation({
+    mutationFn: () => api.post<LabelSuggestions>(`/tasks/${taskId}/ai/labels`),
+  })
+}
+
 export interface AIChatMessage {
   role: 'user' | 'assistant'
   content: string
@@ -521,18 +610,18 @@ export function useCalendarFeedURL() {
   })
 }
 
-export function useCalendarSources() {
+export function useCalendarSources(workspaceId?: number) {
   return useQuery({
-    queryKey: ['calendar-sources'],
-    queryFn: () => api.get<CalendarSource[]>('/calendar/sources'),
+    queryKey: ['calendar-sources', workspaceId ?? null],
+    queryFn: () => api.get<CalendarSource[]>(`/calendar/sources${workspaceParam(workspaceId)}`),
   })
 }
 
-export function useCreateCalendarSource() {
+export function useCreateCalendarSource(workspaceId?: number) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (body: { name: string; url: string; color: string }) =>
-      api.post<CalendarSource>('/calendar/sources', body),
+      api.post<CalendarSource>('/calendar/sources', { ...body, workspace_id: workspaceId }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['calendar-sources'] })
       qc.invalidateQueries({ queryKey: ['calendar-imported'] })
@@ -563,28 +652,38 @@ export function useDeleteCalendarSource() {
   })
 }
 
-export function useImportedCalendars(from: string, to: string) {
+export function useImportedCalendars(from: string, to: string, workspaceId?: number) {
   return useQuery({
-    queryKey: ['calendar-imported', from, to],
-    queryFn: () => api.get<ImportedCalendar[]>(`/calendar/imported?from=${from}&to=${to}`),
+    queryKey: ['calendar-imported', from, to, workspaceId ?? null],
+    queryFn: () =>
+      api.get<ImportedCalendar[]>(
+        `/calendar/imported?from=${from}&to=${to}${workspaceId === undefined ? '' : `&workspace_id=${workspaceId}`}`,
+      ),
     placeholderData: (previous) => previous,
   })
 }
 
-export function usePendingMeetingOutcomes() {
+export function usePendingMeetingOutcomes(workspaceId?: number) {
   return useQuery({
-    queryKey: ['meeting-outcomes', 'pending'],
-    queryFn: () => api.get<MeetingOutcome[]>('/meeting-outcomes?pending=true'),
+    queryKey: ['meeting-outcomes', 'pending', workspaceId ?? null],
+    queryFn: () =>
+      api.get<MeetingOutcome[]>(
+        `/meeting-outcomes?pending=true${workspaceId === undefined ? '' : `&workspace_id=${workspaceId}`}`,
+      ),
     refetchOnWindowFocus: true,
     refetchInterval: 60_000,
   })
 }
 
-export function useCreateMeetingOutcome() {
+export function useCreateMeetingOutcome(workspaceId?: number) {
   const qc = useQueryClient()
+  const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId)
   return useMutation({
     mutationFn: (body: { occurred_on: string; title: string; notes_md: string; ends_at?: string }) =>
-      api.post<MeetingOutcome>('/meeting-outcomes', body),
+      api.post<MeetingOutcome>('/meeting-outcomes', {
+        ...body,
+        workspace_id: workspaceId ?? activeWorkspaceId,
+      }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['meeting-outcomes'] }),
   })
 }

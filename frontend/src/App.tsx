@@ -1,6 +1,14 @@
 import { NavLink, Route, Routes } from 'react-router-dom'
+import { useEffect } from 'react'
 import { Toaster } from '@/components/ui/sonner'
 import { Button } from '@/components/ui/button'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 import { AuthCallback } from './pages/AuthCallback'
 import { Board } from './pages/Board'
@@ -13,19 +21,66 @@ import { Search } from './pages/Search'
 import { Settings } from './pages/Settings'
 import { Stats } from './pages/Stats'
 import { CommandPalette } from './components/CommandPalette'
+import { AppIcon } from './components/Logo'
 import { ThemeToggle } from './components/ThemeToggle'
 import { PendingOutcomesBanner } from './components/calendar/PendingOutcomesBanner'
 import { TimerWidget } from './components/TimerWidget'
 import { TaskDetailSheet } from './components/board/TaskDetailSheet'
 import { useUIStore } from './store/ui'
+import { useWorkspaceStore } from './store/workspace'
+import { useWorkspaces } from './api/hooks'
 
 export function App() {
   const setCommandOpen = useUIStore((state) => state.setCommandOpen)
+  const setSelectedBoardId = useUIStore((state) => state.setSelectedBoardId)
+  const { data: workspaces } = useWorkspaces()
+  const { activeWorkspaceId, setActiveWorkspaceId } = useWorkspaceStore()
+  const storedWorkspace = workspaces?.find((workspace) => workspace.id === activeWorkspaceId)
+  const activeWorkspace = storedWorkspace ?? workspaces?.[0]
+
+  useEffect(() => {
+    if (!workspaces?.length || storedWorkspace) return
+    setActiveWorkspaceId(workspaces[0].id)
+  }, [workspaces, storedWorkspace, setActiveWorkspaceId])
 
   return (
     <div className="flex min-h-screen flex-col">
       <nav className="flex items-center gap-5 border-b px-6 py-3">
-        <span className="mr-2 font-bold">fai</span>
+        <span className="mr-2 flex items-center gap-2">
+          <AppIcon className="h-5 w-5" />
+          <span className="font-bold">fai</span>
+        </span>
+        {!!workspaces?.length && (
+          <Select
+            items={workspaces.map((workspace) => ({
+              value: String(workspace.id),
+              label: workspace.name,
+            }))}
+            value={activeWorkspace ? String(activeWorkspace.id) : undefined}
+            onValueChange={(value) => {
+              if (!value) return
+              setActiveWorkspaceId(Number(value))
+              setSelectedBoardId(undefined)
+            }}
+          >
+            <SelectTrigger size="sm" aria-label="Switch workspace" className="mr-1">
+              <SelectValue />
+              <span className="rounded border px-1 font-mono text-[0.65rem] text-muted-foreground">
+                {activeWorkspace?.tag}
+              </span>
+            </SelectTrigger>
+            <SelectContent align="start">
+              {workspaces.map((workspace) => (
+                <SelectItem key={workspace.id} value={String(workspace.id)}>
+                  {workspace.name}
+                  <span className="font-mono text-[0.65rem] text-muted-foreground">
+                    {workspace.tag}
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
         <NavLink
           to="/"
           end
