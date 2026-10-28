@@ -8,6 +8,7 @@ import {
   useSensors,
   type CollisionDetection,
   type DragEndEvent,
+  type DragOverEvent,
   type DragStartEvent,
 } from '@dnd-kit/core'
 import { Plus, Search } from 'lucide-react'
@@ -196,6 +197,7 @@ export function Board() {
   const [query, setQuery] = useState('')
   const [priority, setPriority] = useState('all')
   const [activeTaskId, setActiveTaskId] = useState<number | null>(null)
+  const [overColumnId, setOverColumnId] = useState<number | null>(null)
   const [composerColumnId, setComposerColumnId] = useState<number | null>(null)
   const [newBoardOpen, setNewBoardOpen] = useState(false)
   const [addingColumn, setAddingColumn] = useState(false)
@@ -293,10 +295,22 @@ export function Board() {
 
   function handleDragStart(event: DragStartEvent) {
     setActiveTaskId(Number(event.active.id))
+    setOverColumnId(null)
+  }
+
+  function handleDragOver(event: DragOverEvent) {
+    const overId = event.over ? String(event.over.id) : ''
+    if (overId.startsWith('column-')) {
+      setOverColumnId(Number(overId.replace('column-', '')))
+      return
+    }
+    const overTask = tasks?.find((task) => task.id === Number(overId))
+    setOverColumnId(overTask?.column_id ?? null)
   }
 
   function handleDragEnd(event: DragEndEvent) {
     setActiveTaskId(null)
+    setOverColumnId(null)
     const { active, over } = event
     if (!over) return
 
@@ -421,8 +435,12 @@ export function Board() {
       sensors={sensors}
       collisionDetection={collisionDetection}
       onDragStart={handleDragStart}
+      onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
-      onDragCancel={() => setActiveTaskId(null)}
+      onDragCancel={() => {
+        setActiveTaskId(null)
+        setOverColumnId(null)
+      }}
     >
       <div className="flex flex-col gap-4">
         <header className="flex flex-wrap items-center justify-between gap-3">
@@ -533,6 +551,7 @@ export function Board() {
                 totalCount={totalByColumn.get(column.id) ?? 0}
                 hasFilters={hasFilters}
                 doneColumnIds={doneColumnIds}
+                highlighted={overColumnId === column.id}
                 adding={composerColumnId === column.id}
                 runningTaskId={running?.task_id ?? null}
                 onStartAdding={() => setComposerColumnId(column.id)}

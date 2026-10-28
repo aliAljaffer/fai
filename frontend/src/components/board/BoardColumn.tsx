@@ -16,6 +16,7 @@ export function BoardColumn({
   totalCount,
   hasFilters,
   doneColumnIds,
+  highlighted,
   adding,
   runningTaskId,
   onStartAdding,
@@ -31,6 +32,7 @@ export function BoardColumn({
   totalCount: number
   hasFilters: boolean
   doneColumnIds: Set<number>
+  highlighted: boolean
   adding: boolean
   runningTaskId: number | null
   onStartAdding: () => void
@@ -79,8 +81,8 @@ export function BoardColumn({
       <div
         ref={setNodeRef}
         className={cn(
-          'flex max-h-[calc(100dvh-14rem)] min-h-24 flex-1 flex-col gap-2 overflow-y-auto rounded-md pt-2 pr-0.5 transition-colors',
-          isOver && 'bg-muted/40',
+          'flex max-h-[calc(100dvh-14rem)] min-h-24 flex-1 flex-col gap-2 overflow-y-auto rounded-md pt-2 pr-0.5 transition-[background-color,box-shadow] duration-150 motion-reduce:transition-none',
+          (isOver || highlighted) && 'bg-muted/40 ring-1 ring-primary/25',
         )}
       >
         <SortableContext items={tasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
