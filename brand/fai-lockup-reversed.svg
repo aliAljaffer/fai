@@ -1,18 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="16 28 268 105" width="268" height="105">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="16 28 246.85 105" width="247" height="105">
   <title>fai</title>
-  <g transform="translate(16,40) scale(0.328125)">
-    <rect width="256" height="256" rx="56" fill="#ACC7E4"/>
-    <g transform="translate(10,-15)" fill="none" stroke="#17130E" stroke-width="30" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M158 76 H130 A28 28 0 0 0 102 104 V210"/>
-      <path d="M70 136 H166"/>
-    </g>
-  </g>
-  <g transform="translate(112.75,-6) scale(0.625)" fill="none" stroke="#FFFFFF" stroke-width="30" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M96 68 H84 A24 24 0 0 0 60 92 V208"/>
-    <path d="M32 118 H96"/>
-    <circle cx="178" cy="160" r="34"/>
-    <path d="M212 126 V208"/>
-    <path d="M258 126 V208"/>
-  </g>
-  <rect x="264.6" y="33.4" width="18.8" height="18.8" rx="1.9" fill="#FFFFFF"/>
+  <g transform="translate(16,40) scale(0.328125)"><rect width="256" height="256" rx="56" fill="#ACC7E4"/><g transform="translate(10,-15)" fill="none" stroke="#17130E" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"><path d="M158 76 H130 A28 28 0 0 0 102 104 V210"/><path d="M70 136 H166"/></g></g>
+  <g transform="translate(123.15,124.00) scale(0.125659,-0.125659)" fill="#FFFFFF"><path transform="translate(0.0,0)" d="M161 -8Q131 -8 114.5 8.5Q98 25 98 56V395H52Q28 395 15.0 407.5Q2 420 2 442Q2 465 15.0 477.0Q28 489 52 489H134L98 456V490Q98 593 150.0 644.5Q202 696 300 705L334 708Q354 710 366.0 701.5Q378 693 382.0 679.5Q386 666 383.0 652.0Q380 638 370.5 627.5Q361 617 346 616L332 615Q275 611 249.0 586.0Q223 561 223 510V473L207 489H308Q332 489 345.0 477.0Q358 465 358 442Q358 420 345.0 407.5Q332 395 308 395H223V56Q223 -8 161 -8Z"/><path transform="translate(359.0,0)" d="M226 -10Q173 -10 131.5 10.5Q90 31 66.5 66.0Q43 101 43 145Q43 199 71.0 230.5Q99 262 162.0 276.0Q225 290 331 290H381V218H332Q270 218 233.0 212.0Q196 206 180.5 191.5Q165 177 165 151Q165 118 188.0 97.0Q211 76 252 76Q285 76 310.5 91.5Q336 107 351.0 134.0Q366 161 366 196V311Q366 361 344.0 383.0Q322 405 270 405Q241 405 207.5 398.0Q174 391 137 374Q118 365 103.5 369.0Q89 373 81.0 385.5Q73 398 73.0 413.0Q73 428 81.0 442.5Q89 457 108 464Q154 483 196.5 491.0Q239 499 274 499Q346 499 392.5 477.0Q439 455 462.0 410.5Q485 366 485 296V56Q485 25 470.0 8.5Q455 -8 427 -8Q399 -8 383.5 8.5Q368 25 368 56V104H376Q369 69 348.5 43.5Q328 18 297.0 4.0Q266 -10 226 -10Z"/><path transform="translate(906.0,0)" d="M127 -7Q97 -7 81.0 11.0Q65 29 65 61V428Q65 461 81.0 478.5Q97 496 127 496Q157 496 173.5 478.5Q190 461 190 428V61Q190 29 174.0 11.0Q158 -7 127 -7ZM127 589Q92 589 72.5 606.5Q53 624 53 655Q53 687 72.5 704.0Q92 721 127 721Q163 721 182.0 704.0Q201 687 201 655Q201 624 182.0 606.5Q163 589 127 589Z"/></g>
 </svg>

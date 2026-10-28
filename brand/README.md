@@ -31,7 +31,7 @@ Semantic tokens sit beside the base palette in `index.css` and replace literal c
 
 ## Typography
 
-The UI is set in Figtree (Google Fonts), self-hosted through `@fontsource-variable/figtree`. The wordmark is not Figtree: it is custom stroke geometry built to match the f symbol, so it stays fixed whatever the UI typeface is.
+The UI is set in Figtree (Google Fonts), self-hosted through `@fontsource-variable/figtree`. The wordmark is set in Nunito 700 (Google Fonts) and converted to outlines, so it stays fixed whatever the UI typeface is and needs no font at render time. Nunito is used for the "fai" name only, never for UI text.
 
 ## Rules
 
@@ -43,5 +43,5 @@ The UI is set in Figtree (Google Fonts), self-hosted through `@fontsource-variab
 ## Notes
 
 - All letterforms are drawn as paths. No fonts are embedded.
-- The marks are stroke-based. If you need expanded outlines for cutting or a vinyl plotter, convert the strokes in a vector editor first.
+- The tile, symbol and wordmark set are drawn as paths, the wordmark as filled outlines, the icon and symbol as strokes. No fonts are embedded. If you need expanded outlines for cutting or a vinyl plotter, convert the strokes in a vector editor first.
 - No trademark search has been done.
