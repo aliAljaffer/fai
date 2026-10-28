@@ -64,9 +64,9 @@ func (s *Server) createCalendarSource(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "name is required and must be under 80 characters")
 		return
 	}
-	parsed, err := url.Parse(strings.TrimSpace(body.URL))
-	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
-		writeError(w, http.StatusBadRequest, "url must be an http or https URL")
+	feedURL, err := normalizeCalendarURL(body.URL)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	color := strings.TrimSpace(body.Color)
@@ -78,12 +78,27 @@ func (s *Server) createCalendarSource(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	source, err := s.Store.CreateCalendarSource(r.Context(), name, parsed.String(), color)
+	source, err := s.Store.CreateCalendarSource(r.Context(), name, feedURL, color)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	writeJSON(w, http.StatusCreated, source)
+}
+
+// webcal is the scheme Outlook and Apple publish; the feed itself is served over https.
+func normalizeCalendarURL(raw string) (string, error) {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return "", errors.New("url must be an http, https or webcal URL")
+	}
+	if parsed.Scheme == "webcal" {
+		parsed.Scheme = "https"
+	}
+	if (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+		return "", errors.New("url must be an http, https or webcal URL")
+	}
+	return parsed.String(), nil
 }
 
 func (s *Server) updateCalendarSource(w http.ResponseWriter, r *http.Request) {

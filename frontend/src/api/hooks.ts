@@ -113,8 +113,12 @@ export function useRemoveTaskTag(taskId: number, boardId: number | undefined) {
 export function useCreateTask(boardId: number | undefined) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (body: { board_id: number; column_id: number; title: string }) =>
-      api.post<Task>('/tasks', body),
+    mutationFn: (body: {
+      board_id: number
+      column_id: number
+      title: string
+      due_date?: string
+    }) => api.post<Task>('/tasks', body),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['tasks', boardId] }),
   })
 }

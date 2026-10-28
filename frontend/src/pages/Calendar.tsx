@@ -9,10 +9,11 @@ import type {
   EventInput,
 } from '@fullcalendar/core'
 import { CalendarPlus, MessageSquarePlus } from 'lucide-react'
-import { format, addMonths, startOfMonth, subMonths } from 'date-fns'
+import { format, addMonths, parseISO, startOfMonth, subMonths } from 'date-fns'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
+import { CalendarDayDialog } from '../components/calendar/CalendarDayDialog'
 import { CalendarSourcesDialog } from '../components/calendar/CalendarSourcesDialog'
 import { LogMeetingOutcomeDialog } from '../components/calendar/LogMeetingOutcomeDialog'
 import { useBoards, useCalendarSources, useImportedCalendars, useTasks, useUpdateTask } from '../api/hooks'
@@ -50,6 +51,7 @@ export function Calendar() {
   const navigate = useNavigate()
 
   const [dialogDate, setDialogDate] = useState<string | null>(null)
+  const [dayDate, setDayDate] = useState<string | null>(null)
   const [dialogOutcome, setDialogOutcome] = useState<MeetingOutcome | undefined>(undefined)
   const [sourcesOpen, setSourcesOpen] = useState(false)
   const [range, setRange] = useState(initialRange)
@@ -105,6 +107,7 @@ export function Calendar() {
 
   const events = useMemo(() => [...taskEvents, ...importedEvents], [taskEvents, importedEvents])
   const importErrors = (importedCalendars ?? []).filter((calendar) => calendar.error)
+  const [today] = useState(() => format(new Date(), 'yyyy-MM-dd'))
 
   function handleEventDrop(info: EventDropArg) {
     const props = info.event.extendedProps as CalendarEventProps
@@ -147,10 +150,11 @@ export function Calendar() {
   }
 
   function handleDateClick(info: DateClickArg) {
-    openNewOutcome(info.date)
+    setDayDate(format(info.date, 'yyyy-MM-dd'))
   }
 
   function openNewOutcome(date: Date) {
+    if (format(date, 'yyyy-MM-dd') > today) return
     setDialogOutcome(undefined)
     setDialogDate(format(date, 'yyyy-MM-dd'))
   }
@@ -159,16 +163,18 @@ export function Calendar() {
     return (
       <div className="fc-day-top-row">
         <span>{arg.dayNumberText}</span>
-        <button
-          className="fc-day-add"
-          aria-label={`Add meeting summary on ${format(arg.date, 'd MMM yyyy')}`}
-          onClick={(event) => {
-            event.stopPropagation()
-            openNewOutcome(arg.date)
-          }}
-        >
-          +
-        </button>
+        {format(arg.date, 'yyyy-MM-dd') <= today && (
+          <button
+            className="fc-day-add"
+            aria-label={`Add meeting summary on ${format(arg.date, 'd MMM yyyy')}`}
+            onClick={(event) => {
+              event.stopPropagation()
+              openNewOutcome(arg.date)
+            }}
+          >
+            +
+          </button>
+        )}
       </div>
     )
   }
@@ -254,6 +260,20 @@ export function Calendar() {
       </div>
 
       <CalendarSourcesDialog open={sourcesOpen} onOpenChange={setSourcesOpen} />
+
+      {dayDate && boardId && (
+        <CalendarDayDialog
+          open
+          date={dayDate}
+          boardId={boardId}
+          allowSummary={dayDate <= today}
+          onOpenChange={(open) => !open && setDayDate(null)}
+          onMeetingSummary={() => {
+            setDayDate(null)
+            openNewOutcome(parseISO(dayDate))
+          }}
+        />
+      )}
 
       {dialogDate && boardId && (
         <LogMeetingOutcomeDialog

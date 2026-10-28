@@ -109,7 +109,7 @@ export function CalendarSourcesDialog({
           <p className="text-xs font-medium text-muted-foreground">Add calendar</p>
           <Input
             value={name}
-            placeholder="Name, for example Work"
+            placeholder="Name, for example Outlook"
             aria-label="Calendar name"
             onChange={(event) => setName(event.target.value)}
           />
@@ -125,6 +125,10 @@ export function CalendarSourcesDialog({
               }
             }}
           />
+          <p className="text-xs text-muted-foreground">
+            Outlook on the web: Settings &gt; Calendar &gt; Shared calendars &gt; Publish a
+            calendar, then copy the ICS or webcal link.
+          </p>
           <div className="flex items-center gap-2">
             <input
               type="color"
