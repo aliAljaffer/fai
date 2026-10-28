@@ -20,6 +20,9 @@ type Server struct {
 	ICSToken            string
 	PublicURL           string
 	AttachmentsDir      string
+	// StaticDir, when set, serves the built SPA from the API server. The
+	// Electron build uses this so the window can load a normal http origin.
+	StaticDir string
 	// AuthMiddleware validates bearer tokens on every /api/* route when set.
 	// Left nil under DISABLE_AUTH for local dev.
 	AuthMiddleware func(http.Handler) http.Handler
@@ -125,6 +128,10 @@ func NewRouter(s *Server) http.Handler {
 			r.Post("/meeting-outcomes/{outcomeID}/tasks", s.createTaskFromOutcome)
 		})
 	})
+
+	if s.StaticDir != "" {
+		r.Handle("/*", spaHandler(s.StaticDir))
+	}
 
 	return r
 }

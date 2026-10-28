@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"net"
 	"net/http"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -78,6 +79,7 @@ func main() {
 		ICSToken:            cfg.ICSToken,
 		PublicURL:           cfg.PublicURL,
 		AttachmentsDir:      cfg.AttachmentsDir,
+		StaticDir:           cfg.StaticDir,
 		AuthMiddleware:      authMiddleware,
 	}
 	router := httpapi.NewRouter(server)
@@ -96,7 +98,7 @@ func main() {
 	scheduler := &reminders.Scheduler{Store: st, Ntfy: ntfyClient, Mail: mailClient}
 	go scheduler.Run(context.Background())
 
-	addr := ":" + cfg.Port
+	addr := net.JoinHostPort(cfg.BindAddr, cfg.Port)
 	log.Printf("fai backend listening on %s", addr)
 	if err := http.ListenAndServe(addr, router); err != nil {
 		log.Fatal(err)

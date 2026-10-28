@@ -133,3 +133,48 @@ calls. Caddy sets `X-Forwarded-User` for `/api`, which the backend trusts in
 `proxy-header` mode while remaining unpublished outside the compose network. The
 `/api/calendar.ics` feed deliberately bypasses Basic auth because calendar clients
 use its URL token instead.
+
+## Desktop app (Electron)
+
+The desktop build is a single installable app for macOS, Windows, and Linux. It
+bundles the same backend binary and frontend, stores everything in one SQLite file
+under the OS's application-data directory, listens on a random loopback port, and
+runs with authentication off (there is no network exposure). Attachments live in an
+`attachments/` directory next to the database.
+
+```sh
+make electron-dev    # build frontend + backend, then run the Electron shell
+make electron-dist   # build a local installer for the current OS
+```
+
+Data locations:
+
+- macOS: `~/Library/Application Support/fai/`
+- Windows: `%APPDATA%\fai\`
+- Linux: `~/.config/fai/`
+
+`fai.db` and `attachments/` are created there on first launch; `backend.log` records
+the embedded server's output. The desktop app reads optional integrations from the
+process environment, or from a `.env` file placed in that data directory (the backend
+loads `.env` from its working directory). Core settings such as `DATABASE_URL`,
+`BIND_ADDR`, `PORT`, and `DISABLE_AUTH` are fixed by the app.
+
+### Releases
+
+`.github/workflows/release.yml` runs on any `v*` tag and builds macOS arm64, macOS
+x64, Linux x64, and Windows x64 artifacts, attaches them to the GitHub release, and
+publishes the cask. The macOS app is ad-hoc signed but not notarized. Homebrew does
+not add the quarantine attribute, so cask installs launch normally; a DMG downloaded
+in a browser needs right-click Open the first time. Windows may show a SmartScreen
+warning.
+
+### Homebrew
+
+```sh
+brew install --cask alialjaffer/tap/fai
+```
+
+The release workflow pushes `Casks/fai.rb` to `aliAljaffer/homebrew-tap` over SSH,
+using the private half of a read/write deploy key stored as the `TAP_DEPLOY_KEY`
+repository secret. Linux users install the `tar.gz` or `AppImage` from the release
+page instead; Homebrew casks are macOS-only.

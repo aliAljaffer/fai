@@ -1,0 +1,40 @@
+appId: com.alialjaffer.fai
+productName: fai
+copyright: Copyright © 2026 Ali Aljaffer
+directories:
+  output: release
+  buildResources: build
+files:
+  - main.js
+  - package.json
+extraResources:
+  - from: ../backend/bin
+    to: backend
+  - from: ../frontend/dist
+    to: web
+asar: true
+mac:
+  category: public.app-category.productivity
+  icon: build/icon.png
+  identity: "-"
+  hardenedRuntime: false
+  target:
+    - dmg
+    - zip
+  artifactName: ${productName}-${version}-${arch}-mac.${ext}
+win:
+  icon: build/icon.png
+  target:
+    - nsis
+  artifactName: ${productName}-${version}-${arch}-setup.${ext}
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+linux:
+  icon: build/icon.png
+  category: Office
+  target:
+    - AppImage
+    - tar.gz
+  artifactName: ${productName}-${version}-${arch}.${ext}

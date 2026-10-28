@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: dev-db-up dev-db-down migrate-up migrate-new sqlc-generate sqlc-generate-sqlite backend-run frontend-run build build-images push-images build-frontend-compose hash-password compose-prod-up compose-prod-down
+.PHONY: dev-db-up dev-db-down migrate-up migrate-new sqlc-generate sqlc-generate-sqlite backend-run frontend-run build build-images push-images build-frontend-compose hash-password compose-prod-up compose-prod-down electron-dev electron-dist
 
 GOOSE := $(HOME)/go/bin/goose
 SQLC := $(HOME)/go/bin/sqlc
@@ -56,6 +56,16 @@ push-images:
 
 build-frontend-compose:
 	docker build -t $(REGISTRY)/fai-frontend:compose frontend/
+
+electron-dev:
+	cd frontend && npm run build
+	cd backend && go build -o bin/fai-backend ./cmd/api
+	cd electron && npm install && npm start
+
+electron-dist:
+	cd frontend && npm run build
+	cd backend && go build -trimpath -ldflags="-s -w" -o bin/fai-backend ./cmd/api
+	cd electron && npm install && npm run dist
 
 # Prints the bcrypt hash already $$-escaped for Compose's env_file interpolation.
 hash-password:

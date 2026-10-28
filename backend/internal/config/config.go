@@ -8,6 +8,7 @@ import (
 type Config struct {
 	DatabaseURL         string
 	Port                string
+	BindAddr            string
 	DisableAuth         bool
 	OIDCIssuerURL       string
 	OIDCAudience        string
@@ -29,6 +30,9 @@ type Config struct {
 	AIProvider          string
 	AIAPIKey            string
 	AIModel             string
+	// StaticDir serves the built frontend SPA from the same origin as the API.
+	// Used by the Electron build, which has no separate web server.
+	StaticDir string
 	// AuthMode is "oidc" (default: backend validates bearer JWTs itself, used by the
 	// kubernetes deployment) or "proxy-header" (trusts X-Forwarded-User/-Email set by
 	// a fronting oauth2-proxy, used by the docker-compose deployment). Only safe in
@@ -52,6 +56,7 @@ func Load() Config {
 	return Config{
 		DatabaseURL:         os.Getenv("DATABASE_URL"),
 		Port:                envOr("PORT", "8080"),
+		BindAddr:            os.Getenv("BIND_ADDR"),
 		DisableAuth:         os.Getenv("DISABLE_AUTH") == "true",
 		OIDCIssuerURL:       os.Getenv("OIDC_ISSUER_URL"),
 		OIDCAudience:        os.Getenv("OIDC_AUDIENCE"),
@@ -73,6 +78,7 @@ func Load() Config {
 		AIProvider:          os.Getenv("AI_PROVIDER"),
 		AIAPIKey:            os.Getenv("AI_API_KEY"),
 		AIModel:             os.Getenv("AI_MODEL"),
+		StaticDir:           os.Getenv("STATIC_DIR"),
 		AuthMode:            envOr("AUTH_MODE", "oidc"),
 	}
 }
