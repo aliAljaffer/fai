@@ -1,9 +1,15 @@
 import { useDroppable } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
-import { Plus } from 'lucide-react'
+import { ArrowLeft, ArrowRight, MoreHorizontal, Pencil, Plus } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import type { BoardColumn as BoardColumnType, Task } from '../../api/types'
@@ -19,10 +25,14 @@ export function BoardColumn({
   highlighted,
   adding,
   runningTaskId,
+  canMoveLeft,
+  canMoveRight,
   onStartAdding,
   onCancelAdding,
   onTaskClick,
   onAddTask,
+  onRename,
+  onMove,
   onToggleTimer,
   onToggleSubtask,
 }: {
@@ -35,10 +45,14 @@ export function BoardColumn({
   highlighted: boolean
   adding: boolean
   runningTaskId: number | null
+  canMoveLeft: boolean
+  canMoveRight: boolean
   onStartAdding: () => void
   onCancelAdding: () => void
   onTaskClick: (task: Task) => void
   onAddTask: (title: string) => Promise<unknown>
+  onRename: (name: string) => Promise<unknown>
+  onMove: (direction: 'left' | 'right') => void
   onToggleTimer: (task: Task) => void
   onToggleSubtask: (subtask: Task) => void
 }) {
@@ -48,12 +62,20 @@ export function BoardColumn({
   })
   const [title, setTitle] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [renaming, setRenaming] = useState(false)
+  const [name, setName] = useState(column.name)
   const inputRef = useRef<HTMLInputElement>(null)
+  const nameRef = useRef<HTMLInputElement>(null)
+  const renameStarted = useRef(false)
 
   useEffect(() => {
     if (adding) inputRef.current?.focus()
     else setTitle('')
   }, [adding])
+
+  useEffect(() => {
+    if (renaming) nameRef.current?.select()
+  }, [renaming])
 
   async function submit() {
     const value = title.trim()
@@ -70,13 +92,92 @@ export function BoardColumn({
     }
   }
 
+  async function submitRename() {
+    const value = name.trim()
+    if (!renaming || renameStarted.current) return
+    renameStarted.current = true
+    setRenaming(false)
+    if (!value || value === column.name) {
+      setName(column.name)
+      renameStarted.current = false
+      return
+    }
+    try {
+      await onRename(value)
+    } catch (error) {
+      setName(column.name)
+      toast.error(error instanceof Error ? error.message : 'Could not rename column')
+    } finally {
+      renameStarted.current = false
+    }
+  }
+
   return (
     <section className="flex w-72 shrink-0 flex-col">
       <div className="flex h-8 items-center justify-between gap-2 border-b pb-2">
-        <h2 className="truncate text-sm font-medium">{column.name}</h2>
-        <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
-          {hasFilters && tasks.length !== totalCount ? `${tasks.length}/${totalCount}` : tasks.length}
-        </span>
+        {renaming ? (
+          <Input
+            ref={nameRef}
+            value={name}
+            aria-label={`Rename ${column.name}`}
+            className="h-6 min-w-0 px-1 text-sm"
+            onChange={(event) => setName(event.target.value)}
+            onBlur={() => void submitRename()}
+            onKeyDown={(event) => {
+              if (event.nativeEvent.isComposing) return
+              if (event.key === 'Enter') {
+                event.preventDefault()
+                void submitRename()
+              }
+              if (event.key === 'Escape') {
+                event.preventDefault()
+                setName(column.name)
+                setRenaming(false)
+              }
+            }}
+          />
+        ) : (
+          <h2 className="min-w-0 truncate text-sm font-medium">{column.name}</h2>
+        )}
+        <div className="flex shrink-0 items-center gap-1">
+          <span className="text-xs tabular-nums text-muted-foreground">
+            {hasFilters && tasks.length !== totalCount ? `${tasks.length}/${totalCount}` : tasks.length}
+          </span>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  className="text-muted-foreground"
+                  aria-label={`Edit ${column.name}`}
+                />
+              }
+            >
+              <MoreHorizontal />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                onClick={() => {
+                  setName(column.name)
+                  renameStarted.current = false
+                  setRenaming(true)
+                }}
+              >
+                <Pencil />
+                Rename
+              </DropdownMenuItem>
+              <DropdownMenuItem disabled={!canMoveLeft} onClick={() => onMove('left')}>
+                <ArrowLeft />
+                Move left
+              </DropdownMenuItem>
+              <DropdownMenuItem disabled={!canMoveRight} onClick={() => onMove('right')}>
+                <ArrowRight />
+                Move right
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
       <div
         ref={setNodeRef}
