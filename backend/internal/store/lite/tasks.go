@@ -94,6 +94,10 @@ func (s *Store) UpdateTaskTitle(ctx context.Context, id int64, title string) err
 	return s.q.UpdateTaskTitle(ctx, sqlitedb.UpdateTaskTitleParams{ID: id, Title: title})
 }
 
+func (s *Store) SetTaskParent(ctx context.Context, id int64, parentTaskID *int64) error {
+	return s.q.SetTaskParent(ctx, sqlitedb.SetTaskParentParams{ID: id, ParentTaskID: ptrToNullInt64(parentTaskID)})
+}
+
 func (s *Store) MoveTask(ctx context.Context, id, columnID int64, position float64) (store.Task, error) {
 	t, err := s.q.MoveTask(ctx, sqlitedb.MoveTaskParams{ID: id, ColumnID: columnID, Position: position})
 	return toTask(t), err

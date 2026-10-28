@@ -314,6 +314,20 @@ func (q *Queries) SetTaskPosition(ctx context.Context, arg SetTaskPositionParams
 	return err
 }
 
+const setTaskParent = `-- name: SetTaskParent :exec
+UPDATE tasks SET parent_task_id = CAST(?1 AS INTEGER), updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?2
+`
+
+type SetTaskParentParams struct {
+	ParentTaskID sql.NullInt64 `json:"parent_task_id"`
+	ID           int64         `json:"id"`
+}
+
+func (q *Queries) SetTaskParent(ctx context.Context, arg SetTaskParentParams) error {
+	_, err := q.db.ExecContext(ctx, setTaskParent, arg.ParentTaskID, arg.ID)
+	return err
+}
+
 const updateTask = `-- name: UpdateTask :one
 UPDATE tasks SET
   title = ?1,

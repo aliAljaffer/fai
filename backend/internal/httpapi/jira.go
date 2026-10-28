@@ -9,6 +9,7 @@ import (
 
 	"github.com/sahilm/fuzzy"
 
+	"github.com/alialjaffer/fai/backend/internal/jira"
 	"github.com/alialjaffer/fai/backend/internal/store"
 )
 
@@ -76,51 +77,128 @@ func (s *Server) jiraImport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	imported, updated, skipped := 0, 0, 0
+
+	inRun := make(map[string]bool, len(issues))
 	for _, issue := range issues {
+		inRun[issue.Key] = true
+	}
+	created := map[string]int64{}
+
+	// The list view nests one level, so a parent that is itself a subtask gets
+	// flattened to its topmost ancestor.
+	rootTask := func(taskID int64) (int64, bool) {
+		seen := map[int64]bool{}
+		for !seen[taskID] {
+			seen[taskID] = true
+			task, err := s.Store.GetTask(ctx, taskID)
+			if err != nil {
+				return 0, false
+			}
+			if task.ParentTaskID == nil {
+				return taskID, true
+			}
+			taskID = *task.ParentTaskID
+		}
+		return 0, false
+	}
+
+	resolveParent := func(key string) (int64, bool, error) {
+		if id, ok := created[key]; ok {
+			return id, true, nil
+		}
+		link, err := s.Store.GetJiraLinkByKey(ctx, key)
+		if err != nil || link == nil {
+			return 0, false, err
+		}
+		return link.TaskID, true, nil
+	}
+
+	handle := func(issue jira.Issue, parentTaskID *int64) error {
 		existing, err := s.Store.GetJiraLinkByKey(ctx, issue.Key)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
+			return err
 		}
 
 		if existing != nil && !body.ForceUpdate {
 			skipped++
-			continue
+			return nil
 		}
 
 		columnID := resolveColumn(issue.Status)
 
 		if existing != nil {
 			if err := s.Store.UpdateTaskTitle(ctx, existing.TaskID, issue.Summary); err != nil {
-				writeError(w, http.StatusInternalServerError, err.Error())
-				return
+				return err
 			}
 			if err := s.Store.UpdateJiraLinkImported(ctx, existing.TaskID, issue.Status); err != nil {
-				writeError(w, http.StatusInternalServerError, err.Error())
-				return
+				return err
+			}
+			if err := s.Store.SetTaskParent(ctx, existing.TaskID, parentTaskID); err != nil {
+				return err
 			}
 			updated++
-			continue
+			return nil
 		}
 
 		position, err := s.appendPosition(ctx, columnID)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
+			return err
 		}
 		task, err := s.Store.CreateTask(ctx, store.CreateTaskParams{
 			BoardID: body.BoardID, ColumnID: columnID, Title: issue.Summary,
-			Priority: "medium", Position: position,
+			Priority: "medium", Position: position, ParentTaskID: parentTaskID,
 		})
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
+			return err
 		}
 		if _, err := s.Store.CreateJiraLinkImported(ctx, task.ID, issue.Key, s.Jira.IssueURL(issue.Key), s.JiraDefaultProject, issue.Status); err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
+			return err
 		}
+		created[issue.Key] = task.ID
 		imported++
+		return nil
+	}
+
+	pending := issues
+	for len(pending) > 0 {
+		var deferred []jira.Issue
+		progressed := false
+		for _, issue := range pending {
+			var parentTaskID *int64
+			if issue.ParentKey != "" {
+				parentID, ok, err := resolveParent(issue.ParentKey)
+				if err != nil {
+					writeError(w, http.StatusInternalServerError, err.Error())
+					return
+				}
+				if !ok {
+					if inRun[issue.ParentKey] {
+						deferred = append(deferred, issue)
+					} else {
+						skipped++
+					}
+					continue
+				}
+				rootID, ok := rootTask(parentID)
+				if !ok {
+					skipped++
+					continue
+				}
+				parentTaskID = &rootID
+			}
+
+			if err := handle(issue, parentTaskID); err != nil {
+				writeError(w, http.StatusInternalServerError, err.Error())
+				return
+			}
+			progressed = true
+		}
+		if !progressed {
+			// Leftovers form a cycle, or their parent was skipped as an orphan.
+			skipped += len(deferred)
+			break
+		}
+		pending = deferred
 	}
 
 	writeJSON(w, http.StatusOK, map[string]int{"imported": imported, "updated": updated, "skipped": skipped})

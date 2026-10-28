@@ -65,3 +65,6 @@ DELETE FROM tasks WHERE id = ?;
 
 -- name: UpdateTaskTitle :exec
 UPDATE tasks SET title = sqlc.arg(title), updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = sqlc.arg(id);
+
+-- name: SetTaskParent :exec
+UPDATE tasks SET parent_task_id = CAST(sqlc.narg('parent_task_id') AS INTEGER), updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = sqlc.arg(id);

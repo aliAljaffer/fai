@@ -62,3 +62,6 @@ UPDATE tasks SET archived = true, updated_at = now() WHERE id = $1;
 
 -- name: DeleteTask :exec
 DELETE FROM tasks WHERE id = $1;
+
+-- name: SetTaskParent :exec
+UPDATE tasks SET parent_task_id = sqlc.narg('parent_task_id'), updated_at = now() WHERE id = sqlc.arg('id');

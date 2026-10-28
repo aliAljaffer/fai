@@ -25,9 +25,10 @@ func New(baseURL, email, apiToken string) *Client {
 }
 
 type Issue struct {
-	Key     string
-	Summary string
-	Status  string
+	Key       string
+	Summary   string
+	Status    string
+	ParentKey string
 }
 
 type searchResponse struct {
@@ -38,6 +39,9 @@ type searchResponse struct {
 			Status  struct {
 				Name string `json:"name"`
 			} `json:"status"`
+			Parent *struct {
+				Key string `json:"key"`
+			} `json:"parent"`
 		} `json:"fields"`
 	} `json:"issues"`
 	NextPageToken string `json:"nextPageToken"`
@@ -72,7 +76,7 @@ func (c *Client) searchIssuesPage(jql string, maxResults int, pageToken string) 
 	params := url.Values{
 		"jql":        {jql},
 		"maxResults": {fmt.Sprint(maxResults)},
-		"fields":     {"summary,status"},
+		"fields":     {"summary,status,parent,subtasks"},
 	}
 	if pageToken != "" {
 		params.Set("nextPageToken", pageToken)
@@ -102,7 +106,11 @@ func (c *Client) searchIssuesPage(jql string, maxResults int, pageToken string) 
 
 	issues := make([]Issue, 0, len(parsed.Issues))
 	for _, i := range parsed.Issues {
-		issues = append(issues, Issue{Key: i.Key, Summary: i.Fields.Summary, Status: i.Fields.Status.Name})
+		issue := Issue{Key: i.Key, Summary: i.Fields.Summary, Status: i.Fields.Status.Name}
+		if i.Fields.Parent != nil {
+			issue.ParentKey = i.Fields.Parent.Key
+		}
+		issues = append(issues, issue)
 	}
 	return issues, parsed.NextPageToken, parsed.IsLast, nil
 }
