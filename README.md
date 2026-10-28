@@ -1,3 +1,11 @@
+<p align="center">
+  <img src="brand/renders/readme-header.png" alt="fai" width="1280">
+</p>
+
+<p align="center">
+  <a href="https://github.com/alialjaffer/fai/actions/workflows/build-images.yml"><img src="https://github.com/alialjaffer/fai/actions/workflows/build-images.yml/badge.svg?branch=main&amp;label=CI" alt="CI"></a>
+</p>
+
 # fai
 
 Self-hosted personal task tracker / Kanban / notetaking app. See `PLAN.md` for the full design and `PROGRESS.md` for build status.

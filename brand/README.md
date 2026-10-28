@@ -10,6 +10,7 @@
 | `fai-wordmark.svg` | "fai" only, where the icon would repeat the f (documents, footers). |
 | `fai-lockup.svg` | Icon plus wordmark, light backgrounds. |
 | `fai-lockup-reversed.svg` | Icon plus wordmark, dark backgrounds. |
+| `readme-header.svg` | Centred lockup banner for the repo README. Render: `renders/readme-header.png`. |
 
 Renders for review live in `renders/`.
 
