@@ -6,11 +6,13 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"regexp"
 	"sort"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/alialjaffer/fai/backend/internal/ics"
@@ -25,7 +27,33 @@ const CalendarSyncInterval = 15 * time.Minute
 
 var colorPattern = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
 
-var calendarHTTPClient = &http.Client{Timeout: 15 * time.Second}
+var calendarHTTPClient = &http.Client{
+	Timeout: 15 * time.Second,
+	Transport: &http.Transport{
+		DialContext: (&net.Dialer{
+			Timeout: 10 * time.Second,
+			Control: rejectNonPublicAddress,
+		}).DialContext,
+	},
+}
+
+// rejectNonPublicAddress keeps the calendar fetcher off loopback, private,
+// link-local, and other non-public addresses. It runs after DNS resolution and
+// on every redirect hop, so a hostname pointing at an internal IP is blocked too.
+func rejectNonPublicAddress(_, address string, _ syscall.RawConn) error {
+	host, _, err := net.SplitHostPort(address)
+	if err != nil {
+		return err
+	}
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return fmt.Errorf("blocked address %q", host)
+	}
+	if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified() || ip.IsMulticast() {
+		return fmt.Errorf("blocked non-public address %q", host)
+	}
+	return nil
+}
 
 type importedEvent struct {
 	ID       string `json:"id"`

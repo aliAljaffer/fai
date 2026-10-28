@@ -60,7 +60,8 @@ Tasks and notes accept file attachments (25 MiB each) over
 lives in the database, bytes live under `ATTACHMENTS_DIR`. The kubernetes deployment
 mounts a Longhorn `ReadWriteMany` PVC at `/data/attachments`; docker-compose uses
 `/data/attachments` inside the existing `faidata` volume. Leave `ATTACHMENTS_DIR`
-unset to disable uploads.
+unset to disable uploads. Total attachment storage is capped at 10 GiB; uploads are
+refused once it is full.
 
 ## Calendar subscription
 

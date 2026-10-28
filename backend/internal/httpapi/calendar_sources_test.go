@@ -90,6 +90,12 @@ func TestImportedCalendarsSyncAndCache(t *testing.T) {
 	}))
 
 	ctx := context.Background()
+
+	// The test feed listens on loopback, which the production client blocks.
+	guardedClient := calendarHTTPClient
+	calendarHTTPClient = feed.Client()
+	t.Cleanup(func() { calendarHTTPClient = guardedClient })
+
 	source, err := st.CreateCalendarSource(ctx, "Outlook", feed.URL, "#2563eb", 0)
 	if err != nil {
 		t.Fatal(err)

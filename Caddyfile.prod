@@ -1,4 +1,12 @@
 {$FAI_DOMAIN} {
+	header {
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy no-referrer
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+	}
+
 	# Calendar clients cannot complete an interactive login; the feed is gated
 	# by its own URL token instead.
 	handle /api/calendar.ics* {

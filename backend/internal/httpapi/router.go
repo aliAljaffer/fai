@@ -38,6 +38,7 @@ type Server struct {
 
 func NewRouter(s *Server) http.Handler {
 	r := chi.NewRouter()
+	r.Use(securityHeaders)
 	// The calendar feed carries its credential in the query string; keep it out
 	// of the access log without touching the handler's view of the request.
 	r.Use(func(next http.Handler) http.Handler {
@@ -65,6 +66,7 @@ func NewRouter(s *Server) http.Handler {
 			if s.AuthMiddleware != nil {
 				r.Use(s.AuthMiddleware)
 			}
+			r.Use(rateLimitByUser(600, 120))
 
 			r.Get("/calendar/feed", s.calendarFeedInfo)
 			r.Get("/calendar/sources", s.listCalendarSources)
@@ -157,4 +159,15 @@ func NewRouter(s *Server) http.Handler {
 	}
 
 	return r
+}
+
+func securityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h := w.Header()
+		h.Set("X-Content-Type-Options", "nosniff")
+		h.Set("X-Frame-Options", "DENY")
+		h.Set("Referrer-Policy", "no-referrer")
+		h.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+		next.ServeHTTP(w, r)
+	})
 }

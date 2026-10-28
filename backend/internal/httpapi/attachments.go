@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"io"
+	"io/fs"
 	"log"
 	"mime"
 	"net/http"
@@ -14,7 +15,10 @@ import (
 	"github.com/alialjaffer/fai/backend/internal/store"
 )
 
-const maxAttachmentBytes = 25 << 20
+const (
+	maxAttachmentBytes      = 25 << 20
+	maxAttachmentsTotalSize = 10 << 30
+)
 
 func (s *Server) listTaskAttachments(w http.ResponseWriter, r *http.Request) {
 	taskID, ok := parseID(r, "taskID")
@@ -104,6 +108,15 @@ func (s *Server) storeUpload(w http.ResponseWriter, r *http.Request, taskID, not
 	}
 	if err := os.MkdirAll(s.AttachmentsDir, 0o755); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	used, err := attachmentsDirSize(s.AttachmentsDir)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if used+header.Size > maxAttachmentsTotalSize {
+		writeError(w, http.StatusInsufficientStorage, "attachment storage is full")
 		return
 	}
 	path := filepath.Join(s.AttachmentsDir, key)
@@ -210,4 +223,23 @@ func randomStorageKey() (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(b[:]), nil
+}
+
+func attachmentsDirSize(dir string) (int64, error) {
+	var total int64
+	err := filepath.WalkDir(dir, func(_ string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		total += info.Size()
+		return nil
+	})
+	return total, err
 }
