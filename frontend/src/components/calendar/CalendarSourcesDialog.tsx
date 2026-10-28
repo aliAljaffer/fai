@@ -1,0 +1,150 @@
+import { Plus, Trash2 } from 'lucide-react'
+import { useState } from 'react'
+import { toast } from 'sonner'
+import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import {
+  useCalendarSources,
+  useCreateCalendarSource,
+  useDeleteCalendarSource,
+  useUpdateCalendarSourceColor,
+} from '../../api/hooks'
+
+export function CalendarSourcesDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}) {
+  const { data: sources, isError, refetch } = useCalendarSources()
+  const createSource = useCreateCalendarSource()
+  const deleteSource = useDeleteCalendarSource()
+  const updateColor = useUpdateCalendarSourceColor()
+  const [name, setName] = useState('')
+  const [url, setURL] = useState('')
+  const [color, setColor] = useState('#2563eb')
+
+  async function submit() {
+    const trimmedName = name.trim()
+    const trimmedURL = url.trim()
+    if (!trimmedName || !trimmedURL || createSource.isPending) return
+    try {
+      await createSource.mutateAsync({ name: trimmedName, url: trimmedURL, color })
+      setName('')
+      setURL('')
+      toast.success('Calendar imported')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not import calendar')
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg rounded-lg">
+        <DialogHeader>
+          <DialogTitle>Calendars</DialogTitle>
+          <DialogDescription>
+            Import external iCalendar feeds here. Their events appear in this calendar with the
+            color you pick and stay out of Fai's own calendar export.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="flex flex-col gap-2">
+          {isError && (
+            <div className="flex items-center justify-between gap-2 rounded-md border border-destructive/40 p-2 text-sm">
+              <span>Could not load imported calendars.</span>
+              <Button size="sm" variant="outline" onClick={() => refetch()}>
+                Retry
+              </Button>
+            </div>
+          )}
+          {!sources?.length && !isError && (
+            <p className="text-sm text-muted-foreground">No imported calendars yet.</p>
+          )}
+          {sources?.map((source) => (
+            <div key={source.id} className="flex items-center gap-2 rounded-md border px-2 py-1.5">
+              <input
+                type="color"
+                defaultValue={source.color}
+                aria-label={`Event color for ${source.name}`}
+                title="Event color"
+                className="h-6 w-6 shrink-0 cursor-pointer rounded border border-input bg-transparent p-0.5"
+                onChange={(event) =>
+                  updateColor.mutate(
+                    { id: source.id, color: event.target.value },
+                    { onError: (error) => toast.error(error.message) },
+                  )
+                }
+              />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium">{source.name}</p>
+                <p className="truncate text-xs text-muted-foreground">{source.url}</p>
+              </div>
+              <Button
+                size="icon-xs"
+                variant="ghost"
+                aria-label={`Remove ${source.name}`}
+                disabled={deleteSource.isPending}
+                onClick={() =>
+                  deleteSource.mutate(source.id, {
+                    onError: (error) => toast.error(error.message),
+                  })
+                }
+              >
+                <Trash2 />
+              </Button>
+            </div>
+          ))}
+        </div>
+
+        <div className="grid gap-2 border-t pt-3">
+          <p className="text-xs font-medium text-muted-foreground">Add calendar</p>
+          <Input
+            value={name}
+            placeholder="Name, for example Work"
+            aria-label="Calendar name"
+            onChange={(event) => setName(event.target.value)}
+          />
+          <Input
+            value={url}
+            placeholder="https://example.com/calendar.ics"
+            aria-label="Calendar feed URL"
+            onChange={(event) => setURL(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault()
+                void submit()
+              }
+            }}
+          />
+          <div className="flex items-center gap-2">
+            <input
+              type="color"
+              value={color}
+              aria-label="Event color"
+              className="h-8 w-10 cursor-pointer rounded border border-input bg-transparent p-0.5"
+              onChange={(event) => setColor(event.target.value)}
+            />
+            <Button
+              size="sm"
+              className="ml-auto"
+              disabled={!name.trim() || !url.trim() || createSource.isPending}
+              onClick={() => void submit()}
+            >
+              <Plus />
+              Import calendar
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}

@@ -43,11 +43,23 @@ type chatResponse struct {
 	} `json:"choices"`
 }
 
-func (p *openAICompatProvider) Chat(ctx context.Context, prompt string) (string, error) {
-	body, err := json.Marshal(chatRequest{
-		Model:    p.model,
-		Messages: []chatMessage{{Role: "user", Content: prompt}},
-	})
+func (p *openAICompatProvider) Chat(ctx context.Context, system string, messages []ChatMessage) (string, error) {
+	if len(messages) == 0 {
+		return "", fmt.Errorf("ai: no messages")
+	}
+	payload := make([]chatMessage, 0, len(messages)+1)
+	if system != "" {
+		payload = append(payload, chatMessage{Role: "system", Content: system})
+	}
+	for _, message := range messages {
+		role := "user"
+		if message.Role == "assistant" {
+			role = "assistant"
+		}
+		payload = append(payload, chatMessage{Role: role, Content: message.Content})
+	}
+
+	body, err := json.Marshal(chatRequest{Model: p.model, Messages: payload})
 	if err != nil {
 		return "", err
 	}
@@ -84,9 +96,17 @@ func (p *openAICompatProvider) GenerateSubtasks(ctx context.Context, title, desc
 			"Respond with ONLY a JSON array of short subtask title strings, nothing else.",
 		title, descriptionMD,
 	)
-	text, err := p.Chat(ctx, prompt)
+	text, err := p.Chat(ctx, FaiSystem, []ChatMessage{{Role: "user", Content: prompt}})
 	if err != nil {
 		return nil, err
 	}
 	return parseJSONStringArray(text)
+}
+
+func (p *openAICompatProvider) PlanTask(ctx context.Context, title, body string) (TaskPlan, error) {
+	text, err := p.Chat(ctx, FaiSystem, []ChatMessage{{Role: "user", Content: planPrompt(title, body)}})
+	if err != nil {
+		return TaskPlan{}, err
+	}
+	return parseTaskPlan(text)
 }

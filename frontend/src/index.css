@@ -208,4 +208,26 @@
   cursor: pointer;
   border-radius: 4px;
   padding: 0 4px;
+  transition: opacity 120ms ease, box-shadow 120ms ease;
+}
+
+.fai-calendar .fc-daygrid-day-frame {
+  transition: background-color 120ms ease, box-shadow 120ms ease;
+}
+
+.fai-calendar.fai-dragging .fc-daygrid-day:hover .fc-daygrid-day-frame {
+  background-color: color-mix(in oklch, var(--primary) 8%, transparent);
+  box-shadow: inset 0 0 0 2px var(--ring);
+}
+
+.fai-calendar .fc-event-dragging:not(.fc-event-mirror) {
+  opacity: 0.35;
+  border-style: dashed;
+}
+
+.fai-calendar .fc-event-mirror {
+  opacity: 1;
+  box-shadow: 0 8px 20px rgb(0 0 0 / 18%);
+  outline: 2px solid var(--background);
+  outline-offset: -2px;
 }

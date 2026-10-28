@@ -56,7 +56,10 @@ unset to disable uploads.
 ## Calendar subscription
 
 `GET /api/calendar.ics?token=<ICS_TOKEN>` is a read-only ICS feed of open tasks with
-a due date, suitable for Apple Calendar (File → New Calendar Subscription). It sits
+a due date, suitable for Apple Calendar (File → New Calendar Subscription). It contains
+Fai tasks only; calendars imported into the web calendar are never exported. The Calendar
+page lets you add external iCalendar feeds, picks a color per feed, and expands recurring
+events for the visible range. It sits
 outside OIDC because calendar clients cannot log in, so the token is the credential;
 the Settings page shows the full URL. Set `ICS_TOKEN` (`openssl rand -hex 32`) and
 `PUBLIC_URL` (used for the task links inside events); rotating the token invalidates
@@ -67,8 +70,10 @@ existing subscriptions. In docker-compose, Caddy routes this one path around
 
 `⌘K`/`Ctrl+K` opens the command palette (pages, tasks, new task). `n` opens the inline task composer,
 `e` focuses the open task's title, and `Esc` closes sheets/dialogs. The List page
-filters by text, column, and tag; rows open the task sheet. The nav has a persisted
-dark/light theme toggle.
+filters by text, column, and tag; rows open the task sheet. Subtasks appear under their
+parent task with a progress count and an expand control. The Calendar page has a meeting
+summary button that saves notes and can turn action items into tasks. Chat is a separate
+page backed by a fixed Fai system prompt. The nav has a persisted dark/light theme toggle.
 
 ## Notifications
 
@@ -87,7 +92,8 @@ minute.
 
 ## AI
 
-`AI_API_KEY` enables the optional task-breakdown and chat features; `AI_PROVIDER=opencode-zen`
+`AI_API_KEY` enables the optional task breakdown, note-to-task plans, meeting extraction,
+and chat features; `AI_PROVIDER=opencode-zen`
 talks to OpenCode Zen's OpenAI-compatible endpoint with `AI_MODEL` (for example
 `claude-haiku-4-5`), while any other value uses Anthropic's Messages API. The endpoints
 are rate-limited per authenticated subject. Unset means the UI hides the AI actions.

@@ -1,3 +1,5 @@
+import { format, parseISO } from 'date-fns'
+
 export function formatDuration(totalSeconds: number): string {
   const h = Math.floor(totalSeconds / 3600)
   const m = Math.floor((totalSeconds % 3600) / 60)
@@ -5,6 +7,21 @@ export function formatDuration(totalSeconds: number): string {
   if (h > 0) return `${h}h ${m}m`
   if (m > 0) return `${m}m ${s}s`
   return `${s}s`
+}
+
+export function formatDueDate(value: string | null): string | null {
+  if (!value) return null
+  const date = parseISO(value)
+  return Number.isNaN(date.getTime()) ? value : format(date, 'MMM d')
+}
+
+export function isPastDue(value: string | null, completed = false): boolean {
+  if (!value || completed) return false
+  const date = parseISO(value)
+  if (Number.isNaN(date.getTime())) return false
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  return date < today
 }
 
 export function formatBytes(bytes: number): string {

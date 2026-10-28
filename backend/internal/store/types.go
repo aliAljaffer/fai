@@ -116,6 +116,14 @@ type MeetingOutcome struct {
 	CreatedAt         time.Time  `json:"created_at"`
 }
 
+type CalendarSource struct {
+	ID        int64     `json:"id"`
+	Name      string    `json:"name"`
+	URL       string    `json:"url"`
+	Color     string    `json:"color"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
 type DayCount struct {
 	Date  string `json:"date"`
 	Count int64  `json:"count"`

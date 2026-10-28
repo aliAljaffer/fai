@@ -1,8 +1,16 @@
+import { Sparkles } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import {
@@ -37,7 +45,7 @@ export function LogMeetingOutcomeDialog({
   const [savedOutcome, setSavedOutcome] = useState<MeetingOutcome | undefined>(outcome)
   const [suggestions, setSuggestions] = useState<(ExtractedTask & { selected: boolean })[]>([])
 
-  const extractTasks = useExtractTasksFromOutcome(savedOutcome?.id ?? 0)
+  const extractTasks = useExtractTasksFromOutcome()
   const createTask = useCreateTaskFromOutcome(savedOutcome?.id ?? 0)
 
   useEffect(() => {
@@ -50,93 +58,154 @@ export function LogMeetingOutcomeDialog({
     }
   }, [open, outcome])
 
-  async function handleSave() {
+  async function save(): Promise<MeetingOutcome | undefined> {
+    if (!title.trim()) return undefined
     const body = {
-      title,
+      title: title.trim(),
       notes_md: notes,
       ends_at: endsAt ? new Date(endsAt).toISOString() : undefined,
     }
-    if (savedOutcome) {
-      const updated = await updateOutcome.mutateAsync({ id: savedOutcome.id, ...body })
-      setSavedOutcome(updated)
-    } else {
-      const created = await createOutcome.mutateAsync({ occurred_on: occurredOn, ...body })
-      setSavedOutcome(created)
+    try {
+      const saved = savedOutcome
+        ? await updateOutcome.mutateAsync({ id: savedOutcome.id, ...body })
+        : await createOutcome.mutateAsync({ occurred_on: occurredOn, ...body })
+      setSavedOutcome(saved)
+      toast.success('Meeting summary saved')
+      return saved
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not save meeting summary')
+      return undefined
     }
-    toast.success('Meeting outcome saved')
+  }
+
+  async function generate(outcomeId: number) {
+    try {
+      const tasks = await extractTasks.mutateAsync(outcomeId)
+      setSuggestions(tasks.map((task) => ({ ...task, selected: true })))
+      if (!tasks.length) toast.info('No action items found in these notes')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not generate tasks')
+    }
+  }
+
+  async function saveAndGenerate() {
+    const saved = await save()
+    if (saved) await generate(saved.id)
+  }
+
+  async function addSelected() {
+    if (!savedOutcome) return
+    const selected = suggestions.filter((suggestion) => suggestion.selected)
+    if (!selected.length) return
+    try {
+      for (const suggestion of selected) {
+        await createTask.mutateAsync({
+          title: suggestion.title,
+          mark_done: suggestion.suggested_done,
+          board_id: boardId,
+        })
+      }
+      toast.success(`Added ${selected.length} tasks`)
+      setSuggestions([])
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not add tasks')
+    }
   }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg rounded-lg">
         <DialogHeader>
-          <DialogTitle>Log meeting outcome — {occurredOn}</DialogTitle>
+          <DialogTitle>Meeting summary, {occurredOn}</DialogTitle>
+          <DialogDescription>
+            Save what happened here, then let AI turn the action items into tasks.
+          </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-3">
-          <Input placeholder="Meeting title" value={title} onChange={(e) => setTitle(e.target.value)} />
+          <Input
+            placeholder="Meeting title"
+            aria-label="Meeting title"
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+          />
           <label className="flex flex-col gap-1 text-sm text-muted-foreground">
             Scheduled end (optional, for the conclusion prompt)
-            <Input type="datetime-local" value={endsAt} onChange={(e) => setEndsAt(e.target.value)} />
+            <Input
+              type="datetime-local"
+              value={endsAt}
+              onChange={(event) => setEndsAt(event.target.value)}
+            />
           </label>
           <Textarea
-            placeholder="What happened / decisions / action items…"
+            placeholder="What happened, decisions, action items…"
+            aria-label="Meeting notes"
             value={notes}
-            onChange={(e) => setNotes(e.target.value)}
+            onChange={(event) => setNotes(event.target.value)}
             rows={6}
           />
-          <Button variant="outline" onClick={handleSave} disabled={!title}>
-            Save notes
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" onClick={() => void save()} disabled={!title.trim()}>
+              Save summary
+            </Button>
+            {aiStatus?.configured && (
+              <Button
+                disabled={!title.trim() || !notes.trim() || extractTasks.isPending}
+                onClick={() => void saveAndGenerate()}
+              >
+                <Sparkles />
+                {extractTasks.isPending ? 'Generating…' : 'Save and generate tasks'}
+              </Button>
+            )}
+          </div>
 
           {savedOutcome && aiStatus?.configured && (
             <div className="flex flex-col gap-2 border-t pt-3">
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={extractTasks.isPending || !notes}
-                onClick={() =>
-                  extractTasks.mutate(undefined, {
-                    onSuccess: (tasks) => setSuggestions(tasks.map((t) => ({ ...t, selected: true }))),
-                    onError: (err) => toast.error(err.message),
-                  })
-                }
-              >
-                {extractTasks.isPending ? 'Analyzing…' : 'Generate tasks from notes'}
-              </Button>
-              {suggestions.map((s, i) => (
-                <div key={i} className="flex items-center gap-2 text-sm">
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={extractTasks.isPending || !notes.trim()}
+                  onClick={() => void generate(savedOutcome.id)}
+                >
+                  <Sparkles />
+                  {extractTasks.isPending ? 'Analyzing…' : 'Generate tasks from notes'}
+                </Button>
+                <span className="text-xs text-muted-foreground">
+                  {suggestions.length ? `${suggestions.length} proposed tasks` : 'No tasks generated yet.'}
+                </span>
+              </div>
+              {suggestions.map((suggestion, index) => (
+                <div key={`${suggestion.title}-${index}`} className="flex items-center gap-2 text-sm">
                   <Checkbox
-                    checked={s.selected}
+                    checked={suggestion.selected}
                     onCheckedChange={(checked) =>
-                      setSuggestions((prev) => prev.map((p, j) => (j === i ? { ...p, selected: !!checked } : p)))
+                      setSuggestions((current) =>
+                        current.map((item, itemIndex) =>
+                          itemIndex === index ? { ...item, selected: Boolean(checked) } : item,
+                        ),
+                      )
                     }
                   />
-                  <span className="flex-1">{s.title}</span>
+                  <span className="flex-1">{suggestion.title}</span>
                   <Button
                     size="sm"
                     variant="ghost"
                     onClick={() =>
-                      setSuggestions((prev) =>
-                        prev.map((p, j) => (j === i ? { ...p, suggested_done: !p.suggested_done } : p)),
+                      setSuggestions((current) =>
+                        current.map((item, itemIndex) =>
+                          itemIndex === index
+                            ? { ...item, suggested_done: !item.suggested_done }
+                            : item,
+                        ),
                       )
                     }
                   >
-                    {s.suggested_done ? 'done' : 'open'}
+                    {suggestion.suggested_done ? 'done' : 'open'}
                   </Button>
                 </div>
               ))}
               {suggestions.length > 0 && (
-                <Button
-                  size="sm"
-                  onClick={async () => {
-                    const selected = suggestions.filter((s) => s.selected)
-                    for (const s of selected) {
-                      await createTask.mutateAsync({ title: s.title, mark_done: s.suggested_done, board_id: boardId })
-                    }
-                    toast.success(`Added ${selected.length} tasks`)
-                    setSuggestions([])
-                  }}
-                >
+                <Button size="sm" onClick={() => void addSelected()}>
                   Add selected tasks
                 </Button>
               )}

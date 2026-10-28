@@ -113,6 +113,13 @@ type Store interface {
 	UpdateJiraLinkImported(ctx context.Context, taskID int64, rawStatus string) error
 	DeleteJiraLink(ctx context.Context, taskID int64) error
 
+	// Calendar sources (external ICS subscriptions shown in the web calendar;
+	// never included in the Fai ICS export)
+	ListCalendarSources(ctx context.Context) ([]CalendarSource, error)
+	CreateCalendarSource(ctx context.Context, name, url, color string) (CalendarSource, error)
+	UpdateCalendarSourceColor(ctx context.Context, id int64, color string) (CalendarSource, error)
+	DeleteCalendarSource(ctx context.Context, id int64) error
+
 	// Meeting outcomes
 	ListMeetingOutcomes(ctx context.Context, occurredOn *string) ([]MeetingOutcome, error)
 	ListPendingMeetingOutcomes(ctx context.Context) ([]MeetingOutcome, error)

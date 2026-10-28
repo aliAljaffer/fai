@@ -4,7 +4,9 @@ import type {
   Attachment,
   Board,
   BoardColumn,
+  CalendarSource,
   ExtractedTask,
+  ImportedCalendar,
   JiraLink,
   JiraSuggestion,
   MeetingOutcome,
@@ -24,6 +26,23 @@ export function useColumns(boardId: number | undefined) {
     queryKey: ['columns', boardId],
     queryFn: () => api.get<BoardColumn[]>(`/boards/${boardId}/columns`),
     enabled: boardId !== undefined,
+  })
+}
+
+export function useCreateBoard() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (name: string) => api.post<Board>('/boards', { name }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['boards'] }),
+  })
+}
+
+export function useCreateColumn(boardId: number | undefined) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { name: string; position: number; is_done: boolean }) =>
+      api.post<BoardColumn>(`/boards/${boardId}/columns`, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['columns', boardId] }),
   })
 }
 
@@ -172,6 +191,7 @@ export function useMoveTask(boardId: number | undefined) {
           t.id === task.id ? { ...task, tags: task.tags?.length ? task.tags : t.tags } : t,
         ),
       )
+      qc.invalidateQueries({ queryKey: ['tasks'] })
     },
   })
 }
@@ -369,9 +389,43 @@ export function useAIBreakdown(taskId: number) {
   })
 }
 
+export interface AIChatMessage {
+  role: 'user' | 'assistant'
+  content: string
+}
+
 export function useAIChat() {
   return useMutation({
-    mutationFn: (prompt: string) => api.post<{ reply: string }>('/ai/chat', { prompt }),
+    mutationFn: (messages: AIChatMessage[]) => api.post<{ reply: string }>('/ai/chat', { messages }),
+  })
+}
+
+export interface NoteTaskPlan {
+  title: string
+  subtasks: string[]
+}
+
+export function useNoteTaskPlan(noteId: number) {
+  return useMutation({
+    mutationFn: (body: { title: string; body_md: string }) =>
+      api.post<NoteTaskPlan>(`/notes/${noteId}/ai/plan`, body),
+  })
+}
+
+export function useCreateTaskFromNote(noteId: number) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: {
+      board_id: number
+      title: string
+      subtasks: string[]
+      note_body?: string
+    }) => api.post<{ task: Task; subtasks: Task[] }>(`/notes/${noteId}/tasks`, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['tasks'] })
+      qc.invalidateQueries({ queryKey: ['notes'] })
+      qc.invalidateQueries({ queryKey: ['notes', noteId] })
+    },
   })
 }
 
@@ -379,6 +433,56 @@ export function useCalendarFeedURL() {
   return useQuery({
     queryKey: ['calendar-feed'],
     queryFn: () => api.get<{ url: string }>('/calendar/feed'),
+  })
+}
+
+export function useCalendarSources() {
+  return useQuery({
+    queryKey: ['calendar-sources'],
+    queryFn: () => api.get<CalendarSource[]>('/calendar/sources'),
+  })
+}
+
+export function useCreateCalendarSource() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { name: string; url: string; color: string }) =>
+      api.post<CalendarSource>('/calendar/sources', body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['calendar-sources'] })
+      qc.invalidateQueries({ queryKey: ['calendar-imported'] })
+    },
+  })
+}
+
+export function useUpdateCalendarSourceColor() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, color }: { id: number; color: string }) =>
+      api.patch<CalendarSource>(`/calendar/sources/${id}`, { color }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['calendar-sources'] })
+      qc.invalidateQueries({ queryKey: ['calendar-imported'] })
+    },
+  })
+}
+
+export function useDeleteCalendarSource() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) => api.delete<void>(`/calendar/sources/${id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['calendar-sources'] })
+      qc.invalidateQueries({ queryKey: ['calendar-imported'] })
+    },
+  })
+}
+
+export function useImportedCalendars(from: string, to: string) {
+  return useQuery({
+    queryKey: ['calendar-imported', from, to],
+    queryFn: () => api.get<ImportedCalendar[]>(`/calendar/imported?from=${from}&to=${to}`),
+    placeholderData: (previous) => previous,
   })
 }
 
@@ -416,9 +520,10 @@ export function useUpdateMeetingOutcome() {
   })
 }
 
-export function useExtractTasksFromOutcome(outcomeId: number) {
+export function useExtractTasksFromOutcome() {
   return useMutation({
-    mutationFn: () => api.post<ExtractedTask[]>(`/meeting-outcomes/${outcomeId}/ai/extract-tasks`),
+    mutationFn: (outcomeId: number) =>
+      api.post<ExtractedTask[]>(`/meeting-outcomes/${outcomeId}/ai/extract-tasks`),
   })
 }
 

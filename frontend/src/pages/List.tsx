@@ -49,7 +49,7 @@ export function List() {
   }, [columns])
 
   const sorted = useMemo(() => {
-    const list = [...(tasks ?? [])]
+    const list = (tasks ?? []).filter((task) => !task.parent_task_id)
     list.sort((a, b) => compare(a, b, sort.key) * sort.dir)
     return list
   }, [tasks, sort])

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/alialjaffer/fai/backend/internal/ai"
 	"github.com/alialjaffer/fai/backend/internal/store"
 )
 
@@ -193,7 +194,7 @@ func (s *Server) extractTasksFromOutcome(w http.ResponseWriter, r *http.Request)
 		"or is still open. Notes:\n\n" + outcome.NotesMd + "\n\n" +
 		`Respond with ONLY a JSON array of {"title": string, "suggested_done": boolean}, nothing else.`
 
-	reply, err := s.AI.Chat(r.Context(), prompt)
+	reply, err := s.AI.Chat(r.Context(), ai.FaiSystem, []ai.ChatMessage{{Role: "user", Content: prompt}})
 	if err != nil {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return

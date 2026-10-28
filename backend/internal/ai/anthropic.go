@@ -27,11 +27,24 @@ func newAnthropic(apiKey, model string) Provider {
 	}
 }
 
-func (p *anthropicProvider) Chat(ctx context.Context, prompt string) (string, error) {
+func (p *anthropicProvider) Chat(ctx context.Context, system string, messages []ChatMessage) (string, error) {
+	if len(messages) == 0 {
+		return "", fmt.Errorf("ai: no messages")
+	}
+	params := make([]anthropic.MessageParam, 0, len(messages))
+	for _, message := range messages {
+		switch message.Role {
+		case "assistant":
+			params = append(params, anthropic.NewAssistantMessage(anthropic.NewTextBlock(message.Content)))
+		default:
+			params = append(params, anthropic.NewUserMessage(anthropic.NewTextBlock(message.Content)))
+		}
+	}
 	msg, err := p.client.Messages.New(ctx, anthropic.MessageNewParams{
 		Model:     p.model,
-		MaxTokens: 1024,
-		Messages:  []anthropic.MessageParam{anthropic.NewUserMessage(anthropic.NewTextBlock(prompt))},
+		MaxTokens: 1500,
+		System:    []anthropic.TextBlockParam{{Text: system}},
+		Messages:  params,
 	})
 	if err != nil {
 		return "", err
@@ -45,11 +58,19 @@ func (p *anthropicProvider) GenerateSubtasks(ctx context.Context, title, descrip
 			"Respond with ONLY a JSON array of short subtask title strings, nothing else.",
 		title, descriptionMD,
 	)
-	text, err := p.Chat(ctx, prompt)
+	text, err := p.Chat(ctx, FaiSystem, []ChatMessage{{Role: "user", Content: prompt}})
 	if err != nil {
 		return nil, err
 	}
 	return parseJSONStringArray(text)
+}
+
+func (p *anthropicProvider) PlanTask(ctx context.Context, title, body string) (TaskPlan, error) {
+	text, err := p.Chat(ctx, FaiSystem, []ChatMessage{{Role: "user", Content: planPrompt(title, body)}})
+	if err != nil {
+		return TaskPlan{}, err
+	}
+	return parseTaskPlan(text)
 }
 
 func textFromBlocks(blocks []anthropic.ContentBlockUnion) string {

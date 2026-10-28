@@ -10,3 +10,6 @@ var Schema string
 
 //go:embed 002_attachments.sql
 var Attachments string
+
+//go:embed 003_calendar_sources.sql
+var CalendarSources string

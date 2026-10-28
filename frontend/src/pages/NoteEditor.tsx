@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { AttachmentsPanel } from '../components/AttachmentsPanel'
+import { NoteAIPanel } from '../components/notes/NoteAIPanel'
 import { MarkdownRenderer } from '../components/MarkdownRenderer'
 import { useDeleteNote, useNote, useUpdateNote } from '../api/hooks'
 import { toast } from 'sonner'
@@ -77,6 +78,8 @@ export function NoteEditor() {
           <MarkdownRenderer source={body} />
         </div>
       </div>
+
+      <NoteAIPanel noteId={noteId} title={title} body={body} />
 
       <AttachmentsPanel noteId={noteId} />
 

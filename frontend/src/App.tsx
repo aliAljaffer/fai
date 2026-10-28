@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils'
 import { AuthCallback } from './pages/AuthCallback'
 import { Board } from './pages/Board'
 import { Calendar } from './pages/Calendar'
+import { Chat } from './pages/Chat'
 import { List } from './pages/List'
 import { Notes } from './pages/Notes'
 import { NoteEditor } from './pages/NoteEditor'
@@ -60,6 +61,14 @@ export function App() {
           Notes
         </NavLink>
         <NavLink
+          to="/chat"
+          className={({ isActive }) =>
+            cn('text-muted-foreground hover:text-foreground', isActive && 'font-semibold text-foreground')
+          }
+        >
+          Chat
+        </NavLink>
+        <NavLink
           to="/stats"
           className={({ isActive }) =>
             cn('text-muted-foreground hover:text-foreground', isActive && 'font-semibold text-foreground')
@@ -109,6 +118,7 @@ export function App() {
           <Route path="/" element={<Board />} />
           <Route path="/list" element={<List />} />
           <Route path="/calendar" element={<Calendar />} />
+          <Route path="/chat" element={<Chat />} />
           <Route path="/notes" element={<Notes />} />
           <Route path="/notes/:id" element={<NoteEditor />} />
           <Route path="/stats" element={<Stats />} />

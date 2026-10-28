@@ -106,3 +106,29 @@ export interface Task {
   created_at: string
   updated_at: string
 }
+
+export interface CalendarSource {
+  id: number
+  name: string
+  url: string
+  color: string
+  created_at: string
+}
+
+export interface ImportedEvent {
+  id: string
+  uid: string
+  source_id: number
+  title: string
+  start: string
+  end?: string
+  all_day: boolean
+  url?: string
+  location?: string
+}
+
+export interface ImportedCalendar {
+  source: CalendarSource
+  events: ImportedEvent[]
+  error?: string
+}

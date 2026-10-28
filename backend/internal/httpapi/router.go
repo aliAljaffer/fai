@@ -59,6 +59,11 @@ func NewRouter(s *Server) http.Handler {
 			}
 
 			r.Get("/calendar/feed", s.calendarFeedInfo)
+			r.Get("/calendar/sources", s.listCalendarSources)
+			r.Post("/calendar/sources", s.createCalendarSource)
+			r.Patch("/calendar/sources/{sourceID}", s.updateCalendarSource)
+			r.Delete("/calendar/sources/{sourceID}", s.deleteCalendarSource)
+			r.Get("/calendar/imported", s.listImportedCalendars)
 			r.Get("/boards", s.listBoards)
 			r.Post("/boards", s.createBoard)
 			r.Get("/boards/{boardID}/columns", s.listColumns)
@@ -99,6 +104,7 @@ func NewRouter(s *Server) http.Handler {
 			r.Get("/notes/{noteID}", s.getNote)
 			r.Patch("/notes/{noteID}", s.updateNote)
 			r.Delete("/notes/{noteID}", s.deleteNote)
+			r.Post("/notes/{noteID}/tasks", s.createTaskFromNote)
 
 			r.Get("/reminders", s.listReminders)
 			r.Post("/reminders", s.createReminder)
@@ -118,6 +124,7 @@ func NewRouter(s *Server) http.Handler {
 				r.Post("/tasks/{taskID}/ai/breakdown", s.aiBreakdown)
 				r.Post("/ai/chat", s.aiChat)
 				r.Post("/meeting-outcomes/{outcomeID}/ai/extract-tasks", s.extractTasksFromOutcome)
+				r.Post("/notes/{noteID}/ai/plan", s.planNoteTask)
 			})
 
 			r.Get("/meeting-outcomes", s.listMeetingOutcomes)

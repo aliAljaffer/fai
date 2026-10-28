@@ -71,7 +71,8 @@ export function Settings() {
           <p className="text-sm text-muted-foreground">
             Subscribe from Apple Calendar (File → New Calendar Subscription, or Settings → Calendar →
             Accounts → Add Account → Other → Add Subscribed Calendar). Open tasks with a due date
-            appear as all-day events and refresh about every 30 minutes.
+            appear as all-day events and refresh about every 30 minutes. The feed contains Fai
+            tasks only. Calendars imported in the app stay out of it.
           </p>
           <div className="flex gap-2">
             <Input
