@@ -270,7 +270,7 @@ export function Calendar() {
           {importErrors.map((calendar) => (
             <span
               key={calendar.source.id}
-              className="text-amber-600 dark:text-amber-400"
+              className="text-attention"
               title={calendar.error}
             >
               {calendar.source.name}: sync failed

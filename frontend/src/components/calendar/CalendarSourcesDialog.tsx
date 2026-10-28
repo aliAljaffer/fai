@@ -17,6 +17,7 @@ import {
   useUpdateCalendarSourceColor,
 } from '../../api/hooks'
 import { useWorkspaceStore } from '../../store/workspace'
+import { STATUS_COLORS } from '../../lib/palette'
 
 export function CalendarSourcesDialog({
   open,
@@ -32,7 +33,7 @@ export function CalendarSourcesDialog({
   const updateColor = useUpdateCalendarSourceColor()
   const [name, setName] = useState('')
   const [url, setURL] = useState('')
-  const [color, setColor] = useState('#5B84AE')
+  const [color, setColor] = useState(STATUS_COLORS.todo)
 
   async function submit() {
     const trimmedName = name.trim()

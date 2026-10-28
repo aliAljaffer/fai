@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="18 54 255 168" width="255" height="168">
+  <title>fai</title>
+  <g fill="none" stroke="#17130E" stroke-width="30" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M96 68 H84 A24 24 0 0 0 60 92 V208"/>
+    <path d="M32 118 H96"/>
+    <circle cx="178" cy="160" r="34"/>
+    <path d="M212 126 V208"/>
+    <path d="M258 126 V208"/>
+  </g>
+  <rect x="243" y="63" width="30" height="30" rx="3" fill="#17130E"/>
+</svg>

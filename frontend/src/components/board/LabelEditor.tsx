@@ -10,14 +10,7 @@ import {
   useTags,
 } from '../../api/hooks'
 import type { Tag, Task } from '../../api/types'
-
-const palette = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899']
-
-function colorFor(name: string) {
-  let hash = 0
-  for (const char of name) hash = (hash * 31 + char.charCodeAt(0)) >>> 0
-  return palette[hash % palette.length]
-}
+import { labelColorFor as colorFor, labelChipStyle } from '../../lib/palette'
 
 export function LabelEditor({ task }: { task: Task }) {
   const { data: allTags } = useTags()
@@ -68,6 +61,7 @@ export function LabelEditor({ task }: { task: Task }) {
           <span
             key={tag.id}
             className="inline-flex items-center gap-1 rounded-full border py-0.5 pr-1 pl-2 text-xs"
+            style={labelChipStyle(tag.color)}
           >
             <span
               className="size-1.5 rounded-full"

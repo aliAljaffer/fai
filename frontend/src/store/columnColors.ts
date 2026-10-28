@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { BoardColumn } from '../api/types'
+import { STATUS_COLORS } from '../lib/palette'
 
 interface ColumnColorState {
   colors: Record<string, string>
@@ -22,7 +23,7 @@ export function columnColor(column: BoardColumn | undefined, overrides: Record<s
   if (!column) return undefined
   const saved = overrides[String(column.id)]
   if (saved) return saved
-  if (column.is_done) return '#16a34a'
-  if (/progress|doing|active|review/i.test(column.name)) return '#d97706'
-  return '#2563eb'
+  if (column.is_done) return STATUS_COLORS.done
+  if (/progress|doing|active|review/i.test(column.name)) return STATUS_COLORS.doing
+  return STATUS_COLORS.todo
 }

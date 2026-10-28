@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { cn } from '@/lib/utils'
 import { formatDueDate, isPastDue } from '../../lib/format'
+import { labelChipStyle } from '../../lib/palette'
 import type { Task } from '../../api/types'
 
 interface TaskCardProps {
@@ -42,6 +43,7 @@ function TaskCardBody({
             <span
               key={tag.id}
               className="inline-flex items-center gap-1 rounded-sm border px-1 py-0.5 text-[0.65rem] text-muted-foreground"
+              style={labelChipStyle(tag.color)}
             >
               <span
                 className="size-1.5 rounded-full"

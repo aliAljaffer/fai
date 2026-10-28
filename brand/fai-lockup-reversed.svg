@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="16 28 268 105" width="268" height="105">
+  <title>fai</title>
+  <g transform="translate(16,40) scale(0.328125)">
+    <rect width="256" height="256" rx="56" fill="#ACC7E4"/>
+    <g transform="translate(10,-15)" fill="none" stroke="#17130E" stroke-width="30" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M158 76 H130 A28 28 0 0 0 102 104 V210"/>
+      <path d="M70 136 H166"/>
+    </g>
+  </g>
+  <g transform="translate(112.75,-6) scale(0.625)" fill="none" stroke="#FFFFFF" stroke-width="30" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M96 68 H84 A24 24 0 0 0 60 92 V208"/>
+    <path d="M32 118 H96"/>
+    <circle cx="178" cy="160" r="34"/>
+    <path d="M212 126 V208"/>
+    <path d="M258 126 V208"/>
+  </g>
+  <rect x="264.6" y="33.4" width="18.8" height="18.8" rx="1.9" fill="#FFFFFF"/>
+</svg>

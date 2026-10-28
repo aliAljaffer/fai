@@ -6,7 +6,6 @@ import { BrowserRouter } from 'react-router-dom'
 import { App } from './App.tsx'
 import { AuthGate } from './auth/AuthGate.tsx'
 import '@uiw/react-md-editor/markdown-editor.css'
-import 'highlight.js/styles/github-dark.css'
 import 'react-calendar-heatmap/dist/styles.css'
 import './index.css'
 

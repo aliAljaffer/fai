@@ -65,13 +65,13 @@ export function RemindersColumn() {
   }
 
   return (
-    <section className="flex w-72 shrink-0 flex-col rounded-md border border-amber-500/60 bg-amber-500/5 p-2 ring-1 ring-amber-500/25">
-      <div className="flex h-8 items-center justify-between gap-2 border-b border-amber-500/30 pb-2">
-        <h2 className="flex min-w-0 items-center gap-1.5 truncate text-sm font-medium text-amber-900 dark:text-amber-200">
+    <section className="flex w-72 shrink-0 flex-col rounded-md border border-attention/60 bg-attention/5 p-2 ring-1 ring-attention/25">
+      <div className="flex h-8 items-center justify-between gap-2 border-b border-attention/30 pb-2">
+        <h2 className="flex min-w-0 items-center gap-1.5 truncate text-sm font-medium text-attention">
           <Bell className="size-3.5" />
           Reminders
         </h2>
-        <span className="shrink-0 text-xs tabular-nums text-amber-800/70 dark:text-amber-200/70">
+        <span className="shrink-0 text-xs tabular-nums text-attention/70">
           {upcoming.length}
         </span>
       </div>
@@ -83,7 +83,7 @@ export function RemindersColumn() {
           return (
             <div
               key={reminder.id}
-              className="group rounded-md border border-amber-500/40 bg-amber-500/10 p-2"
+              className="group rounded-md border border-attention/40 bg-attention/10 p-2"
             >
               <div className="flex items-start justify-between gap-2">
                 <p className="text-sm font-medium break-words">{reminder.title}</p>
@@ -102,8 +102,8 @@ export function RemindersColumn() {
                   className={cn(
                     'border-transparent',
                     overdue
-                      ? 'bg-destructive text-white'
-                      : 'bg-amber-500 text-amber-950',
+                      ? 'bg-destructive text-destructive-foreground'
+                      : 'bg-attention text-attention-foreground',
                   )}
                 >
                   {dueIn}
@@ -172,7 +172,7 @@ export function RemindersColumn() {
             <RefPicker picker={refs} />
             <Button
               size="icon-sm"
-              className="shrink-0 bg-amber-500 text-amber-950 hover:bg-amber-500/80"
+              className="shrink-0 bg-attention text-attention-foreground hover:bg-attention/80"
               aria-label="Create reminder with AI"
               disabled={!text.trim() || aiReminder.isPending}
               onClick={submit}
