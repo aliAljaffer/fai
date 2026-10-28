@@ -4,12 +4,17 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { useBoards, useCalendarFeedURL, useJiraImport } from '../api/hooks'
+import { useBoards, useCalendarFeedURL, useColumns, useJiraImport } from '../api/hooks'
+import { columnColor, useColumnColors } from '../store/columnColors'
+import { useUIStore } from '../store/ui'
 
 export function Settings() {
   const { data: boards } = useBoards()
   const jiraImport = useJiraImport()
   const { data: feed } = useCalendarFeedURL()
+  const selectedBoardId = useUIStore((state) => state.selectedBoardId)
+  const { data: columns } = useColumns(selectedBoardId ?? boards?.[0]?.id)
+  const { colors, setColor } = useColumnColors()
   const [jql, setJql] = useState('')
   const [forceUpdate, setForceUpdate] = useState(false)
 
@@ -60,6 +65,35 @@ export function Settings() {
           >
             {jiraImport.isPending ? 'Importing…' : 'Import from Jira'}
           </Button>
+        </CardContent>
+      </Card>
+
+      <Card className="max-w-xl">
+        <CardHeader>
+          <CardTitle>Status colors</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-2">
+          <p className="text-sm text-muted-foreground">
+            Colors the status text in the List view. Saved in this browser only.
+          </p>
+          {columns?.map((column) => (
+            <label
+              key={column.id}
+              className="flex items-center gap-2 rounded-md border px-2 py-1.5"
+            >
+              <input
+                type="color"
+                value={columnColor(column, colors)}
+                aria-label={`Status color for ${column.name}`}
+                className="h-6 w-6 shrink-0 cursor-pointer rounded border border-input bg-transparent p-0.5"
+                onChange={(event) => setColor(column.id, event.target.value)}
+              />
+              <span className="text-sm">{column.name}</span>
+            </label>
+          ))}
+          {!columns?.length && (
+            <p className="text-sm text-muted-foreground">This board has no columns yet.</p>
+          )}
         </CardContent>
       </Card>
 

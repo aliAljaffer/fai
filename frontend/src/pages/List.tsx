@@ -5,9 +5,10 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { useBoards, useColumns, useTags, useTasks } from '../api/hooks'
+import { useBoards, useColumns, useJiraLink, useTags, useTasks } from '../api/hooks'
 import { BulkTaskBar } from '../components/board/BulkTaskBar'
 import { useDebounced } from '../lib/useDebounced'
+import { columnColor, useColumnColors } from '../store/columnColors'
 import { useUIStore } from '../store/ui'
 import { cn } from '@/lib/utils'
 import type { Task } from '../api/types'
@@ -23,6 +24,22 @@ function compare(a: Task, b: Task, key: SortKey) {
     return a.due_date.localeCompare(b.due_date)
   }
   return a.title.localeCompare(b.title)
+}
+
+function JiraKey({ taskId }: { taskId: number }) {
+  const { data: link } = useJiraLink(taskId)
+  if (!link) return null
+  return (
+    <a
+      href={link.jira_url}
+      target="_blank"
+      rel="noreferrer"
+      className="text-xs font-medium text-primary hover:underline"
+      onClick={(event) => event.stopPropagation()}
+    >
+      {link.jira_key}
+    </a>
+  )
 }
 
 export function List() {
@@ -48,12 +65,13 @@ export function List() {
   const [expanded, setExpanded] = useState<Set<number>>(() => new Set())
   const [selected, setSelected] = useState<Set<number>>(() => new Set())
   const [lastSelected, setLastSelected] = useState<number | null>(null)
+  const [hideDone, setHideDone] = useState(false)
 
-  const columnName = useMemo(() => {
-    const map = new Map<number, string>()
-    for (const c of columns ?? []) map.set(c.id, c.name)
-    return map
-  }, [columns])
+  const columnById = useMemo(
+    () => new Map((columns ?? []).map((column) => [column.id, column])),
+    [columns],
+  )
+  const { colors } = useColumnColors()
 
   const doneColumnIds = useMemo(
     () => new Set((columns ?? []).filter((column) => column.is_done).map((column) => column.id)),
@@ -85,13 +103,20 @@ export function List() {
 
   // Rows currently on screen: roots plus expanded subtasks. Select-all and
   // shift-click ranges operate on these, not on filtered-but-collapsed rows.
+  const visibleRoots = useMemo(
+    () =>
+      hideDone
+        ? roots.filter((task) => !task.completed_at && !doneColumnIds.has(task.column_id))
+        : roots,
+    [roots, hideDone, doneColumnIds],
+  )
   const visibleTasks = useMemo(
     () =>
-      roots.flatMap((task) => [
+      visibleRoots.flatMap((task) => [
         task,
         ...(expanded.has(task.id) ? (subtasksByParent.get(task.id) ?? []) : []),
       ]),
-    [roots, expanded, subtasksByParent],
+    [visibleRoots, expanded, subtasksByParent],
   )
   const visibleIds = useMemo(() => visibleTasks.map((task) => task.id), [visibleTasks])
   const allSelected = visibleIds.length > 0 && visibleIds.every((id) => selected.has(id))
@@ -178,7 +203,11 @@ export function List() {
             </span>
           </div>
         </TableCell>
-        <TableCell>{columnName.get(task.column_id)}</TableCell>
+        <TableCell>
+          <span style={{ color: columnColor(columnById.get(task.column_id), colors) }}>
+            {columnById.get(task.column_id)?.name}
+          </span>
+        </TableCell>
         <TableCell>
           <div className="flex flex-wrap gap-1">
             {(task.tags ?? []).map((tag) => (
@@ -197,6 +226,9 @@ export function List() {
         </TableCell>
         <TableCell>{task.priority}</TableCell>
         <TableCell>{task.due_date ?? '—'}</TableCell>
+        <TableCell>
+          <JiraKey taskId={task.id} />
+        </TableCell>
       </TableRow>
     )
   }
@@ -236,6 +268,14 @@ export function List() {
             ))}
           </SelectContent>
         </Select>
+        <label className="flex items-center gap-2 text-sm">
+          <Checkbox
+            checked={hideDone}
+            aria-label="Hide done tasks"
+            onCheckedChange={(checked) => setHideDone(Boolean(checked))}
+          />
+          Hide done
+        </label>
       </div>
 
       {selectedTasks.length > 0 && (
@@ -272,10 +312,11 @@ export function List() {
             <TableHead className="cursor-pointer" onClick={() => toggleSort('due_date')}>
               Due{arrow('due_date')}
             </TableHead>
+            <TableHead className="w-24">Jira</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {roots.map((task) => {
+          {visibleRoots.map((task) => {
             const subtasks = subtasksByParent.get(task.id) ?? []
             const doneCount = subtasks.filter(
               (subtask) => subtask.completed_at || doneColumnIds.has(subtask.column_id),
@@ -315,9 +356,9 @@ export function List() {
               </Fragment>
             )
           })}
-          {!roots.length && (
+          {!visibleRoots.length && (
             <TableRow>
-              <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+              <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
                 No tasks match these filters.
               </TableCell>
             </TableRow>
