@@ -116,8 +116,15 @@ jobs:
           set -euo pipefail
           latest=$(gh api "repos/${GITHUB_REPOSITORY}/commits/main" --jq .sha)
           if [ "$latest" != "$GITHUB_SHA" ]; then
-            echo "Skipping: main moved to $latest."
-            exit 0
+            if ! changed=$(gh api "repos/${GITHUB_REPOSITORY}/compare/${GITHUB_SHA}...${latest}" --jq '.files[]?.filename'); then
+              echo "Skipping: could not compare $GITHUB_SHA with $latest."
+              exit 0
+            fi
+            if printf '%s\n' "$changed" | grep -qE '^(backend|frontend)/'; then
+              echo "Skipping: image sources changed in $latest."
+              exit 0
+            fi
+            echo "main moved to $latest; only non-image files changed, so the built images are current."
           fi
           test -n "$BACKEND_DIGEST"
           test -n "$FRONTEND_DIGEST"
