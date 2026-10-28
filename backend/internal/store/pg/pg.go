@@ -5,7 +5,9 @@ package pg
 
 import (
 	"context"
+	"errors"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/alialjaffer/fai/backend/internal/db/sqlc"
@@ -48,6 +50,17 @@ func (s *Store) CreateBoard(ctx context.Context, name string, workspaceID int64)
 	return toBoard(b), err
 }
 
+func (s *Store) UpdateBoard(ctx context.Context, id int64, name string) (store.Board, error) {
+	var b sqlc.Board
+	err := s.pool.QueryRow(ctx,
+		`UPDATE boards SET name = $2 WHERE id = $1 RETURNING id, name, workspace_id, created_at`, id, name).
+		Scan(&b.ID, &b.Name, &b.WorkspaceID, &b.CreatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return store.Board{}, store.ErrNotFound
+	}
+	return toBoard(b), err
+}
+
 func toColumn(c sqlc.BoardColumn) store.BoardColumn {
 	return store.BoardColumn{
 		ID: c.ID, BoardID: c.BoardID, Name: c.Name,
@@ -72,6 +85,49 @@ func (s *Store) CreateColumn(ctx context.Context, boardID int64, name string, po
 		BoardID: boardID, Name: name, Position: position, IsDone: isDone,
 	})
 	return toColumn(c), err
+}
+
+func (s *Store) UpdateColumn(ctx context.Context, boardID, id int64, name string, isDone bool) (store.BoardColumn, error) {
+	var c sqlc.BoardColumn
+	err := s.pool.QueryRow(ctx,
+		`UPDATE board_columns SET name = $3, is_done = $4
+		 WHERE id = $2 AND board_id = $1
+		 RETURNING id, board_id, name, position, is_done, created_at`,
+		boardID, id, name, isDone).
+		Scan(&c.ID, &c.BoardID, &c.Name, &c.Position, &c.IsDone, &c.CreatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return store.BoardColumn{}, store.ErrNotFound
+	}
+	return toColumn(c), err
+}
+
+func (s *Store) ReorderColumns(ctx context.Context, boardID int64, ids []int64) ([]store.BoardColumn, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
+	// Positions are unique per board, so move them out of the way before assigning.
+	if _, err := tx.Exec(ctx,
+		`UPDATE board_columns SET position = -position - 1 WHERE board_id = $1`, boardID); err != nil {
+		return nil, err
+	}
+	for i, id := range ids {
+		tag, err := tx.Exec(ctx,
+			`UPDATE board_columns SET position = $3 WHERE id = $2 AND board_id = $1`,
+			boardID, id, int32(i))
+		if err != nil {
+			return nil, err
+		}
+		if tag.RowsAffected() != 1 {
+			return nil, store.ErrNotFound
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return s.ListColumnsByBoard(ctx, boardID)
 }
 
 func toTag(t sqlc.Tag) store.Tag {

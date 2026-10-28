@@ -49,8 +49,11 @@ type Store interface {
 	// Boards
 	ListBoards(ctx context.Context, workspaceID *int64) ([]Board, error)
 	CreateBoard(ctx context.Context, name string, workspaceID int64) (Board, error)
+	UpdateBoard(ctx context.Context, id int64, name string) (Board, error)
 	ListColumnsByBoard(ctx context.Context, boardID int64) ([]BoardColumn, error)
 	CreateColumn(ctx context.Context, boardID int64, name string, position int32, isDone bool) (BoardColumn, error)
+	UpdateColumn(ctx context.Context, boardID, id int64, name string, isDone bool) (BoardColumn, error)
+	ReorderColumns(ctx context.Context, boardID int64, ids []int64) ([]BoardColumn, error)
 
 	// Tags
 	ListTags(ctx context.Context) ([]Tag, error)

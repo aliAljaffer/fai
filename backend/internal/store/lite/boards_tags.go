@@ -2,6 +2,8 @@ package lite
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 
 	"github.com/alialjaffer/fai/backend/internal/db/sqlitedb"
 	"github.com/alialjaffer/fai/backend/internal/store"
@@ -26,6 +28,17 @@ func (s *Store) ListBoards(ctx context.Context, workspaceID *int64) ([]store.Boa
 
 func (s *Store) CreateBoard(ctx context.Context, name string, workspaceID int64) (store.Board, error) {
 	b, err := s.q.CreateBoard(ctx, sqlitedb.CreateBoardParams{Name: name, WorkspaceID: workspaceID})
+	return toBoard(b), err
+}
+
+func (s *Store) UpdateBoard(ctx context.Context, id int64, name string) (store.Board, error) {
+	var b sqlitedb.Board
+	err := s.db.QueryRowContext(ctx,
+		`UPDATE boards SET name = ? WHERE id = ? RETURNING id, name, workspace_id, created_at`, name, id).
+		Scan(&b.ID, &b.Name, &b.WorkspaceID, &b.CreatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return store.Board{}, store.ErrNotFound
+	}
 	return toBoard(b), err
 }
 
@@ -54,6 +67,50 @@ func (s *Store) CreateColumn(ctx context.Context, boardID int64, name string, po
 		BoardID: boardID, Name: name, Position: int64(position), IsDone: isDone,
 	})
 	return toColumn(c), err
+}
+
+func (s *Store) UpdateColumn(ctx context.Context, boardID, id int64, name string, isDone bool) (store.BoardColumn, error) {
+	var c sqlitedb.BoardColumn
+	err := s.db.QueryRowContext(ctx,
+		`UPDATE board_columns SET name = ?, is_done = ?
+		 WHERE id = ? AND board_id = ?
+		 RETURNING id, board_id, name, position, is_done, created_at`,
+		name, isDone, id, boardID).
+		Scan(&c.ID, &c.BoardID, &c.Name, &c.Position, &c.IsDone, &c.CreatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return store.BoardColumn{}, store.ErrNotFound
+	}
+	return toColumn(c), err
+}
+
+func (s *Store) ReorderColumns(ctx context.Context, boardID int64, ids []int64) ([]store.BoardColumn, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	// Positions are unique per board, so move them out of the way before assigning.
+	if _, err := tx.ExecContext(ctx,
+		`UPDATE board_columns SET position = -position - 1 WHERE board_id = ?`, boardID); err != nil {
+		return nil, err
+	}
+	for i, id := range ids {
+		res, err := tx.ExecContext(ctx,
+			`UPDATE board_columns SET position = ? WHERE id = ? AND board_id = ?`, i, id, boardID)
+		if err != nil {
+			return nil, err
+		}
+		if n, err := res.RowsAffected(); err != nil {
+			return nil, err
+		} else if n != 1 {
+			return nil, store.ErrNotFound
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return s.ListColumnsByBoard(ctx, boardID)
 }
 
 func toTag(t sqlitedb.Tag) store.Tag {

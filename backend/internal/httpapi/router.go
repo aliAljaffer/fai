@@ -81,8 +81,11 @@ func NewRouter(s *Server) http.Handler {
 
 			r.Get("/boards", s.listBoards)
 			r.Post("/boards", s.createBoard)
+			r.Patch("/boards/{boardID}", s.updateBoard)
 			r.Get("/boards/{boardID}/columns", s.listColumns)
 			r.Post("/boards/{boardID}/columns", s.createColumn)
+			r.Patch("/boards/{boardID}/columns", s.reorderColumns)
+			r.Patch("/boards/{boardID}/columns/{columnID}", s.updateColumn)
 
 			r.Get("/tasks", s.listTasks)
 			r.Post("/tasks", s.createTask)

@@ -76,11 +76,37 @@ export function useCreateBoard(workspaceId?: number) {
   })
 }
 
+export function useUpdateBoard() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, name }: { id: number; name: string }) =>
+      api.patch<Board>(`/boards/${id}`, { name }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['boards'] }),
+  })
+}
+
 export function useCreateColumn(boardId: number | undefined) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (body: { name: string; position: number; is_done: boolean }) =>
       api.post<BoardColumn>(`/boards/${boardId}/columns`, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['columns', boardId] }),
+  })
+}
+
+export function useUpdateColumn(boardId: number | undefined) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, ...body }: { id: number; name: string; is_done: boolean }) =>
+      api.patch<BoardColumn>(`/boards/${boardId}/columns/${id}`, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['columns', boardId] }),
+  })
+}
+
+export function useReorderColumns(boardId: number | undefined) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (ids: number[]) => api.patch<BoardColumn[]>(`/boards/${boardId}/columns`, { ids }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['columns', boardId] }),
   })
 }
