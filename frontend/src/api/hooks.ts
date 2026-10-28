@@ -775,7 +775,12 @@ export function useDeleteNote() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (id: number) => api.delete<void>(`/notes/${id}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['notes'] }),
+    onSuccess: (_data, id) => {
+      // Refetching the deleted note would 404 and stall the mutation, which keeps
+      // the editor from navigating away until retries finish.
+      qc.removeQueries({ queryKey: ['notes', id] })
+      qc.invalidateQueries({ queryKey: ['notes', 'list'] })
+    },
   })
 }
 

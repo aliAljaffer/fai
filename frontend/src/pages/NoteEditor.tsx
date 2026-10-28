@@ -23,6 +23,7 @@ export function NoteEditor() {
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
   const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const refs = useRefPicker({ value: body, onChange: setBody })
 
   useEffect(() => {
@@ -43,6 +44,18 @@ export function NoteEditor() {
     }
   }
 
+  async function remove() {
+    if (deleting) return
+    setDeleting(true)
+    try {
+      await deleteNote.mutateAsync(noteId)
+      navigate('/notes')
+    } catch (error) {
+      toast.error((error as Error).message)
+      setDeleting(false)
+    }
+  }
+
   if (!data) return null
 
   return (
@@ -59,12 +72,10 @@ export function NoteEditor() {
           </Button>
           <Button
             variant="destructive"
-            onClick={async () => {
-              await deleteNote.mutateAsync(noteId)
-              navigate('/notes')
-            }}
+            disabled={deleting}
+            onClick={() => void remove()}
           >
-            Delete
+            {deleting ? 'Deleting…' : 'Delete'}
           </Button>
         </div>
       </div>
