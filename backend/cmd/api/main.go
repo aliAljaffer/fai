@@ -71,16 +71,18 @@ func main() {
 		log.Println("AI_API_KEY unset — AI features disabled")
 	}
 	server := &httpapi.Server{
-		Store:               st,
-		Jira:                jiraClient,
-		JiraDefaultProject:  cfg.JiraDefaultProject,
-		JiraStatusColumnMap: jira.ParseStatusColumnMap(cfg.JiraStatusColumnMap),
-		AI:                  aiProvider,
-		ICSToken:            cfg.ICSToken,
-		PublicURL:           cfg.PublicURL,
-		AttachmentsDir:      cfg.AttachmentsDir,
-		StaticDir:           cfg.StaticDir,
-		AuthMiddleware:      authMiddleware,
+		Store:                st,
+		Jira:                 jiraClient,
+		JiraDefaultProject:   cfg.JiraDefaultProject,
+		JiraStatusColumnMap:  jira.ParseStatusColumnMap(cfg.JiraStatusColumnMap),
+		JiraEpicIssueType:    cfg.JiraEpicIssueType,
+		JiraSubtaskIssueType: cfg.JiraSubtaskIssueType,
+		AI:                   aiProvider,
+		ICSToken:             cfg.ICSToken,
+		PublicURL:            cfg.PublicURL,
+		AttachmentsDir:       cfg.AttachmentsDir,
+		StaticDir:            cfg.StaticDir,
+		AuthMiddleware:       authMiddleware,
 	}
 	router := httpapi.NewRouter(server)
 

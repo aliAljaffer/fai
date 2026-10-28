@@ -103,6 +103,7 @@ export function LogMeetingOutcomeDialog({
           title: suggestion.title,
           mark_done: suggestion.suggested_done,
           board_id: boardId,
+          due_date: suggestion.due_date,
         })
       }
       toast.success(`Added ${selected.length} tasks`)
@@ -187,6 +188,9 @@ export function LogMeetingOutcomeDialog({
                     }
                   />
                   <span className="flex-1">{suggestion.title}</span>
+                  {suggestion.due_date && (
+                    <span className="text-xs text-muted-foreground">{suggestion.due_date}</span>
+                  )}
                   <Button
                     size="sm"
                     variant="ghost"

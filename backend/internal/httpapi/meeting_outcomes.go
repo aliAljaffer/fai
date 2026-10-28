@@ -119,9 +119,10 @@ func (s *Server) deleteMeetingOutcome(w http.ResponseWriter, r *http.Request) {
 }
 
 type createTaskFromOutcomeBody struct {
-	Title    string `json:"title"`
-	MarkDone bool   `json:"mark_done"`
-	BoardID  int64  `json:"board_id"`
+	Title    string  `json:"title"`
+	MarkDone bool    `json:"mark_done"`
+	BoardID  int64   `json:"board_id"`
+	DueDate  *string `json:"due_date"`
 }
 
 func (s *Server) createTaskFromOutcome(w http.ResponseWriter, r *http.Request) {
@@ -134,6 +135,14 @@ func (s *Server) createTaskFromOutcome(w http.ResponseWriter, r *http.Request) {
 	if err := decodeJSON(r, &body); err != nil || body.Title == "" || body.BoardID == 0 {
 		writeError(w, http.StatusBadRequest, "title and board_id are required")
 		return
+	}
+	if body.DueDate != nil {
+		if *body.DueDate == "" {
+			body.DueDate = nil
+		} else if _, err := time.Parse("2006-01-02", *body.DueDate); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid due_date, expected YYYY-MM-DD")
+			return
+		}
 	}
 
 	ctx := r.Context()
@@ -160,6 +169,7 @@ func (s *Server) createTaskFromOutcome(w http.ResponseWriter, r *http.Request) {
 	task, err := s.Store.CreateTask(ctx, store.CreateTaskParams{
 		BoardID: body.BoardID, ColumnID: columnID, Title: body.Title,
 		Priority: "medium", Position: position, MeetingOutcomeID: &outcomeID,
+		DueDate: body.DueDate,
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
@@ -169,8 +179,9 @@ func (s *Server) createTaskFromOutcome(w http.ResponseWriter, r *http.Request) {
 }
 
 type extractedTask struct {
-	Title         string `json:"title"`
-	SuggestedDone bool   `json:"suggested_done"`
+	Title         string  `json:"title"`
+	SuggestedDone bool    `json:"suggested_done"`
+	DueDate       *string `json:"due_date"`
 }
 
 func (s *Server) extractTasksFromOutcome(w http.ResponseWriter, r *http.Request) {
@@ -189,10 +200,18 @@ func (s *Server) extractTasksFromOutcome(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	meetingDate := outcome.OccurredOn
+	if outcome.EndsAt != nil {
+		meetingDate += ", ending " + outcome.EndsAt.Format("2006-01-02 15:04")
+	}
+
 	prompt := "Extract a short list of action-item tasks from these meeting notes. " +
+		"The meeting took place on " + meetingDate + ". " +
 		"For each, decide if it sounds already completed during the meeting (suggested_done) " +
-		"or is still open. Notes:\n\n" + outcome.NotesMd + "\n\n" +
-		`Respond with ONLY a JSON array of {"title": string, "suggested_done": boolean}, nothing else.`
+		"or is still open. Resolve any relative date in the notes against the meeting date " +
+		"and set due_date to that calendar day as yyyy-MM-dd, or null when the notes give no date. " +
+		"Notes:\n\n" + outcome.NotesMd + "\n\n" +
+		`Respond with ONLY a JSON array of {"title": string, "suggested_done": boolean, "due_date": string or null}, nothing else.`
 
 	reply, err := s.AI.Chat(r.Context(), ai.FaiSystem, []ai.ChatMessage{{Role: "user", Content: prompt}})
 	if err != nil {
@@ -218,6 +237,13 @@ func parseExtractedTasks(text string) ([]extractedTask, error) {
 	var out []extractedTask
 	if err := json.Unmarshal([]byte(text[start:end+1]), &out); err != nil {
 		return nil, fmt.Errorf("ai: invalid JSON array in response: %w", err)
+	}
+	for i := range out {
+		if out[i].DueDate != nil {
+			if _, err := time.Parse("2006-01-02", *out[i].DueDate); err != nil {
+				out[i].DueDate = nil
+			}
+		}
 	}
 	return out, nil
 }

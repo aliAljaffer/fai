@@ -13,14 +13,16 @@ import (
 )
 
 type Server struct {
-	Store               store.Store
-	Jira                *jira.Client
-	JiraDefaultProject  string
-	JiraStatusColumnMap map[string]string
-	AI                  ai.Provider
-	ICSToken            string
-	PublicURL           string
-	AttachmentsDir      string
+	Store                store.Store
+	Jira                 *jira.Client
+	JiraDefaultProject   string
+	JiraStatusColumnMap  map[string]string
+	JiraEpicIssueType    string
+	JiraSubtaskIssueType string
+	AI                   ai.Provider
+	ICSToken             string
+	PublicURL            string
+	AttachmentsDir       string
 	// StaticDir, when set, serves the built SPA from the API server. The
 	// Electron build uses this so the window can load a normal http origin.
 	StaticDir string

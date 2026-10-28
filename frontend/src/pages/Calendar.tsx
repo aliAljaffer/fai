@@ -13,12 +13,31 @@ import { format, addMonths, parseISO, startOfMonth, subMonths } from 'date-fns'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { CalendarDayDialog } from '../components/calendar/CalendarDayDialog'
 import { CalendarSourcesDialog } from '../components/calendar/CalendarSourcesDialog'
+import { ImportedEventDialog } from '../components/calendar/ImportedEventDialog'
 import { LogMeetingOutcomeDialog } from '../components/calendar/LogMeetingOutcomeDialog'
 import { useBoards, useCalendarSources, useImportedCalendars, useTasks, useUpdateTask } from '../api/hooks'
+import { useCalendarPrefs } from '../store/calendarPrefs'
 import { useUIStore } from '../store/ui'
 import type { ImportedEvent, MeetingOutcome, Task } from '../api/types'
+
+const WEEK_DAYS = {
+  0: 'Sunday',
+  1: 'Monday',
+  2: 'Tuesday',
+  3: 'Wednesday',
+  4: 'Thursday',
+  5: 'Friday',
+  6: 'Saturday',
+}
 
 type CalendarEventProps =
   | { kind: 'task'; task: Task }
@@ -53,10 +72,16 @@ export function Calendar() {
   const [dialogDate, setDialogDate] = useState<string | null>(null)
   const [dayDate, setDayDate] = useState<string | null>(null)
   const [dialogOutcome, setDialogOutcome] = useState<MeetingOutcome | undefined>(undefined)
+  const [importedEvent, setImportedEvent] = useState<{
+    event: ImportedEvent
+    sourceName: string
+    date: string
+  } | null>(null)
   const [sourcesOpen, setSourcesOpen] = useState(false)
   const [range, setRange] = useState(initialRange)
   const [draggingTitle, setDraggingTitle] = useState<string | null>(null)
   const calendarRef = useRef<HTMLDivElement>(null)
+  const { firstDay, setFirstDay } = useCalendarPrefs()
 
   const { data: importedCalendars } = useImportedCalendars(range.from, range.to)
 
@@ -131,6 +156,13 @@ export function Calendar() {
     info.jsEvent.preventDefault()
     const props = info.event.extendedProps as CalendarEventProps
     if (props.kind === 'imported') {
+      const date = props.event.all_day
+        ? props.event.start.slice(0, 10)
+        : format(new Date(props.event.start), 'yyyy-MM-dd')
+      if (date <= today) {
+        setImportedEvent({ event: props.event, sourceName: props.sourceName, date })
+        return
+      }
       if (props.event.url) window.open(props.event.url, '_blank', 'noopener,noreferrer')
       return
     }
@@ -180,7 +212,7 @@ export function Calendar() {
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div className="flex flex-col gap-1">
           <h1 className="text-lg font-semibold">Calendar</h1>
@@ -189,6 +221,23 @@ export function Calendar() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <Select
+            value={String(firstDay)}
+            onValueChange={(value) => value && setFirstDay(Number(value))}
+          >
+            <SelectTrigger size="sm" aria-label="First day of week">
+              <SelectValue>
+                {(value) => `Week starts ${WEEK_DAYS[Number(value) as keyof typeof WEEK_DAYS]}`}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {Object.entries(WEEK_DAYS).map(([value, label]) => (
+                <SelectItem key={value} value={value}>
+                  Week starts {label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Button size="sm" disabled={!boardId} onClick={() => openNewOutcome(new Date())}>
             <MessageSquarePlus />
             Add meeting summary
@@ -233,14 +282,18 @@ export function Calendar() {
         </div>
       )}
 
-      <div ref={calendarRef} className="fai-calendar overflow-x-auto rounded-lg border p-3">
-        <div className="min-w-[56rem]">
+      <div
+        ref={calendarRef}
+        className="fai-calendar flex min-h-0 flex-1 flex-col overflow-x-auto rounded-lg border p-3"
+      >
+        <div className="flex min-h-0 min-w-[56rem] flex-1 flex-col">
           <FullCalendar
             plugins={[dayGridPlugin, interactionPlugin]}
             initialView="dayGridMonth"
             headerToolbar={{ left: 'prev,next today', center: 'title', right: '' }}
-            firstDay={1}
-            height="auto"
+            firstDay={firstDay}
+            height="100%"
+            expandRows
             fixedWeekCount={false}
             dayMaxEventRows={3}
             events={events}
@@ -268,6 +321,20 @@ export function Calendar() {
       </div>
 
       <CalendarSourcesDialog open={sourcesOpen} onOpenChange={setSourcesOpen} />
+
+      {importedEvent && (
+        <ImportedEventDialog
+          event={importedEvent.event}
+          sourceName={importedEvent.sourceName}
+          date={importedEvent.date}
+          onOpenChange={(open) => !open && setImportedEvent(null)}
+          onMeetingSummary={() => {
+            const date = importedEvent.date
+            setImportedEvent(null)
+            openNewOutcome(parseISO(date))
+          }}
+        />
+      )}
 
       {dayDate && boardId && (
         <CalendarDayDialog

@@ -6,30 +6,32 @@ import (
 )
 
 type Config struct {
-	DatabaseURL         string
-	Port                string
-	BindAddr            string
-	DisableAuth         bool
-	OIDCIssuerURL       string
-	OIDCAudience        string
-	JiraBaseURL         string
-	JiraEmail           string
-	JiraAPIToken        string
-	JiraDefaultProject  string
-	JiraStatusColumnMap string
-	NtfyURL             string
-	NtfyTopic           string
-	NtfyUsername        string
-	NtfyPassword        string
-	SMTPAddr            string
-	SMTPFrom            string
-	SMTPTo              string
-	ICSToken            string
-	PublicURL           string
-	AttachmentsDir      string
-	AIProvider          string
-	AIAPIKey            string
-	AIModel             string
+	DatabaseURL          string
+	Port                 string
+	BindAddr             string
+	DisableAuth          bool
+	OIDCIssuerURL        string
+	OIDCAudience         string
+	JiraBaseURL          string
+	JiraEmail            string
+	JiraAPIToken         string
+	JiraDefaultProject   string
+	JiraStatusColumnMap  string
+	JiraEpicIssueType    string
+	JiraSubtaskIssueType string
+	NtfyURL              string
+	NtfyTopic            string
+	NtfyUsername         string
+	NtfyPassword         string
+	SMTPAddr             string
+	SMTPFrom             string
+	SMTPTo               string
+	ICSToken             string
+	PublicURL            string
+	AttachmentsDir       string
+	AIProvider           string
+	AIAPIKey             string
+	AIModel              string
 	// StaticDir serves the built frontend SPA from the same origin as the API.
 	// Used by the Electron build, which has no separate web server.
 	StaticDir string
@@ -54,32 +56,34 @@ func (c Config) SQLitePath() string {
 
 func Load() Config {
 	return Config{
-		DatabaseURL:         os.Getenv("DATABASE_URL"),
-		Port:                envOr("PORT", "8080"),
-		BindAddr:            os.Getenv("BIND_ADDR"),
-		DisableAuth:         os.Getenv("DISABLE_AUTH") == "true",
-		OIDCIssuerURL:       os.Getenv("OIDC_ISSUER_URL"),
-		OIDCAudience:        os.Getenv("OIDC_AUDIENCE"),
-		JiraBaseURL:         os.Getenv("JIRA_BASE_URL"),
-		JiraEmail:           os.Getenv("JIRA_EMAIL"),
-		JiraAPIToken:        os.Getenv("JIRA_API_TOKEN"),
-		JiraDefaultProject:  os.Getenv("JIRA_DEFAULT_PROJECT_KEY"),
-		JiraStatusColumnMap: os.Getenv("JIRA_STATUS_COLUMN_MAP"),
-		NtfyURL:             os.Getenv("NTFY_URL"),
-		NtfyTopic:           os.Getenv("NTFY_TOPIC"),
-		NtfyUsername:        os.Getenv("NTFY_USERNAME"),
-		NtfyPassword:        os.Getenv("NTFY_PASSWORD"),
-		SMTPAddr:            os.Getenv("SMTP_ADDR"),
-		SMTPFrom:            os.Getenv("SMTP_FROM"),
-		SMTPTo:              os.Getenv("SMTP_TO"),
-		ICSToken:            os.Getenv("ICS_TOKEN"),
-		PublicURL:           os.Getenv("PUBLIC_URL"),
-		AttachmentsDir:      os.Getenv("ATTACHMENTS_DIR"),
-		AIProvider:          os.Getenv("AI_PROVIDER"),
-		AIAPIKey:            os.Getenv("AI_API_KEY"),
-		AIModel:             os.Getenv("AI_MODEL"),
-		StaticDir:           os.Getenv("STATIC_DIR"),
-		AuthMode:            envOr("AUTH_MODE", "oidc"),
+		DatabaseURL:          os.Getenv("DATABASE_URL"),
+		Port:                 envOr("PORT", "8080"),
+		BindAddr:             os.Getenv("BIND_ADDR"),
+		DisableAuth:          os.Getenv("DISABLE_AUTH") == "true",
+		OIDCIssuerURL:        os.Getenv("OIDC_ISSUER_URL"),
+		OIDCAudience:         os.Getenv("OIDC_AUDIENCE"),
+		JiraBaseURL:          os.Getenv("JIRA_BASE_URL"),
+		JiraEmail:            os.Getenv("JIRA_EMAIL"),
+		JiraAPIToken:         os.Getenv("JIRA_API_TOKEN"),
+		JiraDefaultProject:   os.Getenv("JIRA_DEFAULT_PROJECT_KEY"),
+		JiraStatusColumnMap:  os.Getenv("JIRA_STATUS_COLUMN_MAP"),
+		JiraEpicIssueType:    envOr("JIRA_EPIC_ISSUE_TYPE", "Epic"),
+		JiraSubtaskIssueType: envOr("JIRA_SUBTASK_ISSUE_TYPE", "Sub-task"),
+		NtfyURL:              os.Getenv("NTFY_URL"),
+		NtfyTopic:            os.Getenv("NTFY_TOPIC"),
+		NtfyUsername:         os.Getenv("NTFY_USERNAME"),
+		NtfyPassword:         os.Getenv("NTFY_PASSWORD"),
+		SMTPAddr:             os.Getenv("SMTP_ADDR"),
+		SMTPFrom:             os.Getenv("SMTP_FROM"),
+		SMTPTo:               os.Getenv("SMTP_TO"),
+		ICSToken:             os.Getenv("ICS_TOKEN"),
+		PublicURL:            os.Getenv("PUBLIC_URL"),
+		AttachmentsDir:       os.Getenv("ATTACHMENTS_DIR"),
+		AIProvider:           os.Getenv("AI_PROVIDER"),
+		AIAPIKey:             os.Getenv("AI_API_KEY"),
+		AIModel:              os.Getenv("AI_MODEL"),
+		StaticDir:            os.Getenv("STATIC_DIR"),
+		AuthMode:             envOr("AUTH_MODE", "oidc"),
 	}
 }
 

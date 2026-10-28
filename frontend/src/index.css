@@ -165,6 +165,8 @@
   --fc-event-text-color: var(--primary-foreground);
 }
 .fai-calendar .fc {
+  flex: 1 1 0%;
+  min-height: 0;
   font-size: 0.85rem;
 }
 .fai-calendar .fc-toolbar-title {

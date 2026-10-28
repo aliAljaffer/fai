@@ -57,6 +57,22 @@ export interface JiraSuggestion {
   score: number
 }
 
+export interface JiraExportResult {
+  task_id: number
+  title: string
+  status: 'created' | 'skipped' | 'failed'
+  jira_key?: string
+  issue_type?: string
+  error?: string
+}
+
+export interface JiraExportResponse {
+  created: number
+  skipped: number
+  failed: number
+  results: JiraExportResult[]
+}
+
 export interface MeetingOutcome {
   id: number
   occurred_on: string
@@ -70,6 +86,7 @@ export interface MeetingOutcome {
 export interface ExtractedTask {
   title: string
   suggested_done: boolean
+  due_date: string | null
 }
 
 export interface Reminder {

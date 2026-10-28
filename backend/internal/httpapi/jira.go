@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"sort"
@@ -205,8 +206,160 @@ func (s *Server) jiraImport(w http.ResponseWriter, r *http.Request) {
 }
 
 type jiraExportBody struct {
-	TaskID     int64  `json:"task_id"`
-	ProjectKey string `json:"project_key"`
+	TaskID          int64   `json:"task_id"`
+	TaskIDs         []int64 `json:"task_ids"`
+	ProjectKey      string  `json:"project_key"`
+	IncludeSubtasks *bool   `json:"include_subtasks"`
+}
+
+type jiraExportResult struct {
+	TaskID    int64  `json:"task_id"`
+	Title     string `json:"title"`
+	Status    string `json:"status"`
+	JiraKey   string `json:"jira_key,omitempty"`
+	IssueType string `json:"issue_type,omitempty"`
+	Error     string `json:"error,omitempty"`
+}
+
+type jiraExportResponse struct {
+	Created int                `json:"created"`
+	Skipped int                `json:"skipped"`
+	Failed  int                `json:"failed"`
+	Results []jiraExportResult `json:"results"`
+}
+
+type jiraExporter struct {
+	ctx         context.Context
+	s           *Server
+	projectKey  string
+	epicType    string
+	subtaskType string
+	includeSubs bool
+	resp        *jiraExportResponse
+	keys        map[int64]string
+}
+
+func (e *jiraExporter) record(res jiraExportResult) {
+	e.resp.Results = append(e.resp.Results, res)
+	switch res.Status {
+	case "created":
+		e.resp.Created++
+	case "skipped":
+		e.resp.Skipped++
+	default:
+		e.resp.Failed++
+	}
+	if res.JiraKey != "" {
+		e.keys[res.TaskID] = res.JiraKey
+	}
+}
+
+// issueType picks the Jira type from the subtask count; a task that is itself a
+// child always exports as the instance's subtask type.
+func (e *jiraExporter) issueType(task store.Task, subtaskCount int) string {
+	if task.ParentTaskID != nil {
+		return e.subtaskType
+	}
+	if subtaskCount > 3 {
+		return e.epicType
+	}
+	return "Task"
+}
+
+// create links the task to a new Jira issue, or skips it when already linked.
+func (e *jiraExporter) create(task store.Task, issueType, parentKey string) (string, error) {
+	existing, err := e.s.Store.GetJiraLinkByTask(e.ctx, task.ID)
+	if err != nil {
+		return "", err
+	}
+	if existing != nil {
+		e.record(jiraExportResult{TaskID: task.ID, Title: task.Title, Status: "skipped", JiraKey: existing.JiraKey})
+		return existing.JiraKey, nil
+	}
+
+	key, err := e.s.Jira.CreateIssue(e.projectKey, task.Title, issueType, parentKey)
+	if err != nil {
+		e.record(jiraExportResult{TaskID: task.ID, Title: task.Title, Status: "failed", IssueType: issueType, Error: err.Error()})
+		return "", err
+	}
+	if _, err := e.s.Store.CreateJiraLinkExported(e.ctx, task.ID, key, e.s.Jira.IssueURL(key), e.projectKey); err != nil {
+		e.record(jiraExportResult{TaskID: task.ID, Title: task.Title, Status: "failed", JiraKey: key, IssueType: issueType, Error: err.Error()})
+		return "", err
+	}
+	e.record(jiraExportResult{TaskID: task.ID, Title: task.Title, Status: "created", JiraKey: key, IssueType: issueType})
+	return key, nil
+}
+
+// ensureParent exports a missing parent before its child and returns its Jira key.
+func (e *jiraExporter) ensureParent(task store.Task) (string, bool) {
+	if task.ParentTaskID == nil {
+		return "", true
+	}
+	if key, ok := e.keys[*task.ParentTaskID]; ok {
+		return key, true
+	}
+	parent, err := e.s.Store.GetTask(e.ctx, *task.ParentTaskID)
+	if err != nil {
+		return "", false
+	}
+	parentKey, ok := e.ensureParent(parent)
+	if !ok {
+		return "", false
+	}
+	subtasks, err := e.s.Store.ListSubtasks(e.ctx, parent.ID)
+	if err != nil {
+		return "", false
+	}
+	key, err := e.create(parent, e.issueType(parent, len(subtasks)), parentKey)
+	if err != nil {
+		return "", false
+	}
+	return key, true
+}
+
+func (e *jiraExporter) exportTree(taskID int64) {
+	if _, done := e.keys[taskID]; done {
+		return
+	}
+	task, err := e.s.Store.GetTask(e.ctx, taskID)
+	if err != nil {
+		e.record(jiraExportResult{TaskID: taskID, Status: "failed", Error: "task not found"})
+		return
+	}
+	parentKey, ok := e.ensureParent(task)
+	if !ok {
+		e.record(jiraExportResult{TaskID: task.ID, Title: task.Title, Status: "failed", Error: "parent export failed"})
+		return
+	}
+	subtasks, err := e.s.Store.ListSubtasks(e.ctx, task.ID)
+	if err != nil {
+		e.record(jiraExportResult{TaskID: task.ID, Title: task.Title, Status: "failed", Error: err.Error()})
+		return
+	}
+
+	key, err := e.create(task, e.issueType(task, len(subtasks)), parentKey)
+	if err != nil {
+		if e.includeSubs {
+			for _, child := range subtasks {
+				if _, done := e.keys[child.ID]; done {
+					continue
+				}
+				e.record(jiraExportResult{TaskID: child.ID, Title: child.Title, Status: "failed", Error: "parent export failed"})
+			}
+		}
+		return
+	}
+	if !e.includeSubs {
+		return
+	}
+	for _, child := range subtasks {
+		if _, done := e.keys[child.ID]; done {
+			continue
+		}
+		if _, err := e.create(child, e.subtaskType, key); err != nil {
+			continue
+		}
+	}
 }
 
 func (s *Server) jiraExport(w http.ResponseWriter, r *http.Request) {
@@ -228,29 +381,39 @@ func (s *Server) jiraExport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx := r.Context()
-	task, err := s.Store.GetTask(ctx, body.TaskID)
-	if err != nil {
-		writeError(w, http.StatusNotFound, "task not found")
-		return
+	var taskIDs []int64
+	seen := map[int64]bool{}
+	for _, id := range append([]int64{body.TaskID}, body.TaskIDs...) {
+		if id == 0 || seen[id] {
+			continue
+		}
+		seen[id] = true
+		taskIDs = append(taskIDs, id)
 	}
-	if existing, err := s.Store.GetJiraLinkByTask(ctx, task.ID); err == nil && existing != nil {
-		writeError(w, http.StatusConflict, "task is already linked to a jira issue")
-		return
-	}
-
-	key, err := s.Jira.CreateIssue(projectKey, task.Title)
-	if err != nil {
-		writeError(w, http.StatusBadGateway, err.Error())
+	if len(taskIDs) == 0 {
+		writeError(w, http.StatusBadRequest, "task_id or task_ids is required")
 		return
 	}
 
-	link, err := s.Store.CreateJiraLinkExported(ctx, task.ID, key, s.Jira.IssueURL(key), projectKey)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
+	epicType := s.JiraEpicIssueType
+	if epicType == "" {
+		epicType = "Epic"
 	}
-	writeJSON(w, http.StatusCreated, link)
+	subtaskType := s.JiraSubtaskIssueType
+	if subtaskType == "" {
+		subtaskType = "Sub-task"
+	}
+	resp := &jiraExportResponse{Results: []jiraExportResult{}}
+	exporter := &jiraExporter{
+		ctx: r.Context(), s: s, projectKey: projectKey,
+		epicType: epicType, subtaskType: subtaskType,
+		includeSubs: body.IncludeSubtasks == nil || *body.IncludeSubtasks,
+		resp:        resp, keys: map[int64]string{},
+	}
+	for _, id := range taskIDs {
+		exporter.exportTree(id)
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 type jiraLinkBody struct {

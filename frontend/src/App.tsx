@@ -24,7 +24,7 @@ export function App() {
   const setCommandOpen = useUIStore((state) => state.setCommandOpen)
 
   return (
-    <div className="min-h-screen">
+    <div className="flex min-h-screen flex-col">
       <nav className="flex items-center gap-5 border-b px-6 py-3">
         <span className="mr-2 font-bold">fai</span>
         <NavLink
@@ -113,7 +113,7 @@ export function App() {
         </NavLink>
       </nav>
       <PendingOutcomesBanner />
-      <main className="p-6">
+      <main className="flex flex-1 flex-col p-6">
         <Routes>
           <Route path="/" element={<Board />} />
           <Route path="/list" element={<List />} />

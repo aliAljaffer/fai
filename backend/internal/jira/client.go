@@ -166,15 +166,19 @@ func (c *Client) SearchByText(query, projectKey string, maxResults int) ([]Issue
 	return issues, err
 }
 
-// CreateIssue creates a new issue of type "Task" in the given project and returns its key.
-func (c *Client) CreateIssue(projectKey, summary string) (string, error) {
-	body, err := json.Marshal(map[string]any{
-		"fields": map[string]any{
-			"project":   map[string]string{"key": projectKey},
-			"summary":   summary,
-			"issuetype": map[string]string{"name": "Task"},
-		},
-	})
+// CreateIssue creates a new issue of the given type in the project and returns
+// its key. parentKey is only set for subtasks, which Jira links with
+// parent: {key: ...}.
+func (c *Client) CreateIssue(projectKey, summary, issueType, parentKey string) (string, error) {
+	fields := map[string]any{
+		"project":   map[string]string{"key": projectKey},
+		"summary":   summary,
+		"issuetype": map[string]string{"name": issueType},
+	}
+	if parentKey != "" {
+		fields["parent"] = map[string]string{"key": parentKey}
+	}
+	body, err := json.Marshal(map[string]any{"fields": fields})
 	if err != nil {
 		return "", err
 	}

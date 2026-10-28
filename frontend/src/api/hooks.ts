@@ -7,6 +7,7 @@ import type {
   CalendarSource,
   ExtractedTask,
   ImportedCalendar,
+  JiraExportResponse,
   JiraLink,
   JiraSuggestion,
   MeetingOutcome,
@@ -417,8 +418,8 @@ export function useUnlinkJira(taskId: number) {
 export function useExportJira(taskId: number) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: () => api.post<JiraLink>('/jira/export', { task_id: taskId }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['jira', 'link', taskId] }),
+    mutationFn: () => api.post<JiraExportResponse>('/jira/export', { task_id: taskId }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['jira'] }),
   })
 }
 
@@ -588,7 +589,7 @@ export function useExtractTasksFromOutcome() {
 export function useCreateTaskFromOutcome(outcomeId: number) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (body: { title: string; mark_done: boolean; board_id: number }) =>
+    mutationFn: (body: { title: string; mark_done: boolean; board_id: number; due_date?: string | null }) =>
       api.post<Task>(`/meeting-outcomes/${outcomeId}/tasks`, body),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['tasks'] }),
   })
