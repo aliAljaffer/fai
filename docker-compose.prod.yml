@@ -15,7 +15,7 @@ services:
     restart: unless-stopped
 
   frontend:
-    image: ghcr.io/alialjaffer/fai-frontend:latest
+    image: ghcr.io/alialjaffer/fai-frontend:compose
     expose: ["80"]
     depends_on: [backend]
     restart: unless-stopped
@@ -28,29 +28,14 @@ services:
       NTFY_UPSTREAM_BASE_URL: "https://ntfy.sh"
     restart: unless-stopped
 
-  oauth2-proxy:
-    image: quay.io/oauth2-proxy/oauth2-proxy:latest
-    env_file: .env.prod # OAUTH2_PROXY_CLIENT_ID, OAUTH2_PROXY_CLIENT_SECRET, OAUTH2_PROXY_OIDC_ISSUER_URL, OAUTH2_PROXY_COOKIE_SECRET
-    environment:
-      OAUTH2_PROXY_PROVIDER: oidc
-      OAUTH2_PROXY_HTTP_ADDRESS: "0.0.0.0:4180"
-      OAUTH2_PROXY_EMAIL_DOMAINS: "*"
-      OAUTH2_PROXY_SET_XAUTHREQUEST: "true"
-      OAUTH2_PROXY_PASS_USER_HEADERS: "true"
-      OAUTH2_PROXY_COOKIE_SECURE: "true"
-      OAUTH2_PROXY_REDIRECT_URL: "https://${FAI_DOMAIN}/oauth2/callback"
-      OAUTH2_PROXY_UPSTREAMS: "static://202"
-    expose: ["4180"]
-    restart: unless-stopped
-
-  caddy: # reverse proxy + automatic TLS + oauth2-proxy forward_auth gate
+  caddy: # reverse proxy + automatic TLS + HTTP Basic auth gate
     image: caddy:alpine
     ports: ["80:80", "443:443"]
     volumes:
       - ./Caddyfile.prod:/etc/caddy/Caddyfile
       - caddydata:/data
-    env_file: .env.prod # FAI_DOMAIN
-    depends_on: [backend, frontend, oauth2-proxy]
+    env_file: .env.prod # FAI_DOMAIN, FAI_AUTH_USER, FAI_AUTH_HASH
+    depends_on: [backend, frontend]
     restart: unless-stopped
 
 volumes:

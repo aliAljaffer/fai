@@ -1,27 +1,19 @@
 {$FAI_DOMAIN} {
-	handle /oauth2/* {
-		reverse_proxy oauth2-proxy:4180
-	}
-
-	# Calendar clients cannot complete an OIDC login; the feed is gated by its
-	# own URL token instead. Everything else stays behind forward_auth.
+	# Calendar clients cannot complete an interactive login; the feed is gated
+	# by its own URL token instead.
 	handle /api/calendar.ics* {
 		reverse_proxy backend:8080
 	}
 
 	handle {
-		forward_auth oauth2-proxy:4180 {
-			uri /oauth2/auth
-			copy_headers X-Auth-Request-User X-Auth-Request-Email
-
-			@unauthenticated status 401
-			handle_response @unauthenticated {
-				redir * /oauth2/start?rd={http.request.orig_uri}
-			}
+		basic_auth {
+			{$FAI_AUTH_USER} {$FAI_AUTH_HASH}
 		}
 
 		handle /api/* {
-			reverse_proxy backend:8080
+			reverse_proxy backend:8080 {
+				header_up X-Forwarded-User {http.auth.user.id}
+			}
 		}
 		handle {
 			reverse_proxy frontend:80

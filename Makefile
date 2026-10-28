@@ -1,4 +1,6 @@
-.PHONY: dev-db-up dev-db-down migrate-up migrate-new sqlc-generate sqlc-generate-sqlite backend-run frontend-run build build-images push-images build-frontend-compose compose-prod-up compose-prod-down
+SHELL := /bin/bash
+
+.PHONY: dev-db-up dev-db-down migrate-up migrate-new sqlc-generate sqlc-generate-sqlite backend-run frontend-run build build-images push-images build-frontend-compose hash-password compose-prod-up compose-prod-down
 
 GOOSE := $(HOME)/go/bin/goose
 SQLC := $(HOME)/go/bin/sqlc
@@ -54,3 +56,8 @@ push-images:
 
 build-frontend-compose:
 	docker build -t $(REGISTRY)/fai-frontend:compose frontend/
+
+# Prints the bcrypt hash already $$-escaped for Compose's env_file interpolation.
+hash-password:
+	@read -rsp 'Password: ' pw; echo; \
+	printf '%s\n' "$$pw" | docker run --rm -i caddy:alpine caddy hash-password | sed 's/\$$/\$$\$$/g'

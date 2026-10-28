@@ -62,3 +62,13 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ env.OWNER }}/fai-frontend:latest
             ${{ env.REGISTRY }}/${{ env.OWNER }}/fai-frontend:${{ github.sha }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: frontend
+          push: true
+          # Compose gates every request with Caddy Basic auth; its SPA must not
+          # attempt client-side OIDC.
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.OWNER }}/fai-frontend:compose
+            ${{ env.REGISTRY }}/${{ env.OWNER }}/fai-frontend:compose-${{ github.sha }}
