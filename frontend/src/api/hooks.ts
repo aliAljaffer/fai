@@ -17,6 +17,7 @@ import type {
   Tag,
   Task,
   TaskBacklink,
+  TaskComment,
   TaskRef,
   TimeEntry,
   Workspace,
@@ -157,6 +158,31 @@ export function useTaskReferences(taskId: number | undefined) {
     queryKey: ['task', taskId, 'references'],
     queryFn: () => api.get<TaskBacklink[]>(`/tasks/${taskId}/references`),
     enabled: taskId !== undefined,
+  })
+}
+
+export function useTaskComments(taskId: number | undefined) {
+  return useQuery({
+    queryKey: ['task', taskId, 'comments'],
+    queryFn: () => api.get<TaskComment[]>(`/tasks/${taskId}/comments`),
+    enabled: taskId !== undefined,
+  })
+}
+
+export function useCreateTaskComment(taskId: number) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (bodyMd: string) =>
+      api.post<TaskComment>(`/tasks/${taskId}/comments`, { body_md: bodyMd }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['task', taskId, 'comments'] }),
+  })
+}
+
+export function useDeleteTaskComment(taskId: number) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (commentId: number) => api.delete<void>(`/tasks/${taskId}/comments/${commentId}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['task', taskId, 'comments'] }),
   })
 }
 

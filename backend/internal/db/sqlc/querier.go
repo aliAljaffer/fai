@@ -25,12 +25,14 @@ type Querier interface {
 	CreateReminder(ctx context.Context, arg CreateReminderParams) (Reminder, error)
 	CreateTag(ctx context.Context, arg CreateTagParams) (Tag, error)
 	CreateTask(ctx context.Context, arg CreateTaskParams) (CreateTaskRow, error)
+	CreateTaskComment(ctx context.Context, arg CreateTaskCommentParams) (TaskComment, error)
 	DeleteAttachment(ctx context.Context, id int64) error
 	DeleteJiraLink(ctx context.Context, taskID int64) error
 	DeleteMeetingOutcome(ctx context.Context, id int64) error
 	DeleteNote(ctx context.Context, id int64) error
 	DeleteReminder(ctx context.Context, id int64) error
 	DeleteTask(ctx context.Context, id int64) error
+	DeleteTaskComment(ctx context.Context, arg DeleteTaskCommentParams) error
 	GetAttachment(ctx context.Context, id int64) (Attachment, error)
 	GetBoard(ctx context.Context, id int64) (Board, error)
 	GetColumn(ctx context.Context, id int64) (BoardColumn, error)
@@ -57,6 +59,7 @@ type Querier interface {
 	ListSubtasks(ctx context.Context, parentTaskID pgtype.Int8) ([]ListSubtasksRow, error)
 	ListTags(ctx context.Context) ([]Tag, error)
 	ListTagsForTask(ctx context.Context, taskID int64) ([]Tag, error)
+	ListTaskComments(ctx context.Context, taskID int64) ([]TaskComment, error)
 	ListTasks(ctx context.Context, arg ListTasksParams) ([]ListTasksRow, error)
 	ListTasksByColumnOrdered(ctx context.Context, columnID int64) ([]ListTasksByColumnOrderedRow, error)
 	MarkMeetingOutcomePromptSent(ctx context.Context, id int64) error

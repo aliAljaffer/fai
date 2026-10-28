@@ -77,6 +77,11 @@ type Store interface {
 	ArchiveTask(ctx context.Context, id int64) error
 	DeleteTask(ctx context.Context, id int64) error
 
+	// Task comments
+	CreateTaskComment(ctx context.Context, taskID int64, author, bodyMd string, externalID *string) (TaskComment, error)
+	ListTaskComments(ctx context.Context, taskID int64) ([]TaskComment, error)
+	DeleteTaskComment(ctx context.Context, taskID, commentID int64) error
+
 	// Attachments (metadata only; bytes live on disk)
 	CreateAttachment(ctx context.Context, p CreateAttachmentParams) (Attachment, error)
 	ListAttachmentsByTask(ctx context.Context, taskID int64) ([]Attachment, error)

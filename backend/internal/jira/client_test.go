@@ -7,6 +7,32 @@ import (
 	"testing"
 )
 
+func TestGetCommentsPaginates(t *testing.T) {
+	var starts []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := r.URL.Query().Get("startAt")
+		starts = append(starts, start)
+		w.Header().Set("Content-Type", "application/json")
+		if start == "0" {
+			fmt.Fprint(w, `{"comments":[{"id":"1","author":{"accountId":"me","displayName":"Me"},"body":{"type":"doc","version":1,"content":[{"type":"paragraph","content":[{"type":"text","text":"One"}]}]}}],"startAt":0,"total":2}`)
+			return
+		}
+		fmt.Fprint(w, `{"comments":[{"id":"2","author":{"accountId":"me","displayName":"Me"},"body":"Two"}],"startAt":1,"total":2}`)
+	}))
+	defer srv.Close()
+
+	comments, err := New(srv.URL, "email", "token").GetComments("DEV-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(comments) != 2 || comments[0].Body != "One" || comments[1].Body != "Two" {
+		t.Fatalf("comments = %#v", comments)
+	}
+	if len(starts) != 2 || starts[0] != "0" || starts[1] != "1" {
+		t.Fatalf("startAt values = %#v", starts)
+	}
+}
+
 func TestSearchIssuesFollowsNextPageToken(t *testing.T) {
 	var pages []string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

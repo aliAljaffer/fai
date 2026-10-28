@@ -148,6 +148,45 @@ func (s *Server) jiraImport(w http.ResponseWriter, r *http.Request) {
 		return link.TaskID, true, nil
 	}
 
+	importComments := func(taskID int64, issue jira.Issue, comments []jira.Comment) error {
+		if issue.AssigneeID == "" {
+			return nil
+		}
+		existing, err := s.Store.ListTaskComments(ctx, taskID)
+		if err != nil {
+			return err
+		}
+		seen := map[string]bool{}
+		for _, comment := range existing {
+			if comment.ExternalID != nil {
+				seen[*comment.ExternalID] = true
+			}
+		}
+
+		byID := map[string]jira.Comment{}
+		for _, comment := range comments {
+			byID[comment.ID] = comment
+		}
+		for _, comment := range comments {
+			// Only the assignee's own comments count, and a reply is skipped when
+			// it answers someone else.
+			if comment.AuthorID != issue.AssigneeID || seen[comment.ID] {
+				continue
+			}
+			if comment.ParentID != "" {
+				parent, ok := byID[comment.ParentID]
+				if !ok || parent.AuthorID != issue.AssigneeID {
+					continue
+				}
+			}
+			externalID := comment.ID
+			if _, err := s.Store.CreateTaskComment(ctx, taskID, comment.AuthorName, comment.Body, &externalID); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
 	handle := func(issue jira.Issue, parentTaskID *int64) error {
 		existing, err := s.Store.GetJiraLinkByKey(ctx, issue.Key)
 		if err != nil {
@@ -157,6 +196,11 @@ func (s *Server) jiraImport(w http.ResponseWriter, r *http.Request) {
 		if existing != nil && !body.ForceUpdate {
 			skipped++
 			return nil
+		}
+
+		comments, err := s.Jira.GetComments(issue.Key)
+		if err != nil {
+			return err
 		}
 
 		columnID := resolveColumn(issue.Status)
@@ -181,13 +225,20 @@ func (s *Server) jiraImport(w http.ResponseWriter, r *http.Request) {
 					return err
 				}
 			}
-			if err := s.Store.UpdateTaskTitle(ctx, existing.TaskID, issue.Summary); err != nil {
+			description := task.DescriptionMd
+			if issue.Description != "" {
+				description = issue.Description
+			}
+			if _, err := s.Store.UpdateTask(ctx, existing.TaskID, issue.Summary, description, task.Priority, task.DueDate); err != nil {
 				return err
 			}
 			if err := s.Store.UpdateJiraLinkImported(ctx, existing.TaskID, issue.Status); err != nil {
 				return err
 			}
 			if err := s.Store.SetTaskParent(ctx, existing.TaskID, parentTaskID); err != nil {
+				return err
+			}
+			if err := importComments(existing.TaskID, issue, comments); err != nil {
 				return err
 			}
 			updated++
@@ -200,7 +251,8 @@ func (s *Server) jiraImport(w http.ResponseWriter, r *http.Request) {
 		}
 		task, err := s.Store.CreateTask(ctx, store.CreateTaskParams{
 			BoardID: body.BoardID, ColumnID: columnID, Title: issue.Summary,
-			Priority: "medium", Position: position, ParentTaskID: parentTaskID,
+			DescriptionMd: issue.Description,
+			Priority:      "medium", Position: position, ParentTaskID: parentTaskID,
 		})
 		if err != nil {
 			return err
@@ -211,6 +263,9 @@ func (s *Server) jiraImport(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if _, err := s.Store.CreateJiraLinkImported(ctx, task.ID, issue.Key, s.Jira.IssueURL(issue.Key), s.JiraDefaultProject, issue.Status); err != nil {
+			return err
+		}
+		if err := importComments(task.ID, issue, comments); err != nil {
 			return err
 		}
 		created[issue.Key] = task.ID

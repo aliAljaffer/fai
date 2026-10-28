@@ -79,6 +79,9 @@ func New(path string) (*Store, error) {
 	if _, err := db.ExecContext(ctx, migrationssqlite.Workspaces); err != nil {
 		return nil, fmt.Errorf("applying sqlite workspaces schema: %w", err)
 	}
+	if _, err := db.ExecContext(ctx, migrationssqlite.TaskComments); err != nil {
+		return nil, fmt.Errorf("applying sqlite task comments schema: %w", err)
+	}
 
 	return &Store{q: sqlitedb.New(db), db: db}, nil
 }

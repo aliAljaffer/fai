@@ -78,6 +78,15 @@ type Task struct {
 	UpdatedAt        time.Time  `json:"updated_at"`
 }
 
+type TaskComment struct {
+	ID         int64     `json:"id"`
+	TaskID     int64     `json:"task_id"`
+	Author     string    `json:"author"`
+	BodyMd     string    `json:"body_md"`
+	ExternalID *string   `json:"external_id"`
+	CreatedAt  time.Time `json:"created_at"`
+}
+
 type Attachment struct {
 	ID          int64     `json:"id"`
 	TaskID      *int64    `json:"task_id"`

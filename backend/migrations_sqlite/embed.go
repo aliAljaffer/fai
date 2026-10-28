@@ -19,3 +19,6 @@ var CalendarFeedCache string
 
 //go:embed 005_workspaces.sql
 var Workspaces string
+
+//go:embed 006_task_comments.sql
+var TaskComments string

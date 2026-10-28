@@ -20,6 +20,7 @@ import { AttachmentsPanel } from '../AttachmentsPanel'
 import { RefPicker } from '../refs/RefPicker'
 import { useRefPicker } from '../refs/useRefPicker'
 import { AIPanel } from './AIPanel'
+import { CommentsPanel } from './CommentsPanel'
 import { JiraPanel } from './JiraPanel'
 import { LabelEditor } from './LabelEditor'
 import { SubtasksPanel } from './SubtasksPanel'
@@ -104,6 +105,7 @@ export function TaskDetail({
         <Tabs defaultValue="details">
           <TabsList>
             <TabsTrigger value="details">Details</TabsTrigger>
+            <TabsTrigger value="comments">Comments</TabsTrigger>
             <TabsTrigger value="subtasks">Subtasks</TabsTrigger>
             <TabsTrigger value="time">Time</TabsTrigger>
             <TabsTrigger value="files">Files</TabsTrigger>
@@ -148,6 +150,10 @@ export function TaskDetail({
               </SelectContent>
             </Select>
             <JiraPanel taskId={task.id} />
+          </TabsContent>
+
+          <TabsContent value="comments">
+            <CommentsPanel taskId={task.id} />
           </TabsContent>
 
           <TabsContent value="subtasks">

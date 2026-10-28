@@ -38,6 +38,11 @@ func TestJiraImportNestsSubtasks(t *testing.T) {
 
 	searchBody := jiraSearchBody
 	jiraServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/comment") {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`{"comments":[],"total":0}`))
+			return
+		}
 		if r.URL.Path != "/rest/api/3/search/jql" {
 			http.NotFound(w, r)
 			return
@@ -127,6 +132,11 @@ func TestJiraImportOnlyAssignedAndBackfillsCompletion(t *testing.T) {
 	    "resolutiondate":"2026-03-04T10:00:00.000+0000","updated":"2026-03-05T08:00:00.000+0000"}}
 	],"isLast":true}`
 	jiraServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/comment") {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`{"comments":[],"total":0}`))
+			return
+		}
 		if r.URL.Path != "/rest/api/3/search/jql" {
 			http.NotFound(w, r)
 			return
@@ -168,6 +178,88 @@ func TestJiraImportOnlyAssignedAndBackfillsCompletion(t *testing.T) {
 	}
 	if task.CompletedAt == nil || task.CompletedAt.Format("2006-01-02") != "2026-03-04" {
 		t.Errorf("completed_at = %v, want 2026-03-04", task.CompletedAt)
+	}
+}
+
+func TestJiraImportDescribesAndComments(t *testing.T) {
+	st, err := lite.New(filepath.Join(t.TempDir(), "fai.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	searchBody := `{"issues":[{"key":"DEV-7","fields":{
+	  "summary":"Issue",
+	  "description":{"type":"doc","version":1,"content":[
+	    {"type":"paragraph","content":[{"type":"text","text":"Details","marks":[{"type":"strong"}]}]}
+	  ]},
+	  "assignee":{"accountId":"me","displayName":"Me"},
+	  "status":{"name":"To Do"}
+	}}],"isLast":true}`
+	comment := `{"type":"doc","version":1,"content":[{"type":"paragraph","content":[{"type":"text","text":"%s"}]}]}`
+	commentsBody := `{"comments":[
+	  {"id":"1","author":{"accountId":"me","displayName":"Me"},"body":` + fmt.Sprintf(comment, "First") + `},
+	  {"id":"2","author":{"accountId":"other","displayName":"Other"},"body":` + fmt.Sprintf(comment, "Other") + `},
+	  {"id":"3","parentId":"2","author":{"accountId":"me","displayName":"Me"},"body":` + fmt.Sprintf(comment, "Reply to other") + `},
+	  {"id":"4","parentId":"1","author":{"accountId":"me","displayName":"Me"},"body":` + fmt.Sprintf(comment, "Own reply") + `}
+	],"total":4}`
+
+	jiraServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.URL.Path == "/rest/api/3/search/jql":
+			w.Write([]byte(searchBody))
+		case strings.HasSuffix(r.URL.Path, "/comment"):
+			w.Write([]byte(commentsBody))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer jiraServer.Close()
+
+	server := httptest.NewServer(NewRouter(&Server{
+		Store:              st,
+		Jira:               jira.New(jiraServer.URL, "me@example.com", "token"),
+		JiraDefaultProject: "DEV",
+	}))
+	defer server.Close()
+
+	runImport := func(body string) {
+		t.Helper()
+		res := postJSON(t, server.URL+"/api/jira/import", body)
+		defer res.Body.Close()
+		if res.StatusCode != http.StatusOK {
+			t.Fatalf("import status = %d", res.StatusCode)
+		}
+	}
+
+	runImport(`{"board_id":1}`)
+	tasks, err := st.ListTasks(context.Background(), store.ListTasksParams{})
+	if err != nil || len(tasks) != 1 {
+		t.Fatalf("tasks = %#v, err = %v", tasks, err)
+	}
+	task := tasks[0]
+	if task.DescriptionMd != "**Details**" {
+		t.Errorf("description = %q", task.DescriptionMd)
+	}
+	comments, err := st.ListTaskComments(context.Background(), task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(comments) != 2 || *comments[0].ExternalID != "1" || *comments[1].ExternalID != "4" {
+		t.Fatalf("comments = %#v", comments)
+	}
+	if comments[0].Author != "Me" || comments[0].BodyMd != "First" {
+		t.Errorf("comment = %#v", comments[0])
+	}
+
+	runImport(`{"board_id":1,"force_update":true}`)
+	comments, err = st.ListTaskComments(context.Background(), task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(comments) != 2 {
+		t.Fatalf("re-import duplicated comments: %d", len(comments))
 	}
 }
 

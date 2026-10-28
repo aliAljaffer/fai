@@ -27,6 +27,15 @@ export interface Tag {
   color: string
 }
 
+export interface TaskComment {
+  id: number
+  task_id: number
+  author: string
+  body_md: string
+  external_id: string | null
+  created_at: string
+}
+
 export interface Note {
   id: number
   title: string

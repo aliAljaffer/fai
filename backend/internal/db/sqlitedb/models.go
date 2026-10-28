@@ -128,6 +128,15 @@ type Task struct {
 	UpdatedAt        string         `json:"updated_at"`
 }
 
+type TaskComment struct {
+	ID         int64          `json:"id"`
+	TaskID     int64          `json:"task_id"`
+	Author     string         `json:"author"`
+	BodyMd     string         `json:"body_md"`
+	ExternalID sql.NullString `json:"external_id"`
+	CreatedAt  string         `json:"created_at"`
+}
+
 type TaskTag struct {
 	TaskID int64 `json:"task_id"`
 	TagID  int64 `json:"tag_id"`

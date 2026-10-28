@@ -24,12 +24,14 @@ type Querier interface {
 	CreateReminder(ctx context.Context, arg CreateReminderParams) (Reminder, error)
 	CreateTag(ctx context.Context, arg CreateTagParams) (Tag, error)
 	CreateTask(ctx context.Context, arg CreateTaskParams) (Task, error)
+	CreateTaskComment(ctx context.Context, arg CreateTaskCommentParams) (TaskComment, error)
 	DeleteAttachment(ctx context.Context, id int64) error
 	DeleteJiraLink(ctx context.Context, taskID int64) error
 	DeleteMeetingOutcome(ctx context.Context, id int64) error
 	DeleteNote(ctx context.Context, id int64) error
 	DeleteReminder(ctx context.Context, id int64) error
 	DeleteTask(ctx context.Context, id int64) error
+	DeleteTaskComment(ctx context.Context, arg DeleteTaskCommentParams) error
 	GetAttachment(ctx context.Context, id int64) (Attachment, error)
 	GetJiraLinkByKey(ctx context.Context, jiraKey string) (JiraLink, error)
 	GetJiraLinkByTask(ctx context.Context, taskID int64) (JiraLink, error)
@@ -52,6 +54,7 @@ type Querier interface {
 	ListReminders(ctx context.Context, workspaceID sql.NullInt64) ([]Reminder, error)
 	ListSubtasks(ctx context.Context, parentTaskID sql.NullInt64) ([]Task, error)
 	ListTags(ctx context.Context) ([]Tag, error)
+	ListTaskComments(ctx context.Context, taskID int64) ([]TaskComment, error)
 	ListTasks(ctx context.Context, arg ListTasksParams) ([]Task, error)
 	ListTasksByColumnOrdered(ctx context.Context, columnID int64) ([]Task, error)
 	MarkMeetingOutcomePromptSent(ctx context.Context, id int64) error
