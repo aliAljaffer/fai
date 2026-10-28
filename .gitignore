@@ -8,7 +8,10 @@ electron/release/
 __pycache__/
 *.pyc
 *.log
+.env
 .env.prod
+.env.local
+.env.*.local
 .claude/
 PLAN.md
 backend/data/

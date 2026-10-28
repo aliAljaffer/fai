@@ -3,12 +3,13 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/alialjaffer/fai/actions/workflows/build-images.yml"><img src="https://github.com/alialjaffer/fai/actions/workflows/build-images.yml/badge.svg?branch=main&amp;label=CI" alt="CI"></a>
+  <a href="https://github.com/alialjaffer/fai/actions/workflows/ci.yml"><img src="https://github.com/alialjaffer/fai/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
 </p>
 
 # fai
 
-Self-hosted personal task tracker / Kanban / notetaking app. See `PLAN.md` for the full design and `PROGRESS.md` for build status.
+Self-hosted personal task tracker / Kanban / notetaking app. Runs as a web app
+behind your own identity provider, as a Docker Compose stack, or as a desktop app.
 
 ## Local dev
 
@@ -196,3 +197,7 @@ The release workflow pushes `Casks/fai.rb` to `aliAljaffer/homebrew-tap` over SS
 using the private half of a read/write deploy key stored as the `TAP_DEPLOY_KEY`
 repository secret. Linux users install the `tar.gz` or `AppImage` from the release
 page instead; Homebrew casks are macOS-only.
+
+## License
+
+MIT. See `LICENSE`.
