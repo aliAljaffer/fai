@@ -45,6 +45,7 @@ import {
   useTasks,
 } from '../api/hooks'
 import { BoardColumn } from '../components/board/BoardColumn'
+import { RemindersColumn } from '../components/board/RemindersColumn'
 import { TaskCard } from '../components/board/TaskCard'
 import { isPastDue } from '../lib/format'
 import { useUIStore } from '../store/ui'
@@ -529,6 +530,8 @@ export function Board() {
           <BoardSkeleton columns={columns?.length ?? 4} />
         ) : (
           <div className="flex items-start gap-4 overflow-x-auto pb-2">
+            <RemindersColumn />
+
             {!orderedColumns.length && !addingColumn && (
               <div className="flex w-full max-w-xl flex-col items-start gap-2 rounded-md border border-dashed p-6">
                 <p className="text-sm font-medium">No columns yet</p>

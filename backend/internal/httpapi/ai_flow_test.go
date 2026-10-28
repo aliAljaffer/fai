@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/alialjaffer/fai/backend/internal/ai"
 	"github.com/alialjaffer/fai/backend/internal/store"
@@ -19,11 +20,15 @@ import (
 type fakeAI struct {
 	system   string
 	messages []ai.ChatMessage
+	reply    string
 }
 
 func (f *fakeAI) Chat(_ context.Context, system string, messages []ai.ChatMessage) (string, error) {
 	f.system = system
 	f.messages = messages
+	if f.reply != "" {
+		return f.reply, nil
+	}
 	return "Try starting with the smallest task.", nil
 }
 
@@ -117,6 +122,76 @@ func TestChatUsesFixedSystemPromptAndRejectsSystemTurns(t *testing.T) {
 		t.Errorf("system role status = %d", res.StatusCode)
 	}
 	res.Body.Close()
+}
+
+func TestAIReminderCreatesReminder(t *testing.T) {
+	st, err := lite.New(filepath.Join(t.TempDir(), "fai.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	provider := &fakeAI{reply: `{"title":"Reply to Mohammed about Infath","remind_at":"2099-01-01T10:00:00Z"}`}
+	server := httptest.NewServer(NewRouter(&Server{Store: st, AI: provider}))
+	defer server.Close()
+
+	res := postJSON(t, server.URL+"/api/reminders/ai", `{"text":"Remind me in 10 minutes to reply to Mohammed regarding Infath"}`)
+	if res.StatusCode != http.StatusCreated {
+		t.Fatalf("reminder status = %d", res.StatusCode)
+	}
+	var reminder store.Reminder
+	if err := json.NewDecoder(res.Body).Decode(&reminder); err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if reminder.Title != "Reply to Mohammed about Infath" {
+		t.Errorf("title = %q", reminder.Title)
+	}
+	if reminder.RemindAt.UTC().Format(time.RFC3339) != "2099-01-01T10:00:00Z" {
+		t.Errorf("remind_at = %s", reminder.RemindAt)
+	}
+}
+
+func TestChatCreatesTaskFromAction(t *testing.T) {
+	st, err := lite.New(filepath.Join(t.TempDir(), "fai.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	provider := &fakeAI{reply: "Added it for Wednesday.\nACTION: {\"type\":\"create_task\",\"title\":\"Refresh the Cloudflare token\",\"due_date\":\"2099-01-07\"}"}
+	server := httptest.NewServer(NewRouter(&Server{Store: st, AI: provider}))
+	defer server.Close()
+
+	res := postJSON(t, server.URL+"/api/ai/chat", `{"messages":[{"role":"user","content":"Create a task to refresh the Cloudflare token on Wednesday"}]}`)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("chat status = %d", res.StatusCode)
+	}
+	var body struct {
+		Reply   string `json:"reply"`
+		Created *struct {
+			Type  string `json:"type"`
+			ID    int64  `json:"id"`
+			Title string `json:"title"`
+		} `json:"created"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if body.Reply != "Added it for Wednesday." {
+		t.Errorf("reply = %q", body.Reply)
+	}
+	if body.Created == nil || body.Created.Type != "task" {
+		t.Fatalf("created = %#v", body.Created)
+	}
+	task, err := st.GetTask(context.Background(), body.Created.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if task.Title != "Refresh the Cloudflare token" || task.DueDate == nil || *task.DueDate != "2099-01-07" {
+		t.Errorf("task = %#v", task)
+	}
 }
 
 func postJSON(t *testing.T, url, body string) *http.Response {

@@ -24,6 +24,22 @@ export function isPastDue(value: string | null, completed = false): boolean {
   return date < today
 }
 
+export function formatDueIn(value: string, now = new Date()): string {
+  const due = parseISO(value)
+  if (Number.isNaN(due.getTime())) return ''
+  const minutes = Math.round((due.getTime() - now.getTime()) / 60000)
+  if (minutes <= -1) {
+    const past = -minutes
+    if (past < 60) return `overdue ${past}m`
+    if (past < 1440) return `overdue ${Math.floor(past / 60)}h`
+    return `overdue ${Math.floor(past / 1440)}d`
+  }
+  if (minutes === 0) return 'due now'
+  if (minutes < 60) return `due in ${minutes}m`
+  if (minutes < 1440) return `due in ${Math.floor(minutes / 60)}h`
+  return `due in ${Math.floor(minutes / 1440)}d`
+}
+
 export function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
   const units = ['KB', 'MB', 'GB']

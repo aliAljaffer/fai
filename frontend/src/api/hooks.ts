@@ -304,7 +304,11 @@ export function useUpdateNote() {
 }
 
 export function useReminders() {
-  return useQuery({ queryKey: ['reminders'], queryFn: () => api.get<Reminder[]>('/reminders') })
+  return useQuery({
+    queryKey: ['reminders'],
+    queryFn: () => api.get<Reminder[]>('/reminders'),
+    refetchInterval: 60_000,
+  })
 }
 
 export function useCreateReminder() {
@@ -329,6 +333,18 @@ export function useDeleteReminder() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (id: number) => api.delete<void>(`/reminders/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['reminders'] }),
+  })
+}
+
+export function useAIReminder() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (text: string) =>
+      api.post<Reminder>('/reminders/ai', {
+        text,
+        tz_offset: -new Date().getTimezoneOffset(),
+      }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['reminders'] }),
   })
 }
@@ -453,8 +469,18 @@ export interface AIChatMessage {
 }
 
 export function useAIChat() {
+  const qc = useQueryClient()
   return useMutation({
-    mutationFn: (messages: AIChatMessage[]) => api.post<{ reply: string }>('/ai/chat', { messages }),
+    mutationFn: (messages: AIChatMessage[]) =>
+      api.post<{ reply: string; created?: { type: string; id: number; title: string } }>('/ai/chat', {
+        messages,
+        tz_offset: -new Date().getTimezoneOffset(),
+      }),
+    onSuccess: (result) => {
+      if (!result.created) return
+      qc.invalidateQueries({ queryKey: ['tasks'] })
+      qc.invalidateQueries({ queryKey: ['reminders'] })
+    },
   })
 }
 
