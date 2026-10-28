@@ -44,7 +44,7 @@ func (s *Server) jiraImport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
-	issues, err := s.Jira.SearchIssues(jql, 50)
+	issues, err := s.Jira.SearchIssues(jql, 100)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
