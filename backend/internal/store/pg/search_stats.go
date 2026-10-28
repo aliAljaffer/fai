@@ -7,15 +7,15 @@ import (
 	"github.com/alialjaffer/fai/backend/internal/store"
 )
 
-func (s *Store) SearchTasks(ctx context.Context, query string) ([]store.Task, error) {
-	rows, err := s.q.SearchTasks(ctx, query)
+func (s *Store) SearchTasks(ctx context.Context, query string, workspaceID *int64) ([]store.Task, error) {
+	rows, err := s.q.SearchTasks(ctx, sqlc.SearchTasksParams{WebsearchToTsquery: query, WorkspaceID: ptrToInt8(workspaceID)})
 	if err != nil {
 		return nil, err
 	}
 	out := make([]store.Task, len(rows))
 	for i, t := range rows {
 		out[i] = store.Task{
-			ID: t.ID, BoardID: t.BoardID, ColumnID: t.ColumnID, Title: t.Title,
+			ID: t.ID, BoardID: t.BoardID, ColumnID: t.ColumnID, WorkspaceID: t.WorkspaceID, RefNum: t.RefNum, Title: t.Title,
 			DescriptionMd: t.DescriptionMd, Priority: t.Priority, DueDate: dateToPtr(t.DueDate),
 			Position: t.Position, ParentTaskID: int8ToPtr(t.ParentTaskID), MeetingOutcomeID: int8ToPtr(t.MeetingOutcomeID),
 			CompletedAt: tsToPtr(t.CompletedAt), Archived: t.Archived, Tags: []store.Tag{}, CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt,
@@ -27,14 +27,14 @@ func (s *Store) SearchTasks(ctx context.Context, query string) ([]store.Task, er
 	return out, nil
 }
 
-func (s *Store) SearchNotes(ctx context.Context, query string) ([]store.Note, error) {
-	rows, err := s.q.SearchNotes(ctx, query)
+func (s *Store) SearchNotes(ctx context.Context, query string, workspaceID *int64) ([]store.Note, error) {
+	rows, err := s.q.SearchNotes(ctx, sqlc.SearchNotesParams{WebsearchToTsquery: query, WorkspaceID: ptrToInt8(workspaceID)})
 	if err != nil {
 		return nil, err
 	}
 	out := make([]store.Note, len(rows))
 	for i, n := range rows {
-		out[i] = store.Note{ID: n.ID, Title: n.Title, BodyMd: n.BodyMd, TaskID: int8ToPtr(n.TaskID), CreatedAt: n.CreatedAt, UpdatedAt: n.UpdatedAt}
+		out[i] = store.Note{ID: n.ID, Title: n.Title, BodyMd: n.BodyMd, TaskID: int8ToPtr(n.TaskID), WorkspaceID: n.WorkspaceID, CreatedAt: n.CreatedAt, UpdatedAt: n.UpdatedAt}
 	}
 	return out, nil
 }

@@ -28,11 +28,11 @@ func (s *Store) Close() {
 }
 
 func toBoard(b sqlc.Board) store.Board {
-	return store.Board{ID: b.ID, Name: b.Name, CreatedAt: b.CreatedAt}
+	return store.Board{ID: b.ID, Name: b.Name, WorkspaceID: b.WorkspaceID, CreatedAt: b.CreatedAt}
 }
 
-func (s *Store) ListBoards(ctx context.Context) ([]store.Board, error) {
-	rows, err := s.q.ListBoards(ctx)
+func (s *Store) ListBoards(ctx context.Context, workspaceID *int64) ([]store.Board, error) {
+	rows, err := s.q.ListBoards(ctx, ptrToInt8(workspaceID))
 	if err != nil {
 		return nil, err
 	}
@@ -43,8 +43,8 @@ func (s *Store) ListBoards(ctx context.Context) ([]store.Board, error) {
 	return out, nil
 }
 
-func (s *Store) CreateBoard(ctx context.Context, name string) (store.Board, error) {
-	b, err := s.q.CreateBoard(ctx, name)
+func (s *Store) CreateBoard(ctx context.Context, name string, workspaceID int64) (store.Board, error) {
+	b, err := s.q.CreateBoard(ctx, sqlc.CreateBoardParams{Name: name, WorkspaceID: workspaceID})
 	return toBoard(b), err
 }
 

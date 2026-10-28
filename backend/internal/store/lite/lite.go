@@ -61,8 +61,40 @@ func New(path string) (*Store, error) {
 	if _, err := db.ExecContext(ctx, migrationssqlite.CalendarFeedCache); err != nil {
 		return nil, fmt.Errorf("applying sqlite calendar feed cache schema: %w", err)
 	}
+	// SQLite has no ADD COLUMN IF NOT EXISTS, so upgrade columns are checked first.
+	columns := []struct{ table, column, definition string }{
+		{"boards", "workspace_id", "INTEGER REFERENCES workspaces(id)"},
+		{"notes", "workspace_id", "INTEGER REFERENCES workspaces(id)"},
+		{"reminders", "workspace_id", "INTEGER REFERENCES workspaces(id)"},
+		{"calendar_sources", "workspace_id", "INTEGER REFERENCES workspaces(id)"},
+		{"meeting_outcomes", "workspace_id", "INTEGER REFERENCES workspaces(id)"},
+		{"tasks", "workspace_id", "INTEGER REFERENCES workspaces(id)"},
+		{"tasks", "ref_num", "INTEGER"},
+	}
+	for _, c := range columns {
+		if err := addColumnIfMissing(ctx, db, c.table, c.column, c.definition); err != nil {
+			return nil, fmt.Errorf("adding %s.%s: %w", c.table, c.column, err)
+		}
+	}
+	if _, err := db.ExecContext(ctx, migrationssqlite.Workspaces); err != nil {
+		return nil, fmt.Errorf("applying sqlite workspaces schema: %w", err)
+	}
 
 	return &Store{q: sqlitedb.New(db), db: db}, nil
+}
+
+func addColumnIfMissing(ctx context.Context, db *sql.DB, table, column, definition string) error {
+	var exists int
+	err := db.QueryRowContext(ctx,
+		`SELECT count(*) FROM pragma_table_info(?) WHERE name = ?`, table, column).Scan(&exists)
+	if err != nil {
+		return err
+	}
+	if exists > 0 {
+		return nil
+	}
+	_, err = db.ExecContext(ctx, "ALTER TABLE "+table+" ADD COLUMN "+column+" "+definition)
+	return err
 }
 
 func (s *Store) Close() {

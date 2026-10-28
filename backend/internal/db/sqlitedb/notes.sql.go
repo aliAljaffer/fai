@@ -11,24 +11,33 @@ import (
 )
 
 const createNote = `-- name: CreateNote :one
-INSERT INTO notes (title, body_md, task_id) VALUES (?1, ?2, CAST(?3 AS INTEGER))
-RETURNING id, title, body_md, task_id, created_at, updated_at
+INSERT INTO notes (title, body_md, task_id, workspace_id)
+VALUES (?1, ?2, CAST(?3 AS INTEGER),
+  COALESCE(NULLIF(CAST(?4 AS INTEGER), 0), (SELECT id FROM workspaces ORDER BY id LIMIT 1)))
+RETURNING id, title, body_md, task_id, workspace_id, created_at, updated_at
 `
 
 type CreateNoteParams struct {
-	Title  string        `json:"title"`
-	BodyMd string        `json:"body_md"`
-	TaskID sql.NullInt64 `json:"task_id"`
+	Title       string        `json:"title"`
+	BodyMd      string        `json:"body_md"`
+	TaskID      sql.NullInt64 `json:"task_id"`
+	WorkspaceID int64         `json:"workspace_id"`
 }
 
 func (q *Queries) CreateNote(ctx context.Context, arg CreateNoteParams) (Note, error) {
-	row := q.db.QueryRowContext(ctx, createNote, arg.Title, arg.BodyMd, arg.TaskID)
+	row := q.db.QueryRowContext(ctx, createNote,
+		arg.Title,
+		arg.BodyMd,
+		arg.TaskID,
+		arg.WorkspaceID,
+	)
 	var i Note
 	err := row.Scan(
 		&i.ID,
 		&i.Title,
 		&i.BodyMd,
 		&i.TaskID,
+		&i.WorkspaceID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -45,7 +54,7 @@ func (q *Queries) DeleteNote(ctx context.Context, id int64) error {
 }
 
 const getNote = `-- name: GetNote :one
-SELECT id, title, body_md, task_id, created_at, updated_at FROM notes WHERE id = ?
+SELECT id, title, body_md, task_id, workspace_id, created_at, updated_at FROM notes WHERE id = ?
 `
 
 func (q *Queries) GetNote(ctx context.Context, id int64) (Note, error) {
@@ -56,6 +65,7 @@ func (q *Queries) GetNote(ctx context.Context, id int64) (Note, error) {
 		&i.Title,
 		&i.BodyMd,
 		&i.TaskID,
+		&i.WorkspaceID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -63,7 +73,7 @@ func (q *Queries) GetNote(ctx context.Context, id int64) (Note, error) {
 }
 
 const getNoteByTitle = `-- name: GetNoteByTitle :one
-SELECT id, title, body_md, task_id, created_at, updated_at FROM notes WHERE title = ?
+SELECT id, title, body_md, task_id, workspace_id, created_at, updated_at FROM notes WHERE title = ?
 `
 
 func (q *Queries) GetNoteByTitle(ctx context.Context, title string) (Note, error) {
@@ -74,6 +84,7 @@ func (q *Queries) GetNoteByTitle(ctx context.Context, title string) (Note, error
 		&i.Title,
 		&i.BodyMd,
 		&i.TaskID,
+		&i.WorkspaceID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -81,7 +92,7 @@ func (q *Queries) GetNoteByTitle(ctx context.Context, title string) (Note, error
 }
 
 const listBacklinks = `-- name: ListBacklinks :many
-SELECT id, title, body_md, task_id, created_at, updated_at
+SELECT id, title, body_md, task_id, workspace_id, created_at, updated_at
 FROM notes WHERE id != ?1 AND body_md LIKE '%[[' || ?2 || ']]%'
 `
 
@@ -104,6 +115,7 @@ func (q *Queries) ListBacklinks(ctx context.Context, arg ListBacklinksParams) ([
 			&i.Title,
 			&i.BodyMd,
 			&i.TaskID,
+			&i.WorkspaceID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -121,11 +133,13 @@ func (q *Queries) ListBacklinks(ctx context.Context, arg ListBacklinksParams) ([
 }
 
 const listNotes = `-- name: ListNotes :many
-SELECT id, title, body_md, task_id, created_at, updated_at FROM notes ORDER BY updated_at DESC
+SELECT id, title, body_md, task_id, workspace_id, created_at, updated_at FROM notes
+WHERE CAST(?1 AS INTEGER) IS NULL OR workspace_id = ?1
+ORDER BY updated_at DESC
 `
 
-func (q *Queries) ListNotes(ctx context.Context) ([]Note, error) {
-	rows, err := q.db.QueryContext(ctx, listNotes)
+func (q *Queries) ListNotes(ctx context.Context, workspaceID sql.NullInt64) ([]Note, error) {
+	rows, err := q.db.QueryContext(ctx, listNotes, workspaceID)
 	if err != nil {
 		return nil, err
 	}
@@ -138,6 +152,7 @@ func (q *Queries) ListNotes(ctx context.Context) ([]Note, error) {
 			&i.Title,
 			&i.BodyMd,
 			&i.TaskID,
+			&i.WorkspaceID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -157,7 +172,7 @@ func (q *Queries) ListNotes(ctx context.Context) ([]Note, error) {
 const updateNote = `-- name: UpdateNote :one
 UPDATE notes SET title = ?1, body_md = ?2, task_id = CAST(?3 AS INTEGER), updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 WHERE id = ?4
-RETURNING id, title, body_md, task_id, created_at, updated_at
+RETURNING id, title, body_md, task_id, workspace_id, created_at, updated_at
 `
 
 type UpdateNoteParams struct {
@@ -180,6 +195,7 @@ func (q *Queries) UpdateNote(ctx context.Context, arg UpdateNoteParams) (Note, e
 		&i.Title,
 		&i.BodyMd,
 		&i.TaskID,
+		&i.WorkspaceID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

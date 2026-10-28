@@ -11,7 +11,7 @@ import (
 )
 
 func (s *Server) listReminders(w http.ResponseWriter, r *http.Request) {
-	reminders, err := s.Store.ListReminders(r.Context())
+	reminders, err := s.Store.ListReminders(r.Context(), optionalInt64Param(r, "workspace_id"))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -20,9 +20,10 @@ func (s *Server) listReminders(w http.ResponseWriter, r *http.Request) {
 }
 
 type reminderBody struct {
-	Title    string `json:"title"`
-	RemindAt string `json:"remind_at"`
-	TaskID   *int64 `json:"task_id"`
+	Title       string `json:"title"`
+	RemindAt    string `json:"remind_at"`
+	TaskID      *int64 `json:"task_id"`
+	WorkspaceID int64  `json:"workspace_id"`
 }
 
 func (b reminderBody) remindAt() (time.Time, error) {
@@ -40,7 +41,7 @@ func (s *Server) createReminder(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid remind_at, expected RFC3339")
 		return
 	}
-	reminder, err := s.Store.CreateReminder(r.Context(), body.Title, remindAt, body.TaskID)
+	reminder, err := s.Store.CreateReminder(r.Context(), body.Title, remindAt, body.TaskID, body.WorkspaceID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -167,7 +168,7 @@ func (s *Server) aiReminder(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
-	reminder, err := s.Store.CreateReminder(r.Context(), title, remindAt, nil)
+	reminder, err := s.Store.CreateReminder(r.Context(), title, remindAt, nil, 0)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

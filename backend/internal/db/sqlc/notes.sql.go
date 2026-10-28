@@ -13,27 +13,35 @@ import (
 )
 
 const createNote = `-- name: CreateNote :one
-INSERT INTO notes (title, body_md, task_id) VALUES ($1, $2, $3)
-RETURNING id, title, body_md, task_id, created_at, updated_at
+INSERT INTO notes (title, body_md, task_id, workspace_id)
+VALUES ($1, $2, $3, COALESCE(NULLIF($4::bigint, 0), (SELECT id FROM workspaces ORDER BY id LIMIT 1)))
+RETURNING id, title, body_md, task_id, created_at, updated_at, workspace_id
 `
 
 type CreateNoteParams struct {
-	Title  string      `json:"title"`
-	BodyMd string      `json:"body_md"`
-	TaskID pgtype.Int8 `json:"task_id"`
+	Title       string      `json:"title"`
+	BodyMd      string      `json:"body_md"`
+	TaskID      pgtype.Int8 `json:"task_id"`
+	WorkspaceID int64       `json:"workspace_id"`
 }
 
 type CreateNoteRow struct {
-	ID        int64       `json:"id"`
-	Title     string      `json:"title"`
-	BodyMd    string      `json:"body_md"`
-	TaskID    pgtype.Int8 `json:"task_id"`
-	CreatedAt time.Time   `json:"created_at"`
-	UpdatedAt time.Time   `json:"updated_at"`
+	ID          int64       `json:"id"`
+	Title       string      `json:"title"`
+	BodyMd      string      `json:"body_md"`
+	TaskID      pgtype.Int8 `json:"task_id"`
+	CreatedAt   time.Time   `json:"created_at"`
+	UpdatedAt   time.Time   `json:"updated_at"`
+	WorkspaceID int64       `json:"workspace_id"`
 }
 
 func (q *Queries) CreateNote(ctx context.Context, arg CreateNoteParams) (CreateNoteRow, error) {
-	row := q.db.QueryRow(ctx, createNote, arg.Title, arg.BodyMd, arg.TaskID)
+	row := q.db.QueryRow(ctx, createNote,
+		arg.Title,
+		arg.BodyMd,
+		arg.TaskID,
+		arg.WorkspaceID,
+	)
 	var i CreateNoteRow
 	err := row.Scan(
 		&i.ID,
@@ -42,6 +50,7 @@ func (q *Queries) CreateNote(ctx context.Context, arg CreateNoteParams) (CreateN
 		&i.TaskID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.WorkspaceID,
 	)
 	return i, err
 }
@@ -56,16 +65,17 @@ func (q *Queries) DeleteNote(ctx context.Context, id int64) error {
 }
 
 const getNote = `-- name: GetNote :one
-SELECT id, title, body_md, task_id, created_at, updated_at FROM notes WHERE id = $1
+SELECT id, title, body_md, task_id, created_at, updated_at, workspace_id FROM notes WHERE id = $1
 `
 
 type GetNoteRow struct {
-	ID        int64       `json:"id"`
-	Title     string      `json:"title"`
-	BodyMd    string      `json:"body_md"`
-	TaskID    pgtype.Int8 `json:"task_id"`
-	CreatedAt time.Time   `json:"created_at"`
-	UpdatedAt time.Time   `json:"updated_at"`
+	ID          int64       `json:"id"`
+	Title       string      `json:"title"`
+	BodyMd      string      `json:"body_md"`
+	TaskID      pgtype.Int8 `json:"task_id"`
+	CreatedAt   time.Time   `json:"created_at"`
+	UpdatedAt   time.Time   `json:"updated_at"`
+	WorkspaceID int64       `json:"workspace_id"`
 }
 
 func (q *Queries) GetNote(ctx context.Context, id int64) (GetNoteRow, error) {
@@ -78,21 +88,23 @@ func (q *Queries) GetNote(ctx context.Context, id int64) (GetNoteRow, error) {
 		&i.TaskID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.WorkspaceID,
 	)
 	return i, err
 }
 
 const getNoteByTitle = `-- name: GetNoteByTitle :one
-SELECT id, title, body_md, task_id, created_at, updated_at FROM notes WHERE title = $1
+SELECT id, title, body_md, task_id, created_at, updated_at, workspace_id FROM notes WHERE title = $1
 `
 
 type GetNoteByTitleRow struct {
-	ID        int64       `json:"id"`
-	Title     string      `json:"title"`
-	BodyMd    string      `json:"body_md"`
-	TaskID    pgtype.Int8 `json:"task_id"`
-	CreatedAt time.Time   `json:"created_at"`
-	UpdatedAt time.Time   `json:"updated_at"`
+	ID          int64       `json:"id"`
+	Title       string      `json:"title"`
+	BodyMd      string      `json:"body_md"`
+	TaskID      pgtype.Int8 `json:"task_id"`
+	CreatedAt   time.Time   `json:"created_at"`
+	UpdatedAt   time.Time   `json:"updated_at"`
+	WorkspaceID int64       `json:"workspace_id"`
 }
 
 func (q *Queries) GetNoteByTitle(ctx context.Context, title string) (GetNoteByTitleRow, error) {
@@ -105,12 +117,13 @@ func (q *Queries) GetNoteByTitle(ctx context.Context, title string) (GetNoteByTi
 		&i.TaskID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.WorkspaceID,
 	)
 	return i, err
 }
 
 const listBacklinks = `-- name: ListBacklinks :many
-SELECT id, title, body_md, task_id, created_at, updated_at
+SELECT id, title, body_md, task_id, created_at, updated_at, workspace_id
 FROM notes WHERE id != $1 AND body_md ILIKE '%[[' || $2::text || ']]%'
 `
 
@@ -120,12 +133,13 @@ type ListBacklinksParams struct {
 }
 
 type ListBacklinksRow struct {
-	ID        int64       `json:"id"`
-	Title     string      `json:"title"`
-	BodyMd    string      `json:"body_md"`
-	TaskID    pgtype.Int8 `json:"task_id"`
-	CreatedAt time.Time   `json:"created_at"`
-	UpdatedAt time.Time   `json:"updated_at"`
+	ID          int64       `json:"id"`
+	Title       string      `json:"title"`
+	BodyMd      string      `json:"body_md"`
+	TaskID      pgtype.Int8 `json:"task_id"`
+	CreatedAt   time.Time   `json:"created_at"`
+	UpdatedAt   time.Time   `json:"updated_at"`
+	WorkspaceID int64       `json:"workspace_id"`
 }
 
 func (q *Queries) ListBacklinks(ctx context.Context, arg ListBacklinksParams) ([]ListBacklinksRow, error) {
@@ -144,6 +158,7 @@ func (q *Queries) ListBacklinks(ctx context.Context, arg ListBacklinksParams) ([
 			&i.TaskID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.WorkspaceID,
 		); err != nil {
 			return nil, err
 		}
@@ -156,20 +171,23 @@ func (q *Queries) ListBacklinks(ctx context.Context, arg ListBacklinksParams) ([
 }
 
 const listNotes = `-- name: ListNotes :many
-SELECT id, title, body_md, task_id, created_at, updated_at FROM notes ORDER BY updated_at DESC
+SELECT id, title, body_md, task_id, created_at, updated_at, workspace_id FROM notes
+WHERE $1::bigint IS NULL OR workspace_id = $1
+ORDER BY updated_at DESC
 `
 
 type ListNotesRow struct {
-	ID        int64       `json:"id"`
-	Title     string      `json:"title"`
-	BodyMd    string      `json:"body_md"`
-	TaskID    pgtype.Int8 `json:"task_id"`
-	CreatedAt time.Time   `json:"created_at"`
-	UpdatedAt time.Time   `json:"updated_at"`
+	ID          int64       `json:"id"`
+	Title       string      `json:"title"`
+	BodyMd      string      `json:"body_md"`
+	TaskID      pgtype.Int8 `json:"task_id"`
+	CreatedAt   time.Time   `json:"created_at"`
+	UpdatedAt   time.Time   `json:"updated_at"`
+	WorkspaceID int64       `json:"workspace_id"`
 }
 
-func (q *Queries) ListNotes(ctx context.Context) ([]ListNotesRow, error) {
-	rows, err := q.db.Query(ctx, listNotes)
+func (q *Queries) ListNotes(ctx context.Context, workspaceID pgtype.Int8) ([]ListNotesRow, error) {
+	rows, err := q.db.Query(ctx, listNotes, workspaceID)
 	if err != nil {
 		return nil, err
 	}
@@ -184,6 +202,7 @@ func (q *Queries) ListNotes(ctx context.Context) ([]ListNotesRow, error) {
 			&i.TaskID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.WorkspaceID,
 		); err != nil {
 			return nil, err
 		}
@@ -198,7 +217,7 @@ func (q *Queries) ListNotes(ctx context.Context) ([]ListNotesRow, error) {
 const updateNote = `-- name: UpdateNote :one
 UPDATE notes SET title = $2, body_md = $3, task_id = $4, updated_at = now()
 WHERE id = $1
-RETURNING id, title, body_md, task_id, created_at, updated_at
+RETURNING id, title, body_md, task_id, created_at, updated_at, workspace_id
 `
 
 type UpdateNoteParams struct {
@@ -209,12 +228,13 @@ type UpdateNoteParams struct {
 }
 
 type UpdateNoteRow struct {
-	ID        int64       `json:"id"`
-	Title     string      `json:"title"`
-	BodyMd    string      `json:"body_md"`
-	TaskID    pgtype.Int8 `json:"task_id"`
-	CreatedAt time.Time   `json:"created_at"`
-	UpdatedAt time.Time   `json:"updated_at"`
+	ID          int64       `json:"id"`
+	Title       string      `json:"title"`
+	BodyMd      string      `json:"body_md"`
+	TaskID      pgtype.Int8 `json:"task_id"`
+	CreatedAt   time.Time   `json:"created_at"`
+	UpdatedAt   time.Time   `json:"updated_at"`
+	WorkspaceID int64       `json:"workspace_id"`
 }
 
 func (q *Queries) UpdateNote(ctx context.Context, arg UpdateNoteParams) (UpdateNoteRow, error) {
@@ -232,6 +252,7 @@ func (q *Queries) UpdateNote(ctx context.Context, arg UpdateNoteParams) (UpdateN
 		&i.TaskID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.WorkspaceID,
 	)
 	return i, err
 }

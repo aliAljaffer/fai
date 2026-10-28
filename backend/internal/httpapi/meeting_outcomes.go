@@ -28,7 +28,7 @@ func (s *Server) listMeetingOutcomes(w http.ResponseWriter, r *http.Request) {
 			occurredOn = &v
 		}
 	}
-	outcomes, err := s.Store.ListMeetingOutcomes(r.Context(), occurredOn)
+	outcomes, err := s.Store.ListMeetingOutcomes(r.Context(), occurredOn, optionalInt64Param(r, "workspace_id"))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -37,10 +37,11 @@ func (s *Server) listMeetingOutcomes(w http.ResponseWriter, r *http.Request) {
 }
 
 type meetingOutcomeBody struct {
-	OccurredOn string  `json:"occurred_on"`
-	Title      string  `json:"title"`
-	NotesMd    string  `json:"notes_md"`
-	EndsAt     *string `json:"ends_at"`
+	OccurredOn  string  `json:"occurred_on"`
+	Title       string  `json:"title"`
+	NotesMd     string  `json:"notes_md"`
+	EndsAt      *string `json:"ends_at"`
+	WorkspaceID int64   `json:"workspace_id"`
 }
 
 func (b meetingOutcomeBody) endsAt() *time.Time {
@@ -64,7 +65,7 @@ func (s *Server) createMeetingOutcome(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid occurred_on, expected YYYY-MM-DD")
 		return
 	}
-	outcome, err := s.Store.CreateMeetingOutcome(r.Context(), body.OccurredOn, body.Title, body.NotesMd, body.endsAt())
+	outcome, err := s.Store.CreateMeetingOutcome(r.Context(), body.OccurredOn, body.Title, body.NotesMd, body.endsAt(), body.WorkspaceID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

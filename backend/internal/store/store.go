@@ -12,6 +12,9 @@ import (
 // treats any error as 404 uniformly.
 var ErrNotFound = errors.New("not found")
 
+// ErrDuplicateTag marks a workspace create or rename whose tag is already taken.
+var ErrDuplicateTag = errors.New("duplicate workspace tag")
+
 type CreateTaskParams struct {
 	BoardID          int64
 	ColumnID         int64
@@ -37,9 +40,15 @@ type ListTasksParams struct {
 // interface, never on a concrete driver, so the two deployment targets share one
 // set of handlers.
 type Store interface {
+	// Workspaces
+	ListWorkspaces(ctx context.Context) ([]Workspace, error)
+	GetWorkspace(ctx context.Context, id int64) (Workspace, error)
+	CreateWorkspace(ctx context.Context, name, tag string) (Workspace, error)
+	UpdateWorkspace(ctx context.Context, id int64, name, tag *string) (Workspace, error)
+
 	// Boards
-	ListBoards(ctx context.Context) ([]Board, error)
-	CreateBoard(ctx context.Context, name string) (Board, error)
+	ListBoards(ctx context.Context, workspaceID *int64) ([]Board, error)
+	CreateBoard(ctx context.Context, name string, workspaceID int64) (Board, error)
 	ListColumnsByBoard(ctx context.Context, boardID int64) ([]BoardColumn, error)
 	CreateColumn(ctx context.Context, boardID int64, name string, position int32, isDone bool) (BoardColumn, error)
 
@@ -72,17 +81,17 @@ type Store interface {
 	DeleteAttachment(ctx context.Context, id int64) error
 
 	// Notes
-	ListNotes(ctx context.Context) ([]Note, error)
+	ListNotes(ctx context.Context, workspaceID *int64) ([]Note, error)
 	GetNote(ctx context.Context, id int64) (Note, error)
 	GetNoteByTitle(ctx context.Context, title string) (Note, error)
-	CreateNote(ctx context.Context, title, bodyMd string, taskID *int64) (Note, error)
+	CreateNote(ctx context.Context, title, bodyMd string, taskID *int64, workspaceID int64) (Note, error)
 	UpdateNote(ctx context.Context, id int64, title, bodyMd string, taskID *int64) (Note, error)
 	DeleteNote(ctx context.Context, id int64) error
 	ListBacklinks(ctx context.Context, noteID int64, title string) ([]Note, error)
 
 	// Search
-	SearchTasks(ctx context.Context, query string) ([]Task, error)
-	SearchNotes(ctx context.Context, query string) ([]Note, error)
+	SearchTasks(ctx context.Context, query string, workspaceID *int64) ([]Task, error)
+	SearchNotes(ctx context.Context, query string, workspaceID *int64) ([]Note, error)
 
 	// Stats
 	CompletionsByDay(ctx context.Context, from, to string) ([]DayCount, error)
@@ -98,8 +107,8 @@ type Store interface {
 	ListEntriesForTask(ctx context.Context, taskID int64) ([]TaskTimeEntry, error)
 
 	// Reminders
-	ListReminders(ctx context.Context) ([]Reminder, error)
-	CreateReminder(ctx context.Context, title string, remindAt time.Time, taskID *int64) (Reminder, error)
+	ListReminders(ctx context.Context, workspaceID *int64) ([]Reminder, error)
+	CreateReminder(ctx context.Context, title string, remindAt time.Time, taskID *int64, workspaceID int64) (Reminder, error)
 	UpdateReminder(ctx context.Context, id int64, title string, remindAt time.Time, taskID *int64) (Reminder, error)
 	DeleteReminder(ctx context.Context, id int64) error
 	ListDueUnsentReminders(ctx context.Context) ([]Reminder, error)
@@ -116,22 +125,26 @@ type Store interface {
 
 	// Calendar sources (external ICS subscriptions shown in the web calendar;
 	// never included in the Fai ICS export)
-	ListCalendarSources(ctx context.Context) ([]CalendarSource, error)
-	CreateCalendarSource(ctx context.Context, name, url, color string) (CalendarSource, error)
+	ListCalendarSources(ctx context.Context, workspaceID *int64) ([]CalendarSource, error)
+	CreateCalendarSource(ctx context.Context, name, url, color string, workspaceID int64) (CalendarSource, error)
 	UpdateCalendarSourceColor(ctx context.Context, id int64, color string) (CalendarSource, error)
 	DeleteCalendarSource(ctx context.Context, id int64) error
 	GetCalendarFeed(ctx context.Context, sourceID int64) ([]byte, time.Time, bool, error)
 	SetCalendarFeed(ctx context.Context, sourceID int64, data []byte, fetchedAt time.Time) error
 
 	// Meeting outcomes
-	ListMeetingOutcomes(ctx context.Context, occurredOn *string) ([]MeetingOutcome, error)
+	ListMeetingOutcomes(ctx context.Context, occurredOn *string, workspaceID *int64) ([]MeetingOutcome, error)
 	ListPendingMeetingOutcomes(ctx context.Context) ([]MeetingOutcome, error)
 	GetMeetingOutcome(ctx context.Context, id int64) (MeetingOutcome, error)
-	CreateMeetingOutcome(ctx context.Context, occurredOn, title, notesMd string, endsAt *time.Time) (MeetingOutcome, error)
+	CreateMeetingOutcome(ctx context.Context, occurredOn, title, notesMd string, endsAt *time.Time, workspaceID int64) (MeetingOutcome, error)
 	UpdateMeetingOutcome(ctx context.Context, id int64, title, notesMd string, endsAt *time.Time) (MeetingOutcome, error)
 	DeleteMeetingOutcome(ctx context.Context, id int64) error
 	ListDueUnpromptedMeetingOutcomes(ctx context.Context) ([]MeetingOutcome, error)
 	MarkMeetingOutcomePromptSent(ctx context.Context, id int64) error
+
+	// Task references
+	ResolveRefs(ctx context.Context, query string, workspaceID *int64) ([]TaskRef, error)
+	ListTaskReferences(ctx context.Context, taskID int64) ([]Backlink, error)
 
 	Close()
 }

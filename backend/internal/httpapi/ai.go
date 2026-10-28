@@ -144,7 +144,7 @@ func (s *Server) applyChatAction(ctx context.Context, action chatAction) (chatCr
 		if err != nil {
 			return chatCreated{}, fmt.Errorf("invalid remind_at")
 		}
-		reminder, err := s.Store.CreateReminder(ctx, title, remindAt, nil)
+		reminder, err := s.Store.CreateReminder(ctx, title, remindAt, nil, 0)
 		if err != nil {
 			return chatCreated{}, err
 		}
@@ -155,7 +155,7 @@ func (s *Server) applyChatAction(ctx context.Context, action chatAction) (chatCr
 }
 
 func (s *Server) defaultBoardColumn(ctx context.Context) (int64, int64, error) {
-	boards, err := s.Store.ListBoards(ctx)
+	boards, err := s.Store.ListBoards(ctx, nil)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -255,7 +255,7 @@ func (s *Server) aiChat(w http.ResponseWriter, r *http.Request) {
 // bodies and note bodies stay out of the prompt.
 func (s *Server) faiContext(r *http.Request) string {
 	ctx := r.Context()
-	boards, err := s.Store.ListBoards(ctx)
+	boards, err := s.Store.ListBoards(ctx, nil)
 	if err != nil {
 		return ""
 	}
@@ -301,7 +301,7 @@ func (s *Server) faiContext(r *http.Request) string {
 		out.WriteString("No open tasks.\n")
 	}
 
-	notes, err := s.Store.ListNotes(ctx)
+	notes, err := s.Store.ListNotes(ctx, nil)
 	if err == nil {
 		out.WriteString("\nNotes:\n")
 		if len(notes) == 0 {

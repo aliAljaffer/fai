@@ -16,3 +16,6 @@ var CalendarSources string
 
 //go:embed 004_calendar_feed_cache.sql
 var CalendarFeedCache string
+
+//go:embed 005_workspaces.sql
+var Workspaces string

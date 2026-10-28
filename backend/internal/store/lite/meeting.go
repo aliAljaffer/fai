@@ -12,12 +12,14 @@ func toOutcome(m sqlitedb.MeetingOutcome) store.MeetingOutcome {
 	createdAt, _ := parseTime(m.CreatedAt)
 	return store.MeetingOutcome{
 		ID: m.ID, OccurredOn: m.OccurredOn, Title: m.Title, NotesMd: m.NotesMd,
-		EndsAt: nullTimeToPtr(m.EndsAt), OutcomePromptSent: m.OutcomePromptSent, CreatedAt: createdAt,
+		EndsAt: nullTimeToPtr(m.EndsAt), WorkspaceID: m.WorkspaceID, OutcomePromptSent: m.OutcomePromptSent, CreatedAt: createdAt,
 	}
 }
 
-func (s *Store) ListMeetingOutcomes(ctx context.Context, occurredOn *string) ([]store.MeetingOutcome, error) {
-	rows, err := s.q.ListMeetingOutcomes(ctx, ptrToNullString(occurredOn))
+func (s *Store) ListMeetingOutcomes(ctx context.Context, occurredOn *string, workspaceID *int64) ([]store.MeetingOutcome, error) {
+	rows, err := s.q.ListMeetingOutcomes(ctx, sqlitedb.ListMeetingOutcomesParams{
+		OccurredOn: ptrToNullString(occurredOn), WorkspaceID: ptrToNullInt64(workspaceID),
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -45,9 +47,9 @@ func (s *Store) GetMeetingOutcome(ctx context.Context, id int64) (store.MeetingO
 	return toOutcome(m), err
 }
 
-func (s *Store) CreateMeetingOutcome(ctx context.Context, occurredOn, title, notesMd string, endsAt *time.Time) (store.MeetingOutcome, error) {
+func (s *Store) CreateMeetingOutcome(ctx context.Context, occurredOn, title, notesMd string, endsAt *time.Time, workspaceID int64) (store.MeetingOutcome, error) {
 	m, err := s.q.CreateMeetingOutcome(ctx, sqlitedb.CreateMeetingOutcomeParams{
-		OccurredOn: occurredOn, Title: title, NotesMd: notesMd, EndsAt: ptrTimeToNull(endsAt),
+		OccurredOn: occurredOn, Title: title, NotesMd: notesMd, EndsAt: ptrTimeToNull(endsAt), WorkspaceID: workspaceID,
 	})
 	return toOutcome(m), err
 }

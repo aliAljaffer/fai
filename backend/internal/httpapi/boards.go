@@ -8,7 +8,7 @@ import (
 )
 
 func (s *Server) listBoards(w http.ResponseWriter, r *http.Request) {
-	boards, err := s.Store.ListBoards(r.Context())
+	boards, err := s.Store.ListBoards(r.Context(), optionalInt64Param(r, "workspace_id"))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -18,13 +18,14 @@ func (s *Server) listBoards(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) createBoard(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Name string `json:"name"`
+		Name        string `json:"name"`
+		WorkspaceID int64  `json:"workspace_id"`
 	}
 	if err := decodeJSON(r, &body); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid body")
 		return
 	}
-	board, err := s.Store.CreateBoard(r.Context(), body.Name)
+	board, err := s.Store.CreateBoard(r.Context(), body.Name, body.WorkspaceID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

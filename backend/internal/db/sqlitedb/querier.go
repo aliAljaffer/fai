@@ -14,7 +14,7 @@ type Querier interface {
 	ArchiveTask(ctx context.Context, id int64) error
 	CompletionsByDay(ctx context.Context, arg CompletionsByDayParams) ([]CompletionsByDayRow, error)
 	CreateAttachment(ctx context.Context, arg CreateAttachmentParams) (Attachment, error)
-	CreateBoard(ctx context.Context, name string) (Board, error)
+	CreateBoard(ctx context.Context, arg CreateBoardParams) (Board, error)
 	CreateColumn(ctx context.Context, arg CreateColumnParams) (BoardColumn, error)
 	CreateJiraLink(ctx context.Context, arg CreateJiraLinkParams) (JiraLink, error)
 	CreateJiraLinkExported(ctx context.Context, arg CreateJiraLinkExportedParams) (JiraLink, error)
@@ -41,15 +41,15 @@ type Querier interface {
 	ListAttachmentsByNote(ctx context.Context, dollar_1 int64) ([]Attachment, error)
 	ListAttachmentsByTask(ctx context.Context, dollar_1 int64) ([]Attachment, error)
 	ListBacklinks(ctx context.Context, arg ListBacklinksParams) ([]Note, error)
-	ListBoards(ctx context.Context) ([]Board, error)
+	ListBoards(ctx context.Context, workspaceID sql.NullInt64) ([]Board, error)
 	ListColumnsByBoard(ctx context.Context, boardID int64) ([]BoardColumn, error)
 	ListDueUnpromptedMeetingOutcomes(ctx context.Context) ([]MeetingOutcome, error)
 	ListDueUnsentReminders(ctx context.Context) ([]Reminder, error)
 	ListEntriesForTask(ctx context.Context, taskID int64) ([]TaskTimeEntry, error)
-	ListMeetingOutcomes(ctx context.Context, occurredOn sql.NullString) ([]MeetingOutcome, error)
-	ListNotes(ctx context.Context) ([]Note, error)
+	ListMeetingOutcomes(ctx context.Context, arg ListMeetingOutcomesParams) ([]MeetingOutcome, error)
+	ListNotes(ctx context.Context, workspaceID sql.NullInt64) ([]Note, error)
 	ListPendingMeetingOutcomes(ctx context.Context) ([]MeetingOutcome, error)
-	ListReminders(ctx context.Context) ([]Reminder, error)
+	ListReminders(ctx context.Context, workspaceID sql.NullInt64) ([]Reminder, error)
 	ListSubtasks(ctx context.Context, parentTaskID sql.NullInt64) ([]Task, error)
 	ListTags(ctx context.Context) ([]Tag, error)
 	ListTasks(ctx context.Context, arg ListTasksParams) ([]Task, error)
@@ -58,6 +58,7 @@ type Querier interface {
 	MarkReminderSent(ctx context.Context, id int64) error
 	MoveTask(ctx context.Context, arg MoveTaskParams) (Task, error)
 	RemoveTaskTag(ctx context.Context, arg RemoveTaskTagParams) error
+	SetTaskParent(ctx context.Context, arg SetTaskParentParams) error
 	SetTaskPosition(ctx context.Context, arg SetTaskPositionParams) error
 	StartEntry(ctx context.Context, taskID int64) (TaskTimeEntry, error)
 	StopEntryForTask(ctx context.Context, taskID int64) (TaskTimeEntry, error)

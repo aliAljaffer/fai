@@ -13,24 +13,31 @@ import (
 )
 
 const searchNotes = `-- name: SearchNotes :many
-SELECT id, title, body_md, task_id, created_at, updated_at
+SELECT id, title, body_md, task_id, created_at, updated_at, workspace_id
 FROM notes
 WHERE search_vector @@ websearch_to_tsquery('english', $1)
+  AND ($2::bigint IS NULL OR workspace_id = $2)
 ORDER BY ts_rank(search_vector, websearch_to_tsquery('english', $1)) DESC
 LIMIT 20
 `
 
-type SearchNotesRow struct {
-	ID        int64       `json:"id"`
-	Title     string      `json:"title"`
-	BodyMd    string      `json:"body_md"`
-	TaskID    pgtype.Int8 `json:"task_id"`
-	CreatedAt time.Time   `json:"created_at"`
-	UpdatedAt time.Time   `json:"updated_at"`
+type SearchNotesParams struct {
+	WebsearchToTsquery string      `json:"websearch_to_tsquery"`
+	WorkspaceID        pgtype.Int8 `json:"workspace_id"`
 }
 
-func (q *Queries) SearchNotes(ctx context.Context, websearchToTsquery string) ([]SearchNotesRow, error) {
-	rows, err := q.db.Query(ctx, searchNotes, websearchToTsquery)
+type SearchNotesRow struct {
+	ID          int64       `json:"id"`
+	Title       string      `json:"title"`
+	BodyMd      string      `json:"body_md"`
+	TaskID      pgtype.Int8 `json:"task_id"`
+	CreatedAt   time.Time   `json:"created_at"`
+	UpdatedAt   time.Time   `json:"updated_at"`
+	WorkspaceID int64       `json:"workspace_id"`
+}
+
+func (q *Queries) SearchNotes(ctx context.Context, arg SearchNotesParams) ([]SearchNotesRow, error) {
+	rows, err := q.db.Query(ctx, searchNotes, arg.WebsearchToTsquery, arg.WorkspaceID)
 	if err != nil {
 		return nil, err
 	}
@@ -45,6 +52,7 @@ func (q *Queries) SearchNotes(ctx context.Context, websearchToTsquery string) ([
 			&i.TaskID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.WorkspaceID,
 		); err != nil {
 			return nil, err
 		}
@@ -57,12 +65,18 @@ func (q *Queries) SearchNotes(ctx context.Context, websearchToTsquery string) ([
 }
 
 const searchTasks = `-- name: SearchTasks :many
-SELECT id, board_id, column_id, title, description_md, priority, due_date, position, parent_task_id, meeting_outcome_id, completed_at, archived, created_at, updated_at
+SELECT id, board_id, column_id, title, description_md, priority, due_date, position, parent_task_id, meeting_outcome_id, completed_at, archived, created_at, updated_at, workspace_id, ref_num
 FROM tasks
 WHERE archived = false AND search_vector @@ websearch_to_tsquery('english', $1)
+  AND ($2::bigint IS NULL OR workspace_id = $2)
 ORDER BY ts_rank(search_vector, websearch_to_tsquery('english', $1)) DESC
 LIMIT 20
 `
+
+type SearchTasksParams struct {
+	WebsearchToTsquery string      `json:"websearch_to_tsquery"`
+	WorkspaceID        pgtype.Int8 `json:"workspace_id"`
+}
 
 type SearchTasksRow struct {
 	ID               int64              `json:"id"`
@@ -79,10 +93,12 @@ type SearchTasksRow struct {
 	Archived         bool               `json:"archived"`
 	CreatedAt        time.Time          `json:"created_at"`
 	UpdatedAt        time.Time          `json:"updated_at"`
+	WorkspaceID      int64              `json:"workspace_id"`
+	RefNum           int64              `json:"ref_num"`
 }
 
-func (q *Queries) SearchTasks(ctx context.Context, websearchToTsquery string) ([]SearchTasksRow, error) {
-	rows, err := q.db.Query(ctx, searchTasks, websearchToTsquery)
+func (q *Queries) SearchTasks(ctx context.Context, arg SearchTasksParams) ([]SearchTasksRow, error) {
+	rows, err := q.db.Query(ctx, searchTasks, arg.WebsearchToTsquery, arg.WorkspaceID)
 	if err != nil {
 		return nil, err
 	}
@@ -105,6 +121,8 @@ func (q *Queries) SearchTasks(ctx context.Context, websearchToTsquery string) ([
 			&i.Archived,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.WorkspaceID,
+			&i.RefNum,
 		); err != nil {
 			return nil, err
 		}

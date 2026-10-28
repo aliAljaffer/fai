@@ -10,11 +10,11 @@ import (
 func toNote(n sqlitedb.Note) store.Note {
 	createdAt, _ := parseTime(n.CreatedAt)
 	updatedAt, _ := parseTime(n.UpdatedAt)
-	return store.Note{ID: n.ID, Title: n.Title, BodyMd: n.BodyMd, TaskID: nullInt64ToPtr(n.TaskID), CreatedAt: createdAt, UpdatedAt: updatedAt}
+	return store.Note{ID: n.ID, Title: n.Title, BodyMd: n.BodyMd, TaskID: nullInt64ToPtr(n.TaskID), WorkspaceID: n.WorkspaceID, CreatedAt: createdAt, UpdatedAt: updatedAt}
 }
 
-func (s *Store) ListNotes(ctx context.Context) ([]store.Note, error) {
-	rows, err := s.q.ListNotes(ctx)
+func (s *Store) ListNotes(ctx context.Context, workspaceID *int64) ([]store.Note, error) {
+	rows, err := s.q.ListNotes(ctx, ptrToNullInt64(workspaceID))
 	if err != nil {
 		return nil, err
 	}
@@ -35,8 +35,8 @@ func (s *Store) GetNoteByTitle(ctx context.Context, title string) (store.Note, e
 	return toNote(n), err
 }
 
-func (s *Store) CreateNote(ctx context.Context, title, bodyMd string, taskID *int64) (store.Note, error) {
-	n, err := s.q.CreateNote(ctx, sqlitedb.CreateNoteParams{Title: title, BodyMd: bodyMd, TaskID: ptrToNullInt64(taskID)})
+func (s *Store) CreateNote(ctx context.Context, title, bodyMd string, taskID *int64, workspaceID int64) (store.Note, error) {
+	n, err := s.q.CreateNote(ctx, sqlitedb.CreateNoteParams{Title: title, BodyMd: bodyMd, TaskID: ptrToNullInt64(taskID), WorkspaceID: workspaceID})
 	return toNote(n), err
 }
 

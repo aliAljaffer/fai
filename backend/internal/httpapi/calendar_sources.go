@@ -47,7 +47,7 @@ type importedCalendar struct {
 }
 
 func (s *Server) listCalendarSources(w http.ResponseWriter, r *http.Request) {
-	sources, err := s.Store.ListCalendarSources(r.Context())
+	sources, err := s.Store.ListCalendarSources(r.Context(), optionalInt64Param(r, "workspace_id"))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -57,9 +57,10 @@ func (s *Server) listCalendarSources(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) createCalendarSource(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Name  string `json:"name"`
-		URL   string `json:"url"`
-		Color string `json:"color"`
+		Name        string `json:"name"`
+		URL         string `json:"url"`
+		Color       string `json:"color"`
+		WorkspaceID int64  `json:"workspace_id"`
 	}
 	if err := decodeJSON(r, &body); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid body")
@@ -85,7 +86,7 @@ func (s *Server) createCalendarSource(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	source, err := s.Store.CreateCalendarSource(r.Context(), name, feedURL, color)
+	source, err := s.Store.CreateCalendarSource(r.Context(), name, feedURL, color, body.WorkspaceID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -158,7 +159,7 @@ func (s *Server) listImportedCalendars(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sources, err := s.Store.ListCalendarSources(r.Context())
+	sources, err := s.Store.ListCalendarSources(r.Context(), optionalInt64Param(r, "workspace_id"))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -276,7 +277,7 @@ func (s *Server) RunCalendarSync(ctx context.Context) {
 }
 
 func (s *Server) syncCalendarFeeds(ctx context.Context) {
-	sources, err := s.Store.ListCalendarSources(ctx)
+	sources, err := s.Store.ListCalendarSources(ctx, nil)
 	if err != nil {
 		log.Printf("listing calendar feeds for sync: %v", err)
 		return

@@ -9,11 +9,11 @@ import (
 )
 
 func toReminder(r sqlc.Reminder) store.Reminder {
-	return store.Reminder{ID: r.ID, Title: r.Title, RemindAt: r.RemindAt, TaskID: int8ToPtr(r.TaskID), Sent: r.Sent, CreatedAt: r.CreatedAt}
+	return store.Reminder{ID: r.ID, Title: r.Title, RemindAt: r.RemindAt, TaskID: int8ToPtr(r.TaskID), WorkspaceID: r.WorkspaceID, Sent: r.Sent, CreatedAt: r.CreatedAt}
 }
 
-func (s *Store) ListReminders(ctx context.Context) ([]store.Reminder, error) {
-	rows, err := s.q.ListReminders(ctx)
+func (s *Store) ListReminders(ctx context.Context, workspaceID *int64) ([]store.Reminder, error) {
+	rows, err := s.q.ListReminders(ctx, ptrToInt8(workspaceID))
 	if err != nil {
 		return nil, err
 	}
@@ -24,8 +24,8 @@ func (s *Store) ListReminders(ctx context.Context) ([]store.Reminder, error) {
 	return out, nil
 }
 
-func (s *Store) CreateReminder(ctx context.Context, title string, remindAt time.Time, taskID *int64) (store.Reminder, error) {
-	r, err := s.q.CreateReminder(ctx, sqlc.CreateReminderParams{Title: title, RemindAt: remindAt, TaskID: ptrToInt8(taskID)})
+func (s *Store) CreateReminder(ctx context.Context, title string, remindAt time.Time, taskID *int64, workspaceID int64) (store.Reminder, error) {
+	r, err := s.q.CreateReminder(ctx, sqlc.CreateReminderParams{Title: title, RemindAt: remindAt, TaskID: ptrToInt8(taskID), WorkspaceID: workspaceID})
 	return toReminder(r), err
 }
 

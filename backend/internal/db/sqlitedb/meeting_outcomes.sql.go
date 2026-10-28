@@ -11,16 +11,18 @@ import (
 )
 
 const createMeetingOutcome = `-- name: CreateMeetingOutcome :one
-INSERT INTO meeting_outcomes (occurred_on, title, notes_md, ends_at)
-VALUES (?1, ?2, ?3, CAST(?4 AS TEXT))
-RETURNING id, occurred_on, title, notes_md, ends_at, outcome_prompt_sent, created_at
+INSERT INTO meeting_outcomes (occurred_on, title, notes_md, ends_at, workspace_id)
+VALUES (?1, ?2, ?3, CAST(?4 AS TEXT),
+  COALESCE(NULLIF(CAST(?5 AS INTEGER), 0), (SELECT id FROM workspaces ORDER BY id LIMIT 1)))
+RETURNING id, occurred_on, title, notes_md, ends_at, workspace_id, outcome_prompt_sent, created_at
 `
 
 type CreateMeetingOutcomeParams struct {
-	OccurredOn string         `json:"occurred_on"`
-	Title      string         `json:"title"`
-	NotesMd    string         `json:"notes_md"`
-	EndsAt     sql.NullString `json:"ends_at"`
+	OccurredOn  string         `json:"occurred_on"`
+	Title       string         `json:"title"`
+	NotesMd     string         `json:"notes_md"`
+	EndsAt      sql.NullString `json:"ends_at"`
+	WorkspaceID int64          `json:"workspace_id"`
 }
 
 func (q *Queries) CreateMeetingOutcome(ctx context.Context, arg CreateMeetingOutcomeParams) (MeetingOutcome, error) {
@@ -29,6 +31,7 @@ func (q *Queries) CreateMeetingOutcome(ctx context.Context, arg CreateMeetingOut
 		arg.Title,
 		arg.NotesMd,
 		arg.EndsAt,
+		arg.WorkspaceID,
 	)
 	var i MeetingOutcome
 	err := row.Scan(
@@ -37,6 +40,7 @@ func (q *Queries) CreateMeetingOutcome(ctx context.Context, arg CreateMeetingOut
 		&i.Title,
 		&i.NotesMd,
 		&i.EndsAt,
+		&i.WorkspaceID,
 		&i.OutcomePromptSent,
 		&i.CreatedAt,
 	)
@@ -53,7 +57,7 @@ func (q *Queries) DeleteMeetingOutcome(ctx context.Context, id int64) error {
 }
 
 const getMeetingOutcome = `-- name: GetMeetingOutcome :one
-SELECT id, occurred_on, title, notes_md, ends_at, outcome_prompt_sent, created_at
+SELECT id, occurred_on, title, notes_md, ends_at, workspace_id, outcome_prompt_sent, created_at
 FROM meeting_outcomes WHERE id = ?
 `
 
@@ -66,6 +70,7 @@ func (q *Queries) GetMeetingOutcome(ctx context.Context, id int64) (MeetingOutco
 		&i.Title,
 		&i.NotesMd,
 		&i.EndsAt,
+		&i.WorkspaceID,
 		&i.OutcomePromptSent,
 		&i.CreatedAt,
 	)
@@ -73,7 +78,7 @@ func (q *Queries) GetMeetingOutcome(ctx context.Context, id int64) (MeetingOutco
 }
 
 const listDueUnpromptedMeetingOutcomes = `-- name: ListDueUnpromptedMeetingOutcomes :many
-SELECT id, occurred_on, title, notes_md, ends_at, outcome_prompt_sent, created_at
+SELECT id, occurred_on, title, notes_md, ends_at, workspace_id, outcome_prompt_sent, created_at
 FROM meeting_outcomes
 WHERE ends_at IS NOT NULL AND ends_at <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now') AND notes_md = '' AND outcome_prompt_sent = 0
 `
@@ -93,6 +98,7 @@ func (q *Queries) ListDueUnpromptedMeetingOutcomes(ctx context.Context) ([]Meeti
 			&i.Title,
 			&i.NotesMd,
 			&i.EndsAt,
+			&i.WorkspaceID,
 			&i.OutcomePromptSent,
 			&i.CreatedAt,
 		); err != nil {
@@ -110,14 +116,20 @@ func (q *Queries) ListDueUnpromptedMeetingOutcomes(ctx context.Context) ([]Meeti
 }
 
 const listMeetingOutcomes = `-- name: ListMeetingOutcomes :many
-SELECT id, occurred_on, title, notes_md, ends_at, outcome_prompt_sent, created_at
+SELECT id, occurred_on, title, notes_md, ends_at, workspace_id, outcome_prompt_sent, created_at
 FROM meeting_outcomes
-WHERE CAST(?1 AS TEXT) IS NULL OR occurred_on = ?1
+WHERE (CAST(?1 AS TEXT) IS NULL OR occurred_on = ?1)
+  AND (CAST(?2 AS INTEGER) IS NULL OR workspace_id = ?2)
 ORDER BY occurred_on DESC, created_at DESC
 `
 
-func (q *Queries) ListMeetingOutcomes(ctx context.Context, occurredOn sql.NullString) ([]MeetingOutcome, error) {
-	rows, err := q.db.QueryContext(ctx, listMeetingOutcomes, occurredOn)
+type ListMeetingOutcomesParams struct {
+	OccurredOn  sql.NullString `json:"occurred_on"`
+	WorkspaceID sql.NullInt64  `json:"workspace_id"`
+}
+
+func (q *Queries) ListMeetingOutcomes(ctx context.Context, arg ListMeetingOutcomesParams) ([]MeetingOutcome, error) {
+	rows, err := q.db.QueryContext(ctx, listMeetingOutcomes, arg.OccurredOn, arg.WorkspaceID)
 	if err != nil {
 		return nil, err
 	}
@@ -131,6 +143,7 @@ func (q *Queries) ListMeetingOutcomes(ctx context.Context, occurredOn sql.NullSt
 			&i.Title,
 			&i.NotesMd,
 			&i.EndsAt,
+			&i.WorkspaceID,
 			&i.OutcomePromptSent,
 			&i.CreatedAt,
 		); err != nil {
@@ -148,7 +161,7 @@ func (q *Queries) ListMeetingOutcomes(ctx context.Context, occurredOn sql.NullSt
 }
 
 const listPendingMeetingOutcomes = `-- name: ListPendingMeetingOutcomes :many
-SELECT id, occurred_on, title, notes_md, ends_at, outcome_prompt_sent, created_at
+SELECT id, occurred_on, title, notes_md, ends_at, workspace_id, outcome_prompt_sent, created_at
 FROM meeting_outcomes
 WHERE ends_at IS NOT NULL AND ends_at <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now') AND notes_md = ''
 ORDER BY ends_at
@@ -169,6 +182,7 @@ func (q *Queries) ListPendingMeetingOutcomes(ctx context.Context) ([]MeetingOutc
 			&i.Title,
 			&i.NotesMd,
 			&i.EndsAt,
+			&i.WorkspaceID,
 			&i.OutcomePromptSent,
 			&i.CreatedAt,
 		); err != nil {
@@ -197,7 +211,7 @@ func (q *Queries) MarkMeetingOutcomePromptSent(ctx context.Context, id int64) er
 const updateMeetingOutcome = `-- name: UpdateMeetingOutcome :one
 UPDATE meeting_outcomes SET title = ?1, notes_md = ?2, ends_at = CAST(?3 AS TEXT)
 WHERE id = ?4
-RETURNING id, occurred_on, title, notes_md, ends_at, outcome_prompt_sent, created_at
+RETURNING id, occurred_on, title, notes_md, ends_at, workspace_id, outcome_prompt_sent, created_at
 `
 
 type UpdateMeetingOutcomeParams struct {
@@ -221,6 +235,7 @@ func (q *Queries) UpdateMeetingOutcome(ctx context.Context, arg UpdateMeetingOut
 		&i.Title,
 		&i.NotesMd,
 		&i.EndsAt,
+		&i.WorkspaceID,
 		&i.OutcomePromptSent,
 		&i.CreatedAt,
 	)

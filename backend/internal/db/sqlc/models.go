@@ -22,9 +22,10 @@ type Attachment struct {
 }
 
 type Board struct {
-	ID        int64     `json:"id"`
-	Name      string    `json:"name"`
-	CreatedAt time.Time `json:"created_at"`
+	ID          int64     `json:"id"`
+	Name        string    `json:"name"`
+	CreatedAt   time.Time `json:"created_at"`
+	WorkspaceID int64     `json:"workspace_id"`
 }
 
 type BoardColumn struct {
@@ -34,6 +35,21 @@ type BoardColumn struct {
 	Position  int32     `json:"position"`
 	IsDone    bool      `json:"is_done"`
 	CreatedAt time.Time `json:"created_at"`
+}
+
+type CalendarFeedCache struct {
+	SourceID  int64     `json:"source_id"`
+	Data      string    `json:"data"`
+	FetchedAt time.Time `json:"fetched_at"`
+}
+
+type CalendarSource struct {
+	ID          int64     `json:"id"`
+	Name        string    `json:"name"`
+	Url         string    `json:"url"`
+	Color       string    `json:"color"`
+	CreatedAt   time.Time `json:"created_at"`
+	WorkspaceID int64     `json:"workspace_id"`
 }
 
 type JiraLink struct {
@@ -56,6 +72,7 @@ type MeetingOutcome struct {
 	EndsAt            pgtype.Timestamptz `json:"ends_at"`
 	OutcomePromptSent bool               `json:"outcome_prompt_sent"`
 	CreatedAt         time.Time          `json:"created_at"`
+	WorkspaceID       int64              `json:"workspace_id"`
 }
 
 type Note struct {
@@ -66,6 +83,7 @@ type Note struct {
 	CreatedAt    time.Time   `json:"created_at"`
 	UpdatedAt    time.Time   `json:"updated_at"`
 	SearchVector interface{} `json:"search_vector"`
+	WorkspaceID  int64       `json:"workspace_id"`
 }
 
 type NoteTag struct {
@@ -74,12 +92,13 @@ type NoteTag struct {
 }
 
 type Reminder struct {
-	ID        int64       `json:"id"`
-	Title     string      `json:"title"`
-	RemindAt  time.Time   `json:"remind_at"`
-	TaskID    pgtype.Int8 `json:"task_id"`
-	Sent      bool        `json:"sent"`
-	CreatedAt time.Time   `json:"created_at"`
+	ID          int64       `json:"id"`
+	Title       string      `json:"title"`
+	RemindAt    time.Time   `json:"remind_at"`
+	TaskID      pgtype.Int8 `json:"task_id"`
+	Sent        bool        `json:"sent"`
+	CreatedAt   time.Time   `json:"created_at"`
+	WorkspaceID int64       `json:"workspace_id"`
 }
 
 type Tag struct {
@@ -104,6 +123,8 @@ type Task struct {
 	SearchVector     interface{}        `json:"search_vector"`
 	ParentTaskID     pgtype.Int8        `json:"parent_task_id"`
 	MeetingOutcomeID pgtype.Int8        `json:"meeting_outcome_id"`
+	WorkspaceID      int64              `json:"workspace_id"`
+	RefNum           int64              `json:"ref_num"`
 }
 
 type TaskTag struct {
@@ -117,4 +138,18 @@ type TaskTimeEntry struct {
 	StartedAt       time.Time          `json:"started_at"`
 	EndedAt         pgtype.Timestamptz `json:"ended_at"`
 	DurationSeconds pgtype.Int4        `json:"duration_seconds"`
+}
+
+type Workspace struct {
+	ID        int64     `json:"id"`
+	Name      string    `json:"name"`
+	Tag       string    `json:"tag"`
+	RefSeq    int64     `json:"ref_seq"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type WorkspaceTagAlias struct {
+	WorkspaceID int64     `json:"workspace_id"`
+	Tag         string    `json:"tag"`
+	CreatedAt   time.Time `json:"created_at"`
 }

@@ -9,11 +9,11 @@ import (
 
 func toBoard(b sqlitedb.Board) store.Board {
 	t, _ := parseTime(b.CreatedAt)
-	return store.Board{ID: b.ID, Name: b.Name, CreatedAt: t}
+	return store.Board{ID: b.ID, Name: b.Name, WorkspaceID: b.WorkspaceID, CreatedAt: t}
 }
 
-func (s *Store) ListBoards(ctx context.Context) ([]store.Board, error) {
-	rows, err := s.q.ListBoards(ctx)
+func (s *Store) ListBoards(ctx context.Context, workspaceID *int64) ([]store.Board, error) {
+	rows, err := s.q.ListBoards(ctx, ptrToNullInt64(workspaceID))
 	if err != nil {
 		return nil, err
 	}
@@ -24,8 +24,8 @@ func (s *Store) ListBoards(ctx context.Context) ([]store.Board, error) {
 	return out, nil
 }
 
-func (s *Store) CreateBoard(ctx context.Context, name string) (store.Board, error) {
-	b, err := s.q.CreateBoard(ctx, name)
+func (s *Store) CreateBoard(ctx context.Context, name string, workspaceID int64) (store.Board, error) {
+	b, err := s.q.CreateBoard(ctx, sqlitedb.CreateBoardParams{Name: name, WorkspaceID: workspaceID})
 	return toBoard(b), err
 }
 

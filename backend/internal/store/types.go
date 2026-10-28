@@ -9,10 +9,37 @@ package store
 
 import "time"
 
-type Board struct {
+type Workspace struct {
 	ID        int64     `json:"id"`
 	Name      string    `json:"name"`
+	Tag       string    `json:"tag"`
 	CreatedAt time.Time `json:"created_at"`
+}
+
+// TaskRef is a task resolved from an @TAG-<ref_num> reference or a text query.
+type TaskRef struct {
+	Kind          string `json:"kind"`
+	ID            int64  `json:"id"`
+	Title         string `json:"title"`
+	Ref           string `json:"ref"`
+	RefNum        int64  `json:"ref_num"`
+	WorkspaceTag  string `json:"workspace_tag"`
+	WorkspaceName string `json:"workspace_name"`
+}
+
+// Backlink is an item whose text mentions a task reference.
+type Backlink struct {
+	ID           int64  `json:"id"`
+	Kind         string `json:"kind"`
+	Title        string `json:"title"`
+	WorkspaceTag string `json:"workspace_tag"`
+}
+
+type Board struct {
+	ID          int64     `json:"id"`
+	Name        string    `json:"name"`
+	WorkspaceID int64     `json:"workspace_id"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 type BoardColumn struct {
@@ -34,6 +61,9 @@ type Task struct {
 	ID               int64      `json:"id"`
 	BoardID          int64      `json:"board_id"`
 	ColumnID         int64      `json:"column_id"`
+	WorkspaceID      int64      `json:"workspace_id"`
+	RefNum           int64      `json:"ref_num"`
+	Ref              string     `json:"ref"`
 	Title            string     `json:"title"`
 	DescriptionMd    string     `json:"description_md"`
 	Priority         string     `json:"priority"`
@@ -69,12 +99,13 @@ type CreateAttachmentParams struct {
 }
 
 type Note struct {
-	ID        int64     `json:"id"`
-	Title     string    `json:"title"`
-	BodyMd    string    `json:"body_md"`
-	TaskID    *int64    `json:"task_id"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID          int64     `json:"id"`
+	Title       string    `json:"title"`
+	BodyMd      string    `json:"body_md"`
+	TaskID      *int64    `json:"task_id"`
+	WorkspaceID int64     `json:"workspace_id"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 type TaskTimeEntry struct {
@@ -98,12 +129,13 @@ type JiraLink struct {
 }
 
 type Reminder struct {
-	ID        int64     `json:"id"`
-	Title     string    `json:"title"`
-	RemindAt  time.Time `json:"remind_at"`
-	TaskID    *int64    `json:"task_id"`
-	Sent      bool      `json:"sent"`
-	CreatedAt time.Time `json:"created_at"`
+	ID          int64     `json:"id"`
+	Title       string    `json:"title"`
+	RemindAt    time.Time `json:"remind_at"`
+	TaskID      *int64    `json:"task_id"`
+	WorkspaceID int64     `json:"workspace_id"`
+	Sent        bool      `json:"sent"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 type MeetingOutcome struct {
@@ -112,16 +144,18 @@ type MeetingOutcome struct {
 	Title             string     `json:"title"`
 	NotesMd           string     `json:"notes_md"`
 	EndsAt            *time.Time `json:"ends_at"`
+	WorkspaceID       int64      `json:"workspace_id"`
 	OutcomePromptSent bool       `json:"outcome_prompt_sent"`
 	CreatedAt         time.Time  `json:"created_at"`
 }
 
 type CalendarSource struct {
-	ID        int64     `json:"id"`
-	Name      string    `json:"name"`
-	URL       string    `json:"url"`
-	Color     string    `json:"color"`
-	CreatedAt time.Time `json:"created_at"`
+	ID          int64     `json:"id"`
+	Name        string    `json:"name"`
+	URL         string    `json:"url"`
+	Color       string    `json:"color"`
+	WorkspaceID int64     `json:"workspace_id"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 type DayCount struct {

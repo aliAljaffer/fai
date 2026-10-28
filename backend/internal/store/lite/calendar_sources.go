@@ -10,11 +10,13 @@ import (
 	"github.com/alialjaffer/fai/backend/internal/store"
 )
 
-func (s *Store) ListCalendarSources(ctx context.Context) ([]store.CalendarSource, error) {
+func (s *Store) ListCalendarSources(ctx context.Context, workspaceID *int64) ([]store.CalendarSource, error) {
+	scope := ptrToNullInt64(workspaceID)
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, name, url, color, created_at
+		SELECT id, name, url, color, workspace_id, created_at
 		FROM calendar_sources
-		ORDER BY name`)
+		WHERE CAST(? AS INTEGER) IS NULL OR workspace_id = ?
+		ORDER BY name`, scope, scope)
 	if err != nil {
 		return nil, err
 	}
@@ -24,7 +26,7 @@ func (s *Store) ListCalendarSources(ctx context.Context) ([]store.CalendarSource
 	for rows.Next() {
 		var c store.CalendarSource
 		var createdAt string
-		if err := rows.Scan(&c.ID, &c.Name, &c.URL, &c.Color, &createdAt); err != nil {
+		if err := rows.Scan(&c.ID, &c.Name, &c.URL, &c.Color, &c.WorkspaceID, &createdAt); err != nil {
 			return nil, err
 		}
 		c.CreatedAt, _ = parseTime(createdAt)
@@ -33,14 +35,14 @@ func (s *Store) ListCalendarSources(ctx context.Context) ([]store.CalendarSource
 	return out, rows.Err()
 }
 
-func (s *Store) CreateCalendarSource(ctx context.Context, name, url, color string) (store.CalendarSource, error) {
+func (s *Store) CreateCalendarSource(ctx context.Context, name, url, color string, workspaceID int64) (store.CalendarSource, error) {
 	var c store.CalendarSource
 	var createdAt string
 	err := s.db.QueryRowContext(ctx, `
-		INSERT INTO calendar_sources (name, url, color)
-		VALUES (?, ?, ?)
-		RETURNING id, name, url, color, created_at`, name, url, color).
-		Scan(&c.ID, &c.Name, &c.URL, &c.Color, &createdAt)
+		INSERT INTO calendar_sources (name, url, color, workspace_id)
+		VALUES (?, ?, ?, COALESCE(NULLIF(CAST(? AS INTEGER), 0), (SELECT id FROM workspaces ORDER BY id LIMIT 1)))
+		RETURNING id, name, url, color, workspace_id, created_at`, name, url, color, workspaceID).
+		Scan(&c.ID, &c.Name, &c.URL, &c.Color, &c.WorkspaceID, &createdAt)
 	if err != nil {
 		return store.CalendarSource{}, err
 	}
@@ -53,8 +55,8 @@ func (s *Store) UpdateCalendarSourceColor(ctx context.Context, id int64, color s
 	var createdAt string
 	err := s.db.QueryRowContext(ctx, `
 		UPDATE calendar_sources SET color = ? WHERE id = ?
-		RETURNING id, name, url, color, created_at`, color, id).
-		Scan(&c.ID, &c.Name, &c.URL, &c.Color, &createdAt)
+		RETURNING id, name, url, color, workspace_id, created_at`, color, id).
+		Scan(&c.ID, &c.Name, &c.URL, &c.Color, &c.WorkspaceID, &createdAt)
 	if err != nil {
 		return store.CalendarSource{}, err
 	}

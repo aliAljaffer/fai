@@ -11,11 +11,12 @@ import (
 	"github.com/alialjaffer/fai/backend/internal/store"
 )
 
-func (s *Store) ListCalendarSources(ctx context.Context) ([]store.CalendarSource, error) {
+func (s *Store) ListCalendarSources(ctx context.Context, workspaceID *int64) ([]store.CalendarSource, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT id, name, url, color, created_at
+		SELECT id, name, url, color, workspace_id, created_at
 		FROM calendar_sources
-		ORDER BY name`)
+		WHERE $1::bigint IS NULL OR workspace_id = $1
+		ORDER BY name`, workspaceID)
 	if err != nil {
 		return nil, err
 	}
@@ -24,7 +25,7 @@ func (s *Store) ListCalendarSources(ctx context.Context) ([]store.CalendarSource
 	out := []store.CalendarSource{}
 	for rows.Next() {
 		var c store.CalendarSource
-		if err := rows.Scan(&c.ID, &c.Name, &c.URL, &c.Color, &c.CreatedAt); err != nil {
+		if err := rows.Scan(&c.ID, &c.Name, &c.URL, &c.Color, &c.WorkspaceID, &c.CreatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, c)
@@ -32,13 +33,13 @@ func (s *Store) ListCalendarSources(ctx context.Context) ([]store.CalendarSource
 	return out, rows.Err()
 }
 
-func (s *Store) CreateCalendarSource(ctx context.Context, name, url, color string) (store.CalendarSource, error) {
+func (s *Store) CreateCalendarSource(ctx context.Context, name, url, color string, workspaceID int64) (store.CalendarSource, error) {
 	var c store.CalendarSource
 	err := s.pool.QueryRow(ctx, `
-		INSERT INTO calendar_sources (name, url, color)
-		VALUES ($1, $2, $3)
-		RETURNING id, name, url, color, created_at`, name, url, color).
-		Scan(&c.ID, &c.Name, &c.URL, &c.Color, &c.CreatedAt)
+		INSERT INTO calendar_sources (name, url, color, workspace_id)
+		VALUES ($1, $2, $3, COALESCE(NULLIF($4::bigint, 0), (SELECT id FROM workspaces ORDER BY id LIMIT 1)))
+		RETURNING id, name, url, color, workspace_id, created_at`, name, url, color, workspaceID).
+		Scan(&c.ID, &c.Name, &c.URL, &c.Color, &c.WorkspaceID, &c.CreatedAt)
 	return c, err
 }
 
@@ -46,8 +47,8 @@ func (s *Store) UpdateCalendarSourceColor(ctx context.Context, id int64, color s
 	var c store.CalendarSource
 	err := s.pool.QueryRow(ctx, `
 		UPDATE calendar_sources SET color = $2 WHERE id = $1
-		RETURNING id, name, url, color, created_at`, id, color).
-		Scan(&c.ID, &c.Name, &c.URL, &c.Color, &c.CreatedAt)
+		RETURNING id, name, url, color, workspace_id, created_at`, id, color).
+		Scan(&c.ID, &c.Name, &c.URL, &c.Color, &c.WorkspaceID, &c.CreatedAt)
 	return c, err
 }
 

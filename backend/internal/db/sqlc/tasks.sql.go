@@ -22,17 +22,18 @@ func (q *Queries) ArchiveTask(ctx context.Context, id int64) error {
 }
 
 const createTask = `-- name: CreateTask :one
-WITH col AS (SELECT is_done FROM board_columns WHERE id = $2)
-INSERT INTO tasks (board_id, column_id, title, description_md, priority, due_date, position, parent_task_id, meeting_outcome_id, completed_at)
-SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9,
+INSERT INTO tasks (board_id, column_id, workspace_id, ref_num, title, description_md, priority, due_date, position, parent_task_id, meeting_outcome_id, completed_at)
+SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
   CASE WHEN col.is_done THEN now() ELSE NULL END
-FROM col
-RETURNING id, board_id, column_id, title, description_md, priority, due_date, position, parent_task_id, meeting_outcome_id, completed_at, archived, created_at, updated_at
+FROM (SELECT is_done FROM board_columns WHERE id = $2) col
+RETURNING id, board_id, column_id, title, description_md, priority, due_date, position, completed_at, archived, created_at, updated_at, parent_task_id, meeting_outcome_id, workspace_id, ref_num
 `
 
 type CreateTaskParams struct {
 	BoardID          int64       `json:"board_id"`
 	ColumnID         int64       `json:"column_id"`
+	WorkspaceID      int64       `json:"workspace_id"`
+	RefNum           int64       `json:"ref_num"`
 	Title            string      `json:"title"`
 	DescriptionMd    string      `json:"description_md"`
 	Priority         string      `json:"priority"`
@@ -51,18 +52,22 @@ type CreateTaskRow struct {
 	Priority         string             `json:"priority"`
 	DueDate          pgtype.Date        `json:"due_date"`
 	Position         float64            `json:"position"`
-	ParentTaskID     pgtype.Int8        `json:"parent_task_id"`
-	MeetingOutcomeID pgtype.Int8        `json:"meeting_outcome_id"`
 	CompletedAt      pgtype.Timestamptz `json:"completed_at"`
 	Archived         bool               `json:"archived"`
 	CreatedAt        time.Time          `json:"created_at"`
 	UpdatedAt        time.Time          `json:"updated_at"`
+	ParentTaskID     pgtype.Int8        `json:"parent_task_id"`
+	MeetingOutcomeID pgtype.Int8        `json:"meeting_outcome_id"`
+	WorkspaceID      int64              `json:"workspace_id"`
+	RefNum           int64              `json:"ref_num"`
 }
 
 func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (CreateTaskRow, error) {
 	row := q.db.QueryRow(ctx, createTask,
 		arg.BoardID,
 		arg.ColumnID,
+		arg.WorkspaceID,
+		arg.RefNum,
 		arg.Title,
 		arg.DescriptionMd,
 		arg.Priority,
@@ -81,12 +86,14 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (CreateT
 		&i.Priority,
 		&i.DueDate,
 		&i.Position,
-		&i.ParentTaskID,
-		&i.MeetingOutcomeID,
 		&i.CompletedAt,
 		&i.Archived,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ParentTaskID,
+		&i.MeetingOutcomeID,
+		&i.WorkspaceID,
+		&i.RefNum,
 	)
 	return i, err
 }
@@ -101,7 +108,7 @@ func (q *Queries) DeleteTask(ctx context.Context, id int64) error {
 }
 
 const getTask = `-- name: GetTask :one
-SELECT id, board_id, column_id, title, description_md, priority, due_date, position, parent_task_id, meeting_outcome_id, completed_at, archived, created_at, updated_at
+SELECT id, board_id, column_id, title, description_md, priority, due_date, position, completed_at, archived, created_at, updated_at, parent_task_id, meeting_outcome_id, workspace_id, ref_num
 FROM tasks WHERE id = $1 AND archived = false
 `
 
@@ -114,12 +121,14 @@ type GetTaskRow struct {
 	Priority         string             `json:"priority"`
 	DueDate          pgtype.Date        `json:"due_date"`
 	Position         float64            `json:"position"`
-	ParentTaskID     pgtype.Int8        `json:"parent_task_id"`
-	MeetingOutcomeID pgtype.Int8        `json:"meeting_outcome_id"`
 	CompletedAt      pgtype.Timestamptz `json:"completed_at"`
 	Archived         bool               `json:"archived"`
 	CreatedAt        time.Time          `json:"created_at"`
 	UpdatedAt        time.Time          `json:"updated_at"`
+	ParentTaskID     pgtype.Int8        `json:"parent_task_id"`
+	MeetingOutcomeID pgtype.Int8        `json:"meeting_outcome_id"`
+	WorkspaceID      int64              `json:"workspace_id"`
+	RefNum           int64              `json:"ref_num"`
 }
 
 func (q *Queries) GetTask(ctx context.Context, id int64) (GetTaskRow, error) {
@@ -134,18 +143,20 @@ func (q *Queries) GetTask(ctx context.Context, id int64) (GetTaskRow, error) {
 		&i.Priority,
 		&i.DueDate,
 		&i.Position,
-		&i.ParentTaskID,
-		&i.MeetingOutcomeID,
 		&i.CompletedAt,
 		&i.Archived,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ParentTaskID,
+		&i.MeetingOutcomeID,
+		&i.WorkspaceID,
+		&i.RefNum,
 	)
 	return i, err
 }
 
 const listSubtasks = `-- name: ListSubtasks :many
-SELECT id, board_id, column_id, title, description_md, priority, due_date, position, parent_task_id, meeting_outcome_id, completed_at, archived, created_at, updated_at
+SELECT id, board_id, column_id, title, description_md, priority, due_date, position, completed_at, archived, created_at, updated_at, parent_task_id, meeting_outcome_id, workspace_id, ref_num
 FROM tasks WHERE parent_task_id = $1 AND archived = false ORDER BY created_at
 `
 
@@ -158,12 +169,14 @@ type ListSubtasksRow struct {
 	Priority         string             `json:"priority"`
 	DueDate          pgtype.Date        `json:"due_date"`
 	Position         float64            `json:"position"`
-	ParentTaskID     pgtype.Int8        `json:"parent_task_id"`
-	MeetingOutcomeID pgtype.Int8        `json:"meeting_outcome_id"`
 	CompletedAt      pgtype.Timestamptz `json:"completed_at"`
 	Archived         bool               `json:"archived"`
 	CreatedAt        time.Time          `json:"created_at"`
 	UpdatedAt        time.Time          `json:"updated_at"`
+	ParentTaskID     pgtype.Int8        `json:"parent_task_id"`
+	MeetingOutcomeID pgtype.Int8        `json:"meeting_outcome_id"`
+	WorkspaceID      int64              `json:"workspace_id"`
+	RefNum           int64              `json:"ref_num"`
 }
 
 func (q *Queries) ListSubtasks(ctx context.Context, parentTaskID pgtype.Int8) ([]ListSubtasksRow, error) {
@@ -184,12 +197,14 @@ func (q *Queries) ListSubtasks(ctx context.Context, parentTaskID pgtype.Int8) ([
 			&i.Priority,
 			&i.DueDate,
 			&i.Position,
-			&i.ParentTaskID,
-			&i.MeetingOutcomeID,
 			&i.CompletedAt,
 			&i.Archived,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.ParentTaskID,
+			&i.MeetingOutcomeID,
+			&i.WorkspaceID,
+			&i.RefNum,
 		); err != nil {
 			return nil, err
 		}
@@ -202,7 +217,7 @@ func (q *Queries) ListSubtasks(ctx context.Context, parentTaskID pgtype.Int8) ([
 }
 
 const listTasks = `-- name: ListTasks :many
-SELECT DISTINCT t.id, t.board_id, t.column_id, t.title, t.description_md, t.priority, t.due_date, t.position, t.parent_task_id, t.meeting_outcome_id, t.completed_at, t.archived, t.created_at, t.updated_at
+SELECT DISTINCT t.id, t.board_id, t.column_id, t.title, t.description_md, t.priority, t.due_date, t.position, t.completed_at, t.archived, t.created_at, t.updated_at, t.parent_task_id, t.meeting_outcome_id, t.workspace_id, t.ref_num
 FROM tasks t
 LEFT JOIN task_tags tt ON tt.task_id = t.id
 LEFT JOIN tags tg ON tg.id = tt.tag_id
@@ -232,12 +247,14 @@ type ListTasksRow struct {
 	Priority         string             `json:"priority"`
 	DueDate          pgtype.Date        `json:"due_date"`
 	Position         float64            `json:"position"`
-	ParentTaskID     pgtype.Int8        `json:"parent_task_id"`
-	MeetingOutcomeID pgtype.Int8        `json:"meeting_outcome_id"`
 	CompletedAt      pgtype.Timestamptz `json:"completed_at"`
 	Archived         bool               `json:"archived"`
 	CreatedAt        time.Time          `json:"created_at"`
 	UpdatedAt        time.Time          `json:"updated_at"`
+	ParentTaskID     pgtype.Int8        `json:"parent_task_id"`
+	MeetingOutcomeID pgtype.Int8        `json:"meeting_outcome_id"`
+	WorkspaceID      int64              `json:"workspace_id"`
+	RefNum           int64              `json:"ref_num"`
 }
 
 func (q *Queries) ListTasks(ctx context.Context, arg ListTasksParams) ([]ListTasksRow, error) {
@@ -263,12 +280,14 @@ func (q *Queries) ListTasks(ctx context.Context, arg ListTasksParams) ([]ListTas
 			&i.Priority,
 			&i.DueDate,
 			&i.Position,
-			&i.ParentTaskID,
-			&i.MeetingOutcomeID,
 			&i.CompletedAt,
 			&i.Archived,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.ParentTaskID,
+			&i.MeetingOutcomeID,
+			&i.WorkspaceID,
+			&i.RefNum,
 		); err != nil {
 			return nil, err
 		}
@@ -281,7 +300,7 @@ func (q *Queries) ListTasks(ctx context.Context, arg ListTasksParams) ([]ListTas
 }
 
 const listTasksByColumnOrdered = `-- name: ListTasksByColumnOrdered :many
-SELECT id, board_id, column_id, title, description_md, priority, due_date, position, parent_task_id, meeting_outcome_id, completed_at, archived, created_at, updated_at
+SELECT id, board_id, column_id, title, description_md, priority, due_date, position, completed_at, archived, created_at, updated_at, parent_task_id, meeting_outcome_id, workspace_id, ref_num
 FROM tasks WHERE column_id = $1 AND archived = false ORDER BY position
 `
 
@@ -294,12 +313,14 @@ type ListTasksByColumnOrderedRow struct {
 	Priority         string             `json:"priority"`
 	DueDate          pgtype.Date        `json:"due_date"`
 	Position         float64            `json:"position"`
-	ParentTaskID     pgtype.Int8        `json:"parent_task_id"`
-	MeetingOutcomeID pgtype.Int8        `json:"meeting_outcome_id"`
 	CompletedAt      pgtype.Timestamptz `json:"completed_at"`
 	Archived         bool               `json:"archived"`
 	CreatedAt        time.Time          `json:"created_at"`
 	UpdatedAt        time.Time          `json:"updated_at"`
+	ParentTaskID     pgtype.Int8        `json:"parent_task_id"`
+	MeetingOutcomeID pgtype.Int8        `json:"meeting_outcome_id"`
+	WorkspaceID      int64              `json:"workspace_id"`
+	RefNum           int64              `json:"ref_num"`
 }
 
 func (q *Queries) ListTasksByColumnOrdered(ctx context.Context, columnID int64) ([]ListTasksByColumnOrderedRow, error) {
@@ -320,12 +341,14 @@ func (q *Queries) ListTasksByColumnOrdered(ctx context.Context, columnID int64) 
 			&i.Priority,
 			&i.DueDate,
 			&i.Position,
-			&i.ParentTaskID,
-			&i.MeetingOutcomeID,
 			&i.CompletedAt,
 			&i.Archived,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.ParentTaskID,
+			&i.MeetingOutcomeID,
+			&i.WorkspaceID,
+			&i.RefNum,
 		); err != nil {
 			return nil, err
 		}
@@ -347,7 +370,7 @@ UPDATE tasks t SET
   END,
   updated_at = now()
 WHERE t.id = $1
-RETURNING id, board_id, column_id, title, description_md, priority, due_date, position, parent_task_id, meeting_outcome_id, completed_at, archived, created_at, updated_at
+RETURNING id, board_id, column_id, title, description_md, priority, due_date, position, completed_at, archived, created_at, updated_at, parent_task_id, meeting_outcome_id, workspace_id, ref_num
 `
 
 type MoveTaskParams struct {
@@ -365,12 +388,14 @@ type MoveTaskRow struct {
 	Priority         string             `json:"priority"`
 	DueDate          pgtype.Date        `json:"due_date"`
 	Position         float64            `json:"position"`
-	ParentTaskID     pgtype.Int8        `json:"parent_task_id"`
-	MeetingOutcomeID pgtype.Int8        `json:"meeting_outcome_id"`
 	CompletedAt      pgtype.Timestamptz `json:"completed_at"`
 	Archived         bool               `json:"archived"`
 	CreatedAt        time.Time          `json:"created_at"`
 	UpdatedAt        time.Time          `json:"updated_at"`
+	ParentTaskID     pgtype.Int8        `json:"parent_task_id"`
+	MeetingOutcomeID pgtype.Int8        `json:"meeting_outcome_id"`
+	WorkspaceID      int64              `json:"workspace_id"`
+	RefNum           int64              `json:"ref_num"`
 }
 
 func (q *Queries) MoveTask(ctx context.Context, arg MoveTaskParams) (MoveTaskRow, error) {
@@ -385,28 +410,16 @@ func (q *Queries) MoveTask(ctx context.Context, arg MoveTaskParams) (MoveTaskRow
 		&i.Priority,
 		&i.DueDate,
 		&i.Position,
-		&i.ParentTaskID,
-		&i.MeetingOutcomeID,
 		&i.CompletedAt,
 		&i.Archived,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ParentTaskID,
+		&i.MeetingOutcomeID,
+		&i.WorkspaceID,
+		&i.RefNum,
 	)
 	return i, err
-}
-
-const setTaskPosition = `-- name: SetTaskPosition :exec
-UPDATE tasks SET position = $2, updated_at = now() WHERE id = $1
-`
-
-type SetTaskPositionParams struct {
-	ID       int64   `json:"id"`
-	Position float64 `json:"position"`
-}
-
-func (q *Queries) SetTaskPosition(ctx context.Context, arg SetTaskPositionParams) error {
-	_, err := q.db.Exec(ctx, setTaskPosition, arg.ID, arg.Position)
-	return err
 }
 
 const setTaskParent = `-- name: SetTaskParent :exec
@@ -423,6 +436,20 @@ func (q *Queries) SetTaskParent(ctx context.Context, arg SetTaskParentParams) er
 	return err
 }
 
+const setTaskPosition = `-- name: SetTaskPosition :exec
+UPDATE tasks SET position = $2, updated_at = now() WHERE id = $1
+`
+
+type SetTaskPositionParams struct {
+	ID       int64   `json:"id"`
+	Position float64 `json:"position"`
+}
+
+func (q *Queries) SetTaskPosition(ctx context.Context, arg SetTaskPositionParams) error {
+	_, err := q.db.Exec(ctx, setTaskPosition, arg.ID, arg.Position)
+	return err
+}
+
 const updateTask = `-- name: UpdateTask :one
 UPDATE tasks SET
   title = $2,
@@ -431,7 +458,7 @@ UPDATE tasks SET
   due_date = $5,
   updated_at = now()
 WHERE id = $1 AND archived = false
-RETURNING id, board_id, column_id, title, description_md, priority, due_date, position, parent_task_id, meeting_outcome_id, completed_at, archived, created_at, updated_at
+RETURNING id, board_id, column_id, title, description_md, priority, due_date, position, completed_at, archived, created_at, updated_at, parent_task_id, meeting_outcome_id, workspace_id, ref_num
 `
 
 type UpdateTaskParams struct {
@@ -451,12 +478,14 @@ type UpdateTaskRow struct {
 	Priority         string             `json:"priority"`
 	DueDate          pgtype.Date        `json:"due_date"`
 	Position         float64            `json:"position"`
-	ParentTaskID     pgtype.Int8        `json:"parent_task_id"`
-	MeetingOutcomeID pgtype.Int8        `json:"meeting_outcome_id"`
 	CompletedAt      pgtype.Timestamptz `json:"completed_at"`
 	Archived         bool               `json:"archived"`
 	CreatedAt        time.Time          `json:"created_at"`
 	UpdatedAt        time.Time          `json:"updated_at"`
+	ParentTaskID     pgtype.Int8        `json:"parent_task_id"`
+	MeetingOutcomeID pgtype.Int8        `json:"meeting_outcome_id"`
+	WorkspaceID      int64              `json:"workspace_id"`
+	RefNum           int64              `json:"ref_num"`
 }
 
 func (q *Queries) UpdateTask(ctx context.Context, arg UpdateTaskParams) (UpdateTaskRow, error) {
@@ -477,12 +506,14 @@ func (q *Queries) UpdateTask(ctx context.Context, arg UpdateTaskParams) (UpdateT
 		&i.Priority,
 		&i.DueDate,
 		&i.Position,
-		&i.ParentTaskID,
-		&i.MeetingOutcomeID,
 		&i.CompletedAt,
 		&i.Archived,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ParentTaskID,
+		&i.MeetingOutcomeID,
+		&i.WorkspaceID,
+		&i.RefNum,
 	)
 	return i, err
 }

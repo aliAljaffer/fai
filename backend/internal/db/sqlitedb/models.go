@@ -20,9 +20,10 @@ type Attachment struct {
 }
 
 type Board struct {
-	ID        int64  `json:"id"`
-	Name      string `json:"name"`
-	CreatedAt string `json:"created_at"`
+	ID          int64  `json:"id"`
+	Name        string `json:"name"`
+	WorkspaceID int64  `json:"workspace_id"`
+	CreatedAt   string `json:"created_at"`
 }
 
 type BoardColumn struct {
@@ -32,6 +33,21 @@ type BoardColumn struct {
 	Position  int64  `json:"position"`
 	IsDone    bool   `json:"is_done"`
 	CreatedAt string `json:"created_at"`
+}
+
+type CalendarFeedCache struct {
+	SourceID  int64  `json:"source_id"`
+	Data      string `json:"data"`
+	FetchedAt string `json:"fetched_at"`
+}
+
+type CalendarSource struct {
+	ID          int64  `json:"id"`
+	Name        string `json:"name"`
+	Url         string `json:"url"`
+	Color       string `json:"color"`
+	WorkspaceID int64  `json:"workspace_id"`
+	CreatedAt   string `json:"created_at"`
 }
 
 type JiraLink struct {
@@ -52,17 +68,19 @@ type MeetingOutcome struct {
 	Title             string         `json:"title"`
 	NotesMd           string         `json:"notes_md"`
 	EndsAt            sql.NullString `json:"ends_at"`
+	WorkspaceID       int64          `json:"workspace_id"`
 	OutcomePromptSent bool           `json:"outcome_prompt_sent"`
 	CreatedAt         string         `json:"created_at"`
 }
 
 type Note struct {
-	ID        int64         `json:"id"`
-	Title     string        `json:"title"`
-	BodyMd    string        `json:"body_md"`
-	TaskID    sql.NullInt64 `json:"task_id"`
-	CreatedAt string        `json:"created_at"`
-	UpdatedAt string        `json:"updated_at"`
+	ID          int64         `json:"id"`
+	Title       string        `json:"title"`
+	BodyMd      string        `json:"body_md"`
+	TaskID      sql.NullInt64 `json:"task_id"`
+	WorkspaceID int64         `json:"workspace_id"`
+	CreatedAt   string        `json:"created_at"`
+	UpdatedAt   string        `json:"updated_at"`
 }
 
 type NoteTag struct {
@@ -76,12 +94,13 @@ type NotesFt struct {
 }
 
 type Reminder struct {
-	ID        int64         `json:"id"`
-	Title     string        `json:"title"`
-	RemindAt  string        `json:"remind_at"`
-	TaskID    sql.NullInt64 `json:"task_id"`
-	Sent      bool          `json:"sent"`
-	CreatedAt string        `json:"created_at"`
+	ID          int64         `json:"id"`
+	Title       string        `json:"title"`
+	RemindAt    string        `json:"remind_at"`
+	TaskID      sql.NullInt64 `json:"task_id"`
+	WorkspaceID int64         `json:"workspace_id"`
+	Sent        bool          `json:"sent"`
+	CreatedAt   string        `json:"created_at"`
 }
 
 type Tag struct {
@@ -96,6 +115,8 @@ type Task struct {
 	ColumnID         int64          `json:"column_id"`
 	ParentTaskID     sql.NullInt64  `json:"parent_task_id"`
 	MeetingOutcomeID sql.NullInt64  `json:"meeting_outcome_id"`
+	WorkspaceID      int64          `json:"workspace_id"`
+	RefNum           int64          `json:"ref_num"`
 	Title            string         `json:"title"`
 	DescriptionMd    string         `json:"description_md"`
 	Priority         string         `json:"priority"`
@@ -123,4 +144,18 @@ type TaskTimeEntry struct {
 type TasksFt struct {
 	Title         string `json:"title"`
 	DescriptionMd string `json:"description_md"`
+}
+
+type Workspace struct {
+	ID        int64  `json:"id"`
+	Name      string `json:"name"`
+	Tag       string `json:"tag"`
+	RefSeq    int64  `json:"ref_seq"`
+	CreatedAt string `json:"created_at"`
+}
+
+type WorkspaceTagAlias struct {
+	WorkspaceID int64  `json:"workspace_id"`
+	Tag         string `json:"tag"`
+	CreatedAt   string `json:"created_at"`
 }

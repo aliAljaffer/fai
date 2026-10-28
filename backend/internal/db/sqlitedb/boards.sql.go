@@ -7,16 +7,29 @@ package sqlitedb
 
 import (
 	"context"
+	"database/sql"
 )
 
 const createBoard = `-- name: CreateBoard :one
-INSERT INTO boards (name) VALUES (?) RETURNING id, name, created_at
+INSERT INTO boards (name, workspace_id)
+VALUES (?1, COALESCE(NULLIF(CAST(?2 AS INTEGER), 0), (SELECT id FROM workspaces ORDER BY id LIMIT 1)))
+RETURNING id, name, workspace_id, created_at
 `
 
-func (q *Queries) CreateBoard(ctx context.Context, name string) (Board, error) {
-	row := q.db.QueryRowContext(ctx, createBoard, name)
+type CreateBoardParams struct {
+	Name        string `json:"name"`
+	WorkspaceID int64  `json:"workspace_id"`
+}
+
+func (q *Queries) CreateBoard(ctx context.Context, arg CreateBoardParams) (Board, error) {
+	row := q.db.QueryRowContext(ctx, createBoard, arg.Name, arg.WorkspaceID)
 	var i Board
-	err := row.Scan(&i.ID, &i.Name, &i.CreatedAt)
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.WorkspaceID,
+		&i.CreatedAt,
+	)
 	return i, err
 }
 
@@ -52,11 +65,13 @@ func (q *Queries) CreateColumn(ctx context.Context, arg CreateColumnParams) (Boa
 }
 
 const listBoards = `-- name: ListBoards :many
-SELECT id, name, created_at FROM boards ORDER BY id
+SELECT id, name, workspace_id, created_at FROM boards
+WHERE CAST(?1 AS INTEGER) IS NULL OR workspace_id = ?1
+ORDER BY id
 `
 
-func (q *Queries) ListBoards(ctx context.Context) ([]Board, error) {
-	rows, err := q.db.QueryContext(ctx, listBoards)
+func (q *Queries) ListBoards(ctx context.Context, workspaceID sql.NullInt64) ([]Board, error) {
+	rows, err := q.db.QueryContext(ctx, listBoards, workspaceID)
 	if err != nil {
 		return nil, err
 	}
@@ -64,7 +79,12 @@ func (q *Queries) ListBoards(ctx context.Context) ([]Board, error) {
 	var items []Board
 	for rows.Next() {
 		var i Board
-		if err := rows.Scan(&i.ID, &i.Name, &i.CreatedAt); err != nil {
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.WorkspaceID,
+			&i.CreatedAt,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

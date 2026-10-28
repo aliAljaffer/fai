@@ -2,6 +2,7 @@ package pg
 
 import (
 	"context"
+	"strconv"
 
 	"github.com/alialjaffer/fai/backend/internal/store"
 )
@@ -12,6 +13,14 @@ func (s *Store) attachTags(ctx context.Context, tasks []store.Task) error {
 	}
 	if len(tasks) == 0 {
 		return nil
+	}
+
+	tagsByWorkspace, err := s.workspaceTagsByID(ctx)
+	if err != nil {
+		return err
+	}
+	for i := range tasks {
+		tasks[i].Ref = tagsByWorkspace[tasks[i].WorkspaceID] + "-" + strconv.FormatInt(tasks[i].RefNum, 10)
 	}
 
 	ids := make([]int64, len(tasks))
@@ -45,6 +54,25 @@ func (s *Store) attachTags(ctx context.Context, tasks []store.Task) error {
 		tasks[i].Tags = append(tasks[i].Tags, tag)
 	}
 	return rows.Err()
+}
+
+func (s *Store) workspaceTagsByID(ctx context.Context) (map[int64]string, error) {
+	rows, err := s.pool.Query(ctx, `SELECT id, tag FROM workspaces`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := map[int64]string{}
+	for rows.Next() {
+		var id int64
+		var tag string
+		if err := rows.Scan(&id, &tag); err != nil {
+			return nil, err
+		}
+		out[id] = tag
+	}
+	return out, rows.Err()
 }
 
 func (s *Store) ListTagsForTask(ctx context.Context, taskID int64) ([]store.Tag, error) {

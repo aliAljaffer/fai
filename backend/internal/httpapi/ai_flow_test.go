@@ -48,7 +48,7 @@ func TestNotePlanCreatesParentAndSubtasks(t *testing.T) {
 	defer st.Close()
 
 	ctx := context.Background()
-	note, err := st.CreateNote(ctx, "Launch idea", "A rough plan for launch", nil)
+	note, err := st.CreateNote(ctx, "Launch idea", "A rough plan for launch", nil, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,7 +132,7 @@ func TestExtractedTasksUseMeetingDate(t *testing.T) {
 	defer st.Close()
 
 	ctx := context.Background()
-	outcome, err := st.CreateMeetingOutcome(ctx, "2026-10-20", "Weekly sync", "Follow up Friday on the deck.", nil)
+	outcome, err := st.CreateMeetingOutcome(ctx, "2026-10-20", "Weekly sync", "Follow up Friday on the deck.", nil, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

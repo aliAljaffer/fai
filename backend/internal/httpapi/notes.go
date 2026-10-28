@@ -8,7 +8,7 @@ import (
 )
 
 func (s *Server) listNotes(w http.ResponseWriter, r *http.Request) {
-	notes, err := s.Store.ListNotes(r.Context())
+	notes, err := s.Store.ListNotes(r.Context(), optionalInt64Param(r, "workspace_id"))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -17,9 +17,10 @@ func (s *Server) listNotes(w http.ResponseWriter, r *http.Request) {
 }
 
 type noteBody struct {
-	Title  string `json:"title"`
-	BodyMd string `json:"body_md"`
-	TaskID *int64 `json:"task_id"`
+	Title       string `json:"title"`
+	BodyMd      string `json:"body_md"`
+	TaskID      *int64 `json:"task_id"`
+	WorkspaceID int64  `json:"workspace_id"`
 }
 
 func (s *Server) createNote(w http.ResponseWriter, r *http.Request) {
@@ -28,7 +29,7 @@ func (s *Server) createNote(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid body")
 		return
 	}
-	note, err := s.Store.CreateNote(r.Context(), body.Title, body.BodyMd, body.TaskID)
+	note, err := s.Store.CreateNote(r.Context(), body.Title, body.BodyMd, body.TaskID, body.WorkspaceID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

@@ -90,7 +90,7 @@ func TestImportedCalendarsSyncAndCache(t *testing.T) {
 	}))
 
 	ctx := context.Background()
-	source, err := st.CreateCalendarSource(ctx, "Outlook", feed.URL, "#2563eb")
+	source, err := st.CreateCalendarSource(ctx, "Outlook", feed.URL, "#2563eb", 0)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -182,6 +182,9 @@ export function Calendar() {
   }
 
   function handleDateClick(info: DateClickArg) {
+    // The "+" button's React handler runs after FullCalendar's native cell click,
+    // so stopPropagation in that handler cannot prevent this; ignore it here.
+    if ((info.jsEvent.target as HTMLElement).closest('.fc-day-add')) return
     setDayDate(format(info.date, 'yyyy-MM-dd'))
   }
 

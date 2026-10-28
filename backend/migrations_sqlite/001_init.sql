@@ -1,10 +1,27 @@
 -- Single comprehensive schema for the SQLite (docker-compose) deployment target,
--- mirroring the cumulative state of backend/migrations (Postgres/kubernetes target)
--- as of migration 00008. Translated per-engine: INTEGER PRIMARY KEY AUTOINCREMENT
+-- mirroring the cumulative state of backend/migrations (Postgres/kubernetes target).
+-- Translated per-engine: INTEGER PRIMARY KEY AUTOINCREMENT
 -- instead of GENERATED ALWAYS AS IDENTITY, TEXT (RFC3339/ISO date strings) instead of
 -- TIMESTAMPTZ/DATE, BOOLEAN-as-INTEGER, FTS5 virtual tables + sync triggers instead of
 -- tsvector+GIN, julianday() math instead of EXTRACT(EPOCH ...).
 PRAGMA foreign_keys = ON;
+
+CREATE TABLE workspaces (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  tag TEXT NOT NULL,
+  ref_seq INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+CREATE UNIQUE INDEX idx_workspaces_tag ON workspaces (upper(tag));
+CREATE TABLE workspace_tag_aliases (
+  workspace_id INTEGER NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  tag TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  PRIMARY KEY (workspace_id, tag)
+);
+CREATE UNIQUE INDEX idx_workspace_tag_aliases_tag ON workspace_tag_aliases (upper(tag));
+INSERT INTO workspaces (name, tag) VALUES ('Personal', 'FAI');
 
 CREATE TABLE meeting_outcomes (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -12,6 +29,7 @@ CREATE TABLE meeting_outcomes (
   title TEXT NOT NULL DEFAULT '',
   notes_md TEXT NOT NULL DEFAULT '',
   ends_at TEXT,
+  workspace_id INTEGER NOT NULL REFERENCES workspaces(id),
   outcome_prompt_sent BOOLEAN NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
@@ -22,6 +40,7 @@ CREATE INDEX idx_meeting_outcomes_pending_prompt ON meeting_outcomes(ends_at)
 CREATE TABLE boards (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL,
+  workspace_id INTEGER NOT NULL REFERENCES workspaces(id),
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 
@@ -41,6 +60,8 @@ CREATE TABLE tasks (
   column_id INTEGER NOT NULL REFERENCES board_columns(id) ON DELETE RESTRICT,
   parent_task_id INTEGER REFERENCES tasks(id) ON DELETE SET NULL,
   meeting_outcome_id INTEGER REFERENCES meeting_outcomes(id) ON DELETE SET NULL,
+  workspace_id INTEGER NOT NULL REFERENCES workspaces(id),
+  ref_num INTEGER NOT NULL,
   title TEXT NOT NULL,
   description_md TEXT NOT NULL DEFAULT '',
   priority TEXT NOT NULL DEFAULT 'medium',
@@ -84,6 +105,7 @@ CREATE TABLE notes (
   title TEXT NOT NULL UNIQUE,
   body_md TEXT NOT NULL DEFAULT '',
   task_id INTEGER REFERENCES tasks(id) ON DELETE SET NULL,
+  workspace_id INTEGER NOT NULL REFERENCES workspaces(id),
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
@@ -134,12 +156,14 @@ CREATE TABLE reminders (
   title TEXT NOT NULL,
   remind_at TEXT NOT NULL,
   task_id INTEGER REFERENCES tasks(id) ON DELETE SET NULL,
+  workspace_id INTEGER NOT NULL REFERENCES workspaces(id),
   sent BOOLEAN NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 CREATE INDEX idx_reminders_due_unsent ON reminders(remind_at) WHERE sent = 0;
 
-INSERT INTO boards (name) VALUES ('Personal');
+INSERT INTO boards (name, workspace_id)
+SELECT 'Personal', id FROM workspaces WHERE tag = 'FAI';
 INSERT INTO board_columns (board_id, name, position, is_done)
 SELECT id, 'To Do', 0, 0 FROM boards WHERE name = 'Personal';
 INSERT INTO board_columns (board_id, name, position, is_done)

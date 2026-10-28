@@ -7,16 +7,30 @@ package sqlc
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createBoard = `-- name: CreateBoard :one
-INSERT INTO boards (name) VALUES ($1) RETURNING id, name, created_at
+INSERT INTO boards (name, workspace_id)
+VALUES ($1, COALESCE(NULLIF($2::bigint, 0), (SELECT id FROM workspaces ORDER BY id LIMIT 1)))
+RETURNING id, name, created_at, workspace_id
 `
 
-func (q *Queries) CreateBoard(ctx context.Context, name string) (Board, error) {
-	row := q.db.QueryRow(ctx, createBoard, name)
+type CreateBoardParams struct {
+	Name        string `json:"name"`
+	WorkspaceID int64  `json:"workspace_id"`
+}
+
+func (q *Queries) CreateBoard(ctx context.Context, arg CreateBoardParams) (Board, error) {
+	row := q.db.QueryRow(ctx, createBoard, arg.Name, arg.WorkspaceID)
 	var i Board
-	err := row.Scan(&i.ID, &i.Name, &i.CreatedAt)
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.CreatedAt,
+		&i.WorkspaceID,
+	)
 	return i, err
 }
 
@@ -52,13 +66,18 @@ func (q *Queries) CreateColumn(ctx context.Context, arg CreateColumnParams) (Boa
 }
 
 const getBoard = `-- name: GetBoard :one
-SELECT id, name, created_at FROM boards WHERE id = $1
+SELECT id, name, created_at, workspace_id FROM boards WHERE id = $1
 `
 
 func (q *Queries) GetBoard(ctx context.Context, id int64) (Board, error) {
 	row := q.db.QueryRow(ctx, getBoard, id)
 	var i Board
-	err := row.Scan(&i.ID, &i.Name, &i.CreatedAt)
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.CreatedAt,
+		&i.WorkspaceID,
+	)
 	return i, err
 }
 
@@ -81,11 +100,13 @@ func (q *Queries) GetColumn(ctx context.Context, id int64) (BoardColumn, error) 
 }
 
 const listBoards = `-- name: ListBoards :many
-SELECT id, name, created_at FROM boards ORDER BY id
+SELECT id, name, created_at, workspace_id FROM boards
+WHERE $1::bigint IS NULL OR workspace_id = $1
+ORDER BY id
 `
 
-func (q *Queries) ListBoards(ctx context.Context) ([]Board, error) {
-	rows, err := q.db.Query(ctx, listBoards)
+func (q *Queries) ListBoards(ctx context.Context, workspaceID pgtype.Int8) ([]Board, error) {
+	rows, err := q.db.Query(ctx, listBoards, workspaceID)
 	if err != nil {
 		return nil, err
 	}
@@ -93,7 +114,12 @@ func (q *Queries) ListBoards(ctx context.Context) ([]Board, error) {
 	var items []Board
 	for rows.Next() {
 		var i Board
-		if err := rows.Scan(&i.ID, &i.Name, &i.CreatedAt); err != nil {
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.CreatedAt,
+			&i.WorkspaceID,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
