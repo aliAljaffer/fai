@@ -9,7 +9,6 @@ import { Chat } from './pages/Chat'
 import { List } from './pages/List'
 import { Notes } from './pages/Notes'
 import { NoteEditor } from './pages/NoteEditor'
-import { Reminders } from './pages/Reminders'
 import { Search } from './pages/Search'
 import { Settings } from './pages/Settings'
 import { Stats } from './pages/Stats'
@@ -76,14 +75,6 @@ export function App() {
         >
           Stats
         </NavLink>
-        <NavLink
-          to="/reminders"
-          className={({ isActive }) =>
-            cn('text-muted-foreground hover:text-foreground', isActive && 'font-semibold text-foreground')
-          }
-        >
-          Reminders
-        </NavLink>
         <TimerWidget />
         <ThemeToggle />
         <Button
@@ -122,7 +113,6 @@ export function App() {
           <Route path="/notes" element={<Notes />} />
           <Route path="/notes/:id" element={<NoteEditor />} />
           <Route path="/stats" element={<Stats />} />
-          <Route path="/reminders" element={<Reminders />} />
           <Route path="/search" element={<Search />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/auth/callback" element={<AuthCallback />} />

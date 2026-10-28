@@ -1,7 +1,6 @@
 import { Command } from 'cmdk'
 import {
   BarChart3,
-  Bell,
   Calendar,
   LayoutDashboard,
   List,
@@ -23,7 +22,6 @@ const pages = [
   { label: 'Calendar', path: '/calendar', icon: Calendar },
   { label: 'Notes', path: '/notes', icon: NotebookPen },
   { label: 'Stats', path: '/stats', icon: BarChart3 },
-  { label: 'Reminders', path: '/reminders', icon: Bell },
   { label: 'Search', path: '/search', icon: Search },
   { label: 'Settings', path: '/settings', icon: Settings },
 ]

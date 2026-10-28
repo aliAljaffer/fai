@@ -45,8 +45,9 @@ export function Chat() {
       <header className="flex flex-col gap-1">
         <h1 className="text-lg font-semibold">Chat</h1>
         <p className="text-xs text-muted-foreground">
-          Ask about your tasks, notes, or what to do next. The assistant sees open task titles and
-          note titles.
+          Ask about your tasks, notes, or what to do next. It can also create tasks and reminders,
+          for example "Create a task to refresh the Cloudflare token on Wednesday". The assistant
+          sees open task titles and note titles.
         </p>
       </header>
 
