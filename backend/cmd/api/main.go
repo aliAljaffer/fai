@@ -97,6 +97,7 @@ func main() {
 	}
 	scheduler := &reminders.Scheduler{Store: st, Ntfy: ntfyClient, Mail: mailClient}
 	go scheduler.Run(context.Background())
+	go server.RunCalendarSync(context.Background())
 
 	addr := net.JoinHostPort(cfg.BindAddr, cfg.Port)
 	log.Printf("fai backend listening on %s", addr)

@@ -1,6 +1,17 @@
 package httpapi
 
-import "testing"
+import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"path/filepath"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"github.com/alialjaffer/fai/backend/internal/store/lite"
+)
 
 func TestNormalizeCalendarURL(t *testing.T) {
 	cases := []struct {
@@ -52,5 +63,81 @@ func TestNormalizeCalendarURL(t *testing.T) {
 				t.Fatalf("got %q, want %q", got, tc.want)
 			}
 		})
+	}
+}
+
+func TestImportedCalendarsSyncAndCache(t *testing.T) {
+	st, err := lite.New(filepath.Join(t.TempDir(), "fai.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	const body = "BEGIN:VCALENDAR\r\n" +
+		"VERSION:2.0\r\n" +
+		"BEGIN:VEVENT\r\n" +
+		"UID:outlook-1\r\n" +
+		"SUMMARY:Outlook event\r\n" +
+		"DTSTART;VALUE=DATE:20261015\r\n" +
+		"END:VEVENT\r\n" +
+		"END:VCALENDAR\r\n"
+
+	var hits atomic.Int32
+	feed := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		w.Header().Set("Content-Type", "text/calendar")
+		w.Write([]byte(body))
+	}))
+
+	ctx := context.Background()
+	source, err := st.CreateCalendarSource(ctx, "Outlook", feed.URL, "#2563eb")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	server := httptest.NewServer(NewRouter(&Server{Store: st}))
+	defer server.Close()
+
+	fetch := func() []importedCalendar {
+		res, err := http.Get(server.URL + "/api/calendar/imported?from=2026-10-01&to=2026-11-01")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+		var calendars []importedCalendar
+		if err := json.NewDecoder(res.Body).Decode(&calendars); err != nil {
+			t.Fatal(err)
+		}
+		return calendars
+	}
+
+	first := fetch()
+	if len(first) != 1 || first[0].Error != "" || len(first[0].Events) != 1 {
+		t.Fatalf("unexpected first result: %+v", first)
+	}
+	if got := hits.Load(); got != 1 {
+		t.Fatalf("first view fetched %d times, want 1", got)
+	}
+
+	fetch()
+	if got := hits.Load(); got != 1 {
+		t.Fatalf("cached view fetched again (%d), want 1", got)
+	}
+
+	stored, _, ok, err := st.GetCalendarFeed(ctx, source.ID)
+	if err != nil || !ok || len(stored) == 0 {
+		t.Fatalf("feed was not stored in Fai: ok=%v err=%v", ok, err)
+	}
+
+	feed.Close()
+	if err := st.SetCalendarFeed(ctx, source.ID, stored, time.Now().Add(-time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	offline := fetch()
+	if len(offline) != 1 || len(offline[0].Events) != 1 || offline[0].Error != "" {
+		t.Fatalf("stale cache was not served when the feed was unreachable: %+v", offline)
+	}
+	if got := hits.Load(); got != 1 {
+		t.Fatalf("closed feed still counted %d hits", got)
 	}
 }

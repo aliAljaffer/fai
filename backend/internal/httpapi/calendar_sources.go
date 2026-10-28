@@ -1,9 +1,11 @@
 package httpapi
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -16,6 +18,10 @@ import (
 )
 
 const maxImportedCalendarBytes = 8 << 20
+
+// CalendarSyncInterval is how often cached external feeds refresh in the
+// background, and how stale a feed may be before opening the calendar refetches it.
+const CalendarSyncInterval = 15 * time.Minute
 
 var colorPattern = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
 
@@ -160,11 +166,12 @@ func (s *Server) listImportedCalendars(w http.ResponseWriter, r *http.Request) {
 	out := make([]importedCalendar, 0, len(sources))
 	for _, source := range sources {
 		item := importedCalendar{Source: source, Events: []importedEvent{}}
-		events, err := s.fetchImportedEvents(r, source, from, to)
+		data, err := s.calendarFeedData(r.Context(), source, false)
+		if err == nil {
+			item.Events, err = parseImportedEvents(source, data, from, to)
+		}
 		if err != nil {
 			item.Error = err.Error()
-		} else {
-			item.Events = events
 		}
 		out = append(out, item)
 	}
@@ -200,8 +207,62 @@ func importedRange(r *http.Request) (time.Time, time.Time, error) {
 	return from, to, nil
 }
 
-func (s *Server) fetchImportedEvents(r *http.Request, source store.CalendarSource, from, to time.Time) ([]importedEvent, error) {
-	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, source.URL, nil)
+// calendarFeedData returns the stored feed, refetching it over https when it is
+// missing, older than CalendarSyncInterval, or force is set. A failed refresh
+// keeps serving the stored copy so a flaky feed does not blank the calendar.
+func (s *Server) calendarFeedData(ctx context.Context, source store.CalendarSource, force bool) ([]byte, error) {
+	data, fetchedAt, ok, err := s.Store.GetCalendarFeed(ctx, source.ID)
+	if err != nil {
+		return nil, err
+	}
+	if ok && !force && time.Since(fetchedAt) < CalendarSyncInterval {
+		return data, nil
+	}
+	fresh, err := fetchCalendarFeed(ctx, source)
+	if err != nil {
+		if ok {
+			return data, nil
+		}
+		return nil, err
+	}
+	fetchedAt = time.Now().UTC()
+	if err := s.Store.SetCalendarFeed(ctx, source.ID, fresh, fetchedAt); err != nil {
+		log.Printf("storing calendar feed %s: %v", source.Name, err)
+	}
+	return fresh, nil
+}
+
+// RunCalendarSync keeps stored Outlook and other iCalendar feeds current by
+// refreshing them in the background until ctx is done.
+func (s *Server) RunCalendarSync(ctx context.Context) {
+	s.syncCalendarFeeds(ctx)
+	ticker := time.NewTicker(CalendarSyncInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			s.syncCalendarFeeds(ctx)
+		}
+	}
+}
+
+func (s *Server) syncCalendarFeeds(ctx context.Context) {
+	sources, err := s.Store.ListCalendarSources(ctx)
+	if err != nil {
+		log.Printf("listing calendar feeds for sync: %v", err)
+		return
+	}
+	for _, source := range sources {
+		if _, err := s.calendarFeedData(ctx, source, true); err != nil {
+			log.Printf("syncing calendar feed %s: %v", source.Name, err)
+		}
+	}
+}
+
+func fetchCalendarFeed(ctx context.Context, source store.CalendarSource) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, source.URL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("could not request calendar")
 	}
@@ -224,7 +285,10 @@ func (s *Server) fetchImportedEvents(r *http.Request, source store.CalendarSourc
 	if len(data) > maxImportedCalendarBytes {
 		return nil, fmt.Errorf("calendar is larger than %d bytes", maxImportedCalendarBytes)
 	}
+	return data, nil
+}
 
+func parseImportedEvents(source store.CalendarSource, data []byte, from, to time.Time) ([]importedEvent, error) {
 	occurrences, err := ics.Parse(data, from, to)
 	if err != nil {
 		return nil, fmt.Errorf("could not parse calendar")

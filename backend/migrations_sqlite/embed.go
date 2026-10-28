@@ -13,3 +13,6 @@ var Attachments string
 
 //go:embed 003_calendar_sources.sql
 var CalendarSources string
+
+//go:embed 004_calendar_feed_cache.sql
+var CalendarFeedCache string

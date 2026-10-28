@@ -52,8 +52,9 @@ export function CalendarSourcesDialog({
         <DialogHeader>
           <DialogTitle>Calendars</DialogTitle>
           <DialogDescription>
-            Import external iCalendar feeds here. Their events appear in this calendar with the
-            color you pick and stay out of Fai's own calendar export.
+            Sync an Outlook or other iCalendar feed into Fai with its https (or webcal) link.
+            Events appear in this calendar with the color you pick, refresh in the background,
+            and stay out of Fai's own calendar export.
           </DialogDescription>
         </DialogHeader>
 

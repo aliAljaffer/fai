@@ -2,7 +2,10 @@ package lite
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
+	"time"
 
 	"github.com/alialjaffer/fai/backend/internal/store"
 )
@@ -72,4 +75,31 @@ func (s *Store) DeleteCalendarSource(ctx context.Context, id int64) error {
 		return fmt.Errorf("%w: calendar source %d", store.ErrNotFound, id)
 	}
 	return nil
+}
+
+func (s *Store) GetCalendarFeed(ctx context.Context, sourceID int64) ([]byte, time.Time, bool, error) {
+	var data, fetchedAt string
+	err := s.db.QueryRowContext(ctx, `
+		SELECT data, fetched_at FROM calendar_feed_cache WHERE source_id = ?`, sourceID).
+		Scan(&data, &fetchedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, time.Time{}, false, nil
+	}
+	if err != nil {
+		return nil, time.Time{}, false, err
+	}
+	at, err := parseTime(fetchedAt)
+	if err != nil {
+		return nil, time.Time{}, false, err
+	}
+	return []byte(data), at, true, nil
+}
+
+func (s *Store) SetCalendarFeed(ctx context.Context, sourceID int64, data []byte, fetchedAt time.Time) error {
+	_, err := s.db.ExecContext(ctx, `
+		INSERT INTO calendar_feed_cache (source_id, data, fetched_at)
+		VALUES (?, ?, ?)
+		ON CONFLICT (source_id) DO UPDATE SET data = excluded.data, fetched_at = excluded.fetched_at`,
+		sourceID, string(data), formatTime(fetchedAt))
+	return err
 }

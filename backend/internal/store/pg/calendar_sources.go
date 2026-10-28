@@ -2,7 +2,11 @@ package pg
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"time"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/alialjaffer/fai/backend/internal/store"
 )
@@ -56,4 +60,28 @@ func (s *Store) DeleteCalendarSource(ctx context.Context, id int64) error {
 		return fmt.Errorf("%w: calendar source %d", store.ErrNotFound, id)
 	}
 	return nil
+}
+
+func (s *Store) GetCalendarFeed(ctx context.Context, sourceID int64) ([]byte, time.Time, bool, error) {
+	var data string
+	var fetchedAt time.Time
+	err := s.pool.QueryRow(ctx, `
+		SELECT data, fetched_at FROM calendar_feed_cache WHERE source_id = $1`, sourceID).
+		Scan(&data, &fetchedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, time.Time{}, false, nil
+	}
+	if err != nil {
+		return nil, time.Time{}, false, err
+	}
+	return []byte(data), fetchedAt, true, nil
+}
+
+func (s *Store) SetCalendarFeed(ctx context.Context, sourceID int64, data []byte, fetchedAt time.Time) error {
+	_, err := s.pool.Exec(ctx, `
+		INSERT INTO calendar_feed_cache (source_id, data, fetched_at)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (source_id) DO UPDATE SET data = EXCLUDED.data, fetched_at = EXCLUDED.fetched_at`,
+		sourceID, string(data), fetchedAt)
+	return err
 }

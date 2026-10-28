@@ -120,6 +120,8 @@ type Store interface {
 	CreateCalendarSource(ctx context.Context, name, url, color string) (CalendarSource, error)
 	UpdateCalendarSourceColor(ctx context.Context, id int64, color string) (CalendarSource, error)
 	DeleteCalendarSource(ctx context.Context, id int64) error
+	GetCalendarFeed(ctx context.Context, sourceID int64) ([]byte, time.Time, bool, error)
+	SetCalendarFeed(ctx context.Context, sourceID int64, data []byte, fetchedAt time.Time) error
 
 	// Meeting outcomes
 	ListMeetingOutcomes(ctx context.Context, occurredOn *string) ([]MeetingOutcome, error)

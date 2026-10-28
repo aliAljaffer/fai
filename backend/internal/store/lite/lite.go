@@ -58,6 +58,9 @@ func New(path string) (*Store, error) {
 	if _, err := db.ExecContext(ctx, migrationssqlite.CalendarSources); err != nil {
 		return nil, fmt.Errorf("applying sqlite calendar sources schema: %w", err)
 	}
+	if _, err := db.ExecContext(ctx, migrationssqlite.CalendarFeedCache); err != nil {
+		return nil, fmt.Errorf("applying sqlite calendar feed cache schema: %w", err)
+	}
 
 	return &Store{q: sqlitedb.New(db), db: db}, nil
 }
