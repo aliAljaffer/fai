@@ -204,6 +204,60 @@ export function useDeleteTask(boardId: number | undefined) {
   })
 }
 
+export type BulkTaskAction =
+  | { type: 'move'; columnId: number }
+  | { type: 'priority'; priority: string }
+  | { type: 'dueDate'; dueDate: string | null }
+  | { type: 'addTag'; tagId: number }
+  | { type: 'removeTag'; tagId: number }
+  | { type: 'delete' }
+
+// Bulk operations reuse the single-task endpoints. Moves run sequentially so each
+// moved task lands after the previous one instead of racing for the same position.
+export function useBulkTaskActions() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ tasks, action }: { tasks: Task[]; action: BulkTaskAction }) => {
+      const run = (task: Task) => {
+        switch (action.type) {
+          case 'move':
+            return api.post<void>(`/tasks/${task.id}/move`, { column_id: action.columnId })
+          case 'priority':
+            return api.patch<void>(`/tasks/${task.id}`, {
+              title: task.title,
+              description_md: task.description_md,
+              priority: action.priority,
+              due_date: task.due_date,
+            })
+          case 'dueDate':
+            return api.patch<void>(`/tasks/${task.id}`, {
+              title: task.title,
+              description_md: task.description_md,
+              priority: task.priority,
+              due_date: action.dueDate,
+            })
+          case 'addTag':
+            return api.put<void>(`/tasks/${task.id}/tags/${action.tagId}`)
+          case 'removeTag':
+            return api.delete<void>(`/tasks/${task.id}/tags/${action.tagId}`)
+          case 'delete':
+            return api.delete<void>(`/tasks/${task.id}`)
+        }
+      }
+
+      if (action.type === 'move') {
+        for (const task of tasks) await run(task)
+        return
+      }
+      await Promise.all(tasks.map(run))
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ['tasks'] })
+      qc.invalidateQueries({ queryKey: ['task'] })
+    },
+  })
+}
+
 export function useNotes() {
   return useQuery({ queryKey: ['notes'], queryFn: () => api.get<Note[]>('/notes') })
 }

@@ -70,10 +70,13 @@ existing subscriptions. In docker-compose, Caddy routes this one path around
 
 `⌘K`/`Ctrl+K` opens the command palette (pages, tasks, new task). `n` opens the inline task composer,
 `e` focuses the open task's title, and `Esc` closes sheets/dialogs. The List page
-filters by text, column, and tag; rows open the task sheet. Subtasks appear under their
-parent task with a progress count and an expand control. The Calendar page has a meeting
-summary button that saves notes and can turn action items into tasks. Chat is a separate
-page backed by a fixed Fai system prompt. The nav has a persisted dark/light theme toggle.
+filters by text, column, and tag; rows open the task sheet. Checkboxes support bulk
+actions — move to a column, set priority, add or remove labels, set or clear the due
+date, mark done/reopen, and delete — with shift-click range selection and select-all.
+Subtasks appear under their parent task with a progress count and an expand control. The
+Calendar page has a meeting summary button that saves notes and can turn action items
+into tasks. Chat is a separate page backed by a fixed Fai system prompt. The nav has a
+persisted dark/light theme toggle.
 
 ## Notifications
 
