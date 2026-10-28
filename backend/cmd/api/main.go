@@ -5,6 +5,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
@@ -103,7 +104,15 @@ func main() {
 
 	addr := net.JoinHostPort(cfg.BindAddr, cfg.Port)
 	log.Printf("fai backend listening on %s", addr)
-	if err := http.ListenAndServe(addr, router); err != nil {
+	// ReadHeaderTimeout bounds unauthenticated slow-header requests; the read and
+	// write timeouts stay unset because AI calls can legitimately run for a minute.
+	srv := &http.Server{
+		Addr:              addr,
+		Handler:           router,
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
+	if err := srv.ListenAndServe(); err != nil {
 		log.Fatal(err)
 	}
 }

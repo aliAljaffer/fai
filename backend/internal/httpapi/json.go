@@ -2,8 +2,12 @@ package httpapi
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 )
+
+// maxJSONBytes caps decoded JSON request bodies; attachments have their own limit.
+const maxJSONBytes = 2 << 20
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
@@ -16,5 +20,5 @@ func writeError(w http.ResponseWriter, status int, msg string) {
 }
 
 func decodeJSON(r *http.Request, v any) error {
-	return json.NewDecoder(r.Body).Decode(v)
+	return json.NewDecoder(io.LimitReader(r.Body, maxJSONBytes)).Decode(v)
 }
