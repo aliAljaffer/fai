@@ -151,6 +151,78 @@ function LoadError({
   )
 }
 
+function NewTaskDialog({
+  open,
+  onOpenChange,
+  boardId,
+  columnId,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  boardId?: number
+  columnId?: number
+}) {
+  const [title, setTitle] = useState('')
+  const createTask = useCreateTask(boardId)
+
+  async function submit() {
+    const value = title.trim()
+    if (!value || !boardId || !columnId || createTask.isPending) return
+    try {
+      await createTask.mutateAsync({ board_id: boardId, column_id: columnId, title: value })
+      setTitle('')
+      onOpenChange(false)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not create task')
+    }
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        onOpenChange(next)
+        if (!next) setTitle('')
+      }}
+    >
+      <DialogContent className="rounded-lg">
+        <DialogHeader>
+          <DialogTitle>New task</DialogTitle>
+          <DialogDescription>
+            It lands in the first column of this board.
+          </DialogDescription>
+        </DialogHeader>
+        <Input
+          autoFocus
+          value={title}
+          placeholder="Task title"
+          aria-label="Task title"
+          disabled={createTask.isPending}
+          onChange={(event) => setTitle(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.nativeEvent.isComposing) return
+            if (event.key === 'Enter') {
+              event.preventDefault()
+              void submit()
+            }
+          }}
+        />
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button
+            disabled={!title.trim() || !columnId || createTask.isPending}
+            onClick={() => void submit()}
+          >
+            Create task
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 function BoardSkeleton({ columns = 4 }: { columns?: number }) {
   return (
     <div className="flex flex-col gap-4" aria-busy="true" aria-label="Loading board">
@@ -203,6 +275,7 @@ export function Board() {
   const [activeTaskId, setActiveTaskId] = useState<number | null>(null)
   const [overColumnId, setOverColumnId] = useState<number | null>(null)
   const [composerColumnId, setComposerColumnId] = useState<number | null>(null)
+  const [newTaskOpen, setNewTaskOpen] = useState(false)
   const [newBoardOpen, setNewBoardOpen] = useState(false)
   const [addingColumn, setAddingColumn] = useState(false)
   const [columnName, setColumnName] = useState('')
@@ -225,7 +298,7 @@ export function Board() {
     if (newTaskRequest === handledNewTaskRequest.current) return
     if (!orderedColumns[0]) return
     handledNewTaskRequest.current = newTaskRequest
-    setComposerColumnId(orderedColumns[0].id)
+    setNewTaskOpen(true)
   }, [newTaskRequest, orderedColumns])
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
@@ -376,8 +449,8 @@ export function Board() {
     }
   }
 
-  function startFirstTask() {
-    if (orderedColumns[0]) setComposerColumnId(orderedColumns[0].id)
+  function openNewTask() {
+    setNewTaskOpen(true)
   }
 
   if (boardsQuery.isError) {
@@ -509,7 +582,7 @@ export function Board() {
                 <SelectItem value="low">Low</SelectItem>
               </SelectContent>
             </Select>
-            <Button size="sm" disabled={!orderedColumns.length} onClick={startFirstTask}>
+            <Button size="sm" disabled={!orderedColumns.length} onClick={openNewTask}>
               <Plus />
               New task
             </Button>
@@ -658,6 +731,13 @@ export function Board() {
         open={newBoardOpen}
         onOpenChange={setNewBoardOpen}
         onCreated={(created) => setSelectedBoardId(created.id)}
+      />
+
+      <NewTaskDialog
+        open={newTaskOpen}
+        onOpenChange={setNewTaskOpen}
+        boardId={boardId}
+        columnId={orderedColumns[0]?.id}
       />
     </DndContext>
   )
