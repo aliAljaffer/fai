@@ -27,7 +27,7 @@ In the app these map to CSS variables in `frontend/src/index.css`: `--primary` i
 
 Labels and statuses live in `frontend/src/lib/palette.ts`: eight label hues at a single lightness and chroma, plus three status colours (todo slate, doing teal, done green). Status is shown as a dot so the text keeps full contrast. `@task` references use the brand slate.
 
-Semantic tokens sit beside the base palette in `index.css` and replace literal colours: `--attention` (reminders, sync warnings), `--attention-foreground`, `--destructive-foreground`, `--code-string`, `--code-number`, the `--chart-1..5` slate ramp, and `--brand-tile` / `--brand-ink` for the mark itself.
+Semantic tokens sit beside the base palette in `index.css` and replace literal colours: `--attention` (reminders, sync warnings), `--attention-foreground`, `--destructive-foreground`, `--code-string`, `--code-number`, the `--chart-1..2` slate ramp, and `--brand-tile` / `--brand-ink` for the mark itself.
 
 ## Typography
 

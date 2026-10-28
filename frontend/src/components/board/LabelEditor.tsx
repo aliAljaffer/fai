@@ -9,8 +9,9 @@ import {
   useRemoveTaskTag,
   useTags,
 } from '../../api/hooks'
+import { TagChip } from '../TagChip'
 import type { Tag, Task } from '../../api/types'
-import { labelColorFor as colorFor, labelChipStyle } from '../../lib/palette'
+import { labelColorFor as colorFor } from '../../lib/palette'
 
 export function LabelEditor({ task }: { task: Task }) {
   const { data: allTags } = useTags()
@@ -58,16 +59,7 @@ export function LabelEditor({ task }: { task: Task }) {
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-1.5">
         {(task.tags ?? []).map((tag) => (
-          <span
-            key={tag.id}
-            className="inline-flex items-center gap-1 rounded-full border py-0.5 pr-1 pl-2 text-xs"
-            style={labelChipStyle(tag.color)}
-          >
-            <span
-              className="size-1.5 rounded-full"
-              style={{ backgroundColor: tag.color || undefined }}
-            />
-            {tag.name}
+          <TagChip key={tag.id} tag={tag} className="rounded-full py-0.5 pr-1 pl-2 text-xs">
             <button
               className="rounded-full p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
               aria-label={`Remove ${tag.name}`}
@@ -75,7 +67,7 @@ export function LabelEditor({ task }: { task: Task }) {
             >
               <X className="size-3" />
             </button>
-          </span>
+          </TagChip>
         ))}
         {!(task.tags ?? []).length && <span className="text-xs text-muted-foreground">No labels</span>}
       </div>

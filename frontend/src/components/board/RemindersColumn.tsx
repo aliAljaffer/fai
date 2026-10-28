@@ -71,7 +71,7 @@ export function RemindersColumn() {
           <Bell className="size-3.5" />
           Reminders
         </h2>
-        <span className="shrink-0 text-xs tabular-nums text-attention/70">
+        <span className="shrink-0 text-xs tabular-nums text-attention">
           {upcoming.length}
         </span>
       </div>

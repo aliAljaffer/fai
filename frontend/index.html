@@ -3,14 +3,17 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="theme-color" content="#FAFCFE" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#0D1012" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#0D1012" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>fai</title>
     <script>
       try {
         const theme = localStorage.getItem('theme')
-        document.documentElement.classList.toggle('dark', theme !== 'light')
+        const dark = theme !== 'light'
+        document.documentElement.classList.toggle('dark', dark)
+        document
+          .querySelector('meta[name="theme-color"]')
+          .setAttribute('content', dark ? '#0D1012' : '#FAFCFE')
       } catch {}
     </script>
   </head>

@@ -15,6 +15,11 @@ export const STATUS_COLORS = {
   done: '#519160',
 }
 
+export const THEME_BACKGROUNDS = {
+  light: '#FAFCFE',
+  dark: '#0D1012',
+}
+
 export function labelColorFor(name: string) {
   let hash = 0
   for (const char of name) hash = (hash * 31 + char.charCodeAt(0)) >>> 0

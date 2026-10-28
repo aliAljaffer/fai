@@ -7,8 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useBoards, useColumns, useJiraLink, useTags, useTasks } from '../api/hooks'
 import { BulkTaskBar } from '../components/board/BulkTaskBar'
+import { TagChip } from '../components/TagChip'
 import { useDebounced } from '../lib/useDebounced'
-import { labelChipStyle } from '../lib/palette'
 import { columnColor, useColumnColors } from '../store/columnColors'
 import { useUIStore } from '../store/ui'
 import { useWorkspaceStore } from '../store/workspace'
@@ -219,17 +219,11 @@ export function List() {
         <TableCell>
           <div className="flex flex-wrap gap-1">
             {(task.tags ?? []).map((tag) => (
-              <span
+              <TagChip
                 key={tag.id}
-                className="inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[0.65rem] text-muted-foreground"
-                style={labelChipStyle(tag.color)}
-              >
-                <span
-                  className="size-1.5 rounded-full"
-                  style={{ backgroundColor: tag.color || undefined }}
-                />
-                {tag.name}
-              </span>
+                tag={tag}
+                className="rounded-full px-1.5 py-0.5 text-[0.65rem] text-muted-foreground"
+              />
             ))}
           </div>
         </TableCell>
