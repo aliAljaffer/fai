@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { ChevronRight, SlidersHorizontal } from 'lucide-react'
+import { ChevronRight, Plus, SlidersHorizontal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
@@ -16,6 +16,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { formatTimestamp } from '../lib/format'
 import { useBoards, useColumns, useJiraLinks, useTags, useTasks } from '../api/hooks'
 import { BulkTaskBar } from '../components/board/BulkTaskBar'
+import { NewTaskDialog } from '../components/board/NewTaskDialog'
 import { TaskTypeIcon } from '../components/TaskTypeIcon'
 import { taskStatus } from '../lib/taskType'
 import { StatusPill } from '../components/StatusPill'
@@ -88,12 +89,35 @@ function JiraChip({ link }: { link?: JiraLink }) {
       target="_blank"
       rel="noreferrer"
       aria-label={`Open ${link.jira_key} in Jira`}
-      className="ml-auto shrink-0 rounded border px-1 font-mono text-[0.65rem] text-primary hover:underline"
+      className="shrink-0 rounded border px-1 font-mono text-[0.65rem] text-primary hover:underline"
       onClick={(event) => event.stopPropagation()}
     >
       {link.jira_key}
     </a>
   )
+}
+
+type Sort = { key: SortKey; dir: 1 | -1 }
+
+const sortKeys = new Set<SortKey>(['title', 'priority', 'due_date', 'created_at', 'updated_at'])
+
+function loadSort(): Sort {
+  try {
+    const saved: unknown = JSON.parse(localStorage.getItem('list-sort') ?? 'null')
+    if (
+      saved &&
+      typeof saved === 'object' &&
+      'key' in saved &&
+      'dir' in saved &&
+      sortKeys.has(saved.key as SortKey) &&
+      (saved.dir === 1 || saved.dir === -1)
+    ) {
+      return { key: saved.key as SortKey, dir: saved.dir }
+    }
+  } catch {
+    // fall through to default
+  }
+  return { key: 'title', dir: 1 }
 }
 
 export function List() {
@@ -118,16 +142,21 @@ export function List() {
   })
 
   const [, setSearchParams] = useSearchParams()
-  const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: 'title', dir: 1 })
+  const [sort, setSort] = useState<Sort>(loadSort)
   const [visible, setVisible] = useState<Set<ColumnKey>>(loadVisibleColumns)
   const [expanded, setExpanded] = useState<Set<number>>(() => new Set())
   const [selected, setSelected] = useState<Set<number>>(() => new Set())
   const [lastSelected, setLastSelected] = useState<number | null>(null)
   const [hideDone, setHideDone] = useState(false)
+  const [newTaskOpen, setNewTaskOpen] = useState(false)
 
   useEffect(() => {
     localStorage.setItem('list-columns', JSON.stringify([...visible]))
   }, [visible])
+
+  useEffect(() => {
+    localStorage.setItem('list-sort', JSON.stringify(sort))
+  }, [sort])
 
   const { data: jiraLinks } = useJiraLinks(workspaceParam)
   const jiraLinkById = useMemo(
@@ -145,6 +174,11 @@ export function List() {
 
   const doneColumnIds = useMemo(
     () => new Set((columns ?? []).filter((column) => column.is_done).map((column) => column.id)),
+    [columns],
+  )
+
+  const firstColumnId = useMemo(
+    () => [...(columns ?? [])].sort((a, b) => a.position - b.position)[0]?.id,
     [columns],
   )
 
@@ -317,7 +351,14 @@ export function List() {
             >
               {task.title}
             </button>
-            <JiraChip link={jiraLinkById.get(task.id)} />
+            <div className="ml-auto flex shrink-0 items-center gap-1">
+              <JiraChip link={jiraLinkById.get(task.id)} />
+              {task.ref && (
+                <span className="rounded border px-1 font-mono text-[0.65rem] text-muted-foreground">
+                  {task.ref}
+                </span>
+              )}
+            </div>
           </div>
         </TableCell>
         {visibleList.map((column) => (
@@ -432,6 +473,10 @@ export function List() {
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
+        <Button size="sm" disabled={!boardId || !firstColumnId} onClick={() => setNewTaskOpen(true)}>
+          <Plus />
+          New task
+        </Button>
       </div>
 
       {selectedTasks.length > 0 && (
@@ -510,6 +555,13 @@ export function List() {
           )}
         </TableBody>
       </Table>
+
+      <NewTaskDialog
+        open={newTaskOpen}
+        onOpenChange={setNewTaskOpen}
+        boardId={boardId}
+        columnId={firstColumnId}
+      />
     </div>
   )
 }
