@@ -25,6 +25,7 @@ import { AppIcon } from './components/Logo'
 import { ThemeToggle } from './components/ThemeToggle'
 import { PendingOutcomesBanner } from './components/calendar/PendingOutcomesBanner'
 import { TimerWidget } from './components/TimerWidget'
+import { UpdateIndicator } from './components/UpdateIndicator'
 import { TaskDetailSheet } from './components/board/TaskDetailSheet'
 import { useUIStore } from './store/ui'
 import { useWorkspaceStore } from './store/workspace'
@@ -132,6 +133,7 @@ export function App() {
         </NavLink>
         <TimerWidget />
         <ThemeToggle />
+        <UpdateIndicator />
         <Button
           variant="ghost"
           size="sm"

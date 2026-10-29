@@ -202,6 +202,24 @@
   }
 }
 
+.update-indicator {
+  border-color: color-mix(in oklch, var(--brand-ink) 22%, transparent);
+  background-color: var(--brand-tile);
+  color: var(--brand-ink);
+}
+
+.update-indicator:hover {
+  background-color: color-mix(in oklch, var(--brand-tile), var(--brand-ink) 10%);
+}
+
+.update-indicator:focus-visible {
+  border-color: var(--brand-ink);
+}
+
+.update-indicator-dot {
+  background-color: var(--brand-ink);
+}
+
 .prose,
 .prose-invert {
   --tw-prose-links: var(--primary);

@@ -20,6 +20,15 @@ import {
   useUpdateWorkspace,
   useWorkspaces,
 } from '../api/hooks'
+import {
+  appVersion,
+  checkForUpdates,
+  downloadUpdate,
+  installUpdate,
+  isDesktop,
+  setAutoDownload,
+  useUpdateState,
+} from '../lib/updates'
 import { columnColor, useColumnColors } from '../store/columnColors'
 import { useUIStore } from '../store/ui'
 import { useWorkspaceStore } from '../store/workspace'
@@ -198,6 +207,93 @@ function WorkspacesCard() {
   )
 }
 
+function AboutCard() {
+  const state = useUpdateState()
+  const desktop = isDesktop()
+  const busy = state.status === 'checking' || state.status === 'downloading'
+
+  const status =
+    state.status === 'checking'
+      ? 'Checking for updates…'
+      : state.status === 'available'
+        ? `Version ${state.version ?? ''} is available. Download it when you are ready.`
+        : state.status === 'downloading'
+          ? `Downloading version ${state.version ?? ''} (${Math.round(state.progress)}%).`
+          : state.status === 'downloaded'
+            ? `Version ${state.version ?? ''} is ready to install.`
+            : state.status === 'error'
+              ? `Update check failed: ${state.error ?? 'unknown error'}`
+              : state.autoDownload
+                ? 'fai checks for a new version every six hours and downloads it automatically.'
+                : 'fai checks for a new version every six hours and tells you when one is available.'
+
+  return (
+    <Card className="max-w-xl">
+      <CardHeader>
+        <CardTitle>About</CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
+        <div className="flex items-center justify-between text-sm">
+          <span>Version</span>
+          <span className="font-mono text-muted-foreground">{appVersion()}</span>
+        </div>
+        {desktop ? (
+          <>
+            <p className="text-sm text-muted-foreground">{status}</p>
+            <label className="flex items-start justify-between gap-3 rounded-md border px-2 py-1.5">
+              <span className="flex flex-col gap-0.5">
+                <span className="text-sm">Download updates automatically</span>
+                <span className="text-xs text-muted-foreground">
+                  When off, fai announces a new version and downloads it only when you ask.
+                </span>
+              </span>
+              <Input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4"
+                checked={state.autoDownload}
+                aria-label="Download updates automatically"
+                onChange={(event) => void setAutoDownload(event.target.checked)}
+              />
+            </label>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={busy}
+                onClick={() => void checkForUpdates()}
+              >
+                Check for updates
+              </Button>
+              {state.status === 'available' && (
+                <Button
+                  size="sm"
+                  className="update-indicator"
+                  onClick={() => void downloadUpdate()}
+                >
+                  Download {state.version}
+                </Button>
+              )}
+              {state.status === 'downloaded' && (
+                <Button
+                  size="sm"
+                  className="update-indicator"
+                  onClick={() => void installUpdate()}
+                >
+                  Restart to install {state.version}
+                </Button>
+              )}
+            </div>
+          </>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            Updates are delivered by the desktop app.
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
 export function Settings() {
   const workspaceId = useWorkspaceStore((state) => state.activeWorkspaceId)
   const { data: boards } = useBoards(workspaceId)
@@ -370,6 +466,8 @@ export function Settings() {
           </p>
         </CardContent>
       </Card>
+
+      <AboutCard />
     </div>
   )
 }

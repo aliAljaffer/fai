@@ -195,6 +195,11 @@ not add the quarantine attribute, so cask installs launch normally; a DMG downlo
 in a browser needs right-click Open the first time. Windows may show a SmartScreen
 warning.
 
+Installed copies check GitHub Releases every six hours and show an update badge in the
+navigation bar in the brand slate. Downloads wait for you by default; Settings has a
+toggle for automatic background downloads, plus the current version and a manual check
+button.
+
 ### Homebrew
 
 ```sh

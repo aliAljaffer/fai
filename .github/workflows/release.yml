@@ -61,6 +61,8 @@ jobs:
 
       - name: Build frontend
         working-directory: frontend
+        env:
+          VITE_APP_VERSION: ${{ env.RELEASE_TAG }}
         run: npm ci && npm run build
 
       - name: Build backend
@@ -104,15 +106,24 @@ jobs:
             electron/release/*.exe
             electron/release/*.AppImage
             electron/release/*.tar.gz
+            electron/release/*.blockmap
+            electron/release/latest*.yml
 
   release:
     needs: build
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
       - uses: actions/download-artifact@v4
         with:
-          path: dist
-          merge-multiple: true
+          path: artifacts
+
+      - name: Install PyYAML
+        run: python3 -m pip install --quiet pyyaml
+
+      - name: Assemble release files
+        run: python3 .github/merge-update-metadata.py --artifacts artifacts --dist dist
 
       - name: Write checksums
         working-directory: dist

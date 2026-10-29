@@ -6,7 +6,12 @@ directories:
   buildResources: build
 files:
   - main.js
+  - preload.js
   - package.json
+publish:
+  provider: github
+  owner: alialjaffer
+  repo: fai
 extraResources:
   - from: ../backend/bin
     to: backend
