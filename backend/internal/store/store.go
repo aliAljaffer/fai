@@ -166,5 +166,9 @@ type Store interface {
 	GetAISettings(ctx context.Context) (AISettings, error)
 	SaveAISettings(ctx context.Context, settings AISettings) (AISettings, error)
 
+	// Appearance is the shared palette selection for the hosted app.
+	GetAppearance(ctx context.Context) (AppearanceSettings, error)
+	SaveAppearance(ctx context.Context, settings AppearanceSettings) (AppearanceSettings, error)
+
 	Close()
 }

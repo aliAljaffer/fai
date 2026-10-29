@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from './client'
 import type {
   AISettings,
+  AppearanceSettings,
   Attachment,
   Board,
   BoardColumn,
@@ -608,6 +609,36 @@ export function useUpdateAISettings() {
       qc.setQueryData(['ai', 'settings'], settings)
       qc.invalidateQueries({ queryKey: ['ai', 'status'] })
     },
+  })
+}
+
+export function useAppearance() {
+  return useQuery({
+    queryKey: ['appearance'],
+    queryFn: () => api.get<AppearanceSettings>('/appearance'),
+  })
+}
+
+export function useUpdateAppearance() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: Omit<AppearanceSettings, 'updated_at'>) =>
+      api.put<AppearanceSettings>('/appearance', body),
+    onMutate: async (next) => {
+      await qc.cancelQueries({ queryKey: ['appearance'] })
+      const previous = qc.getQueryData<AppearanceSettings>(['appearance'])
+      qc.setQueryData<AppearanceSettings>(['appearance'], (current) => ({
+        global_palette_id: next.global_palette_id,
+        workspace_palettes: next.workspace_palettes,
+        custom_palettes: next.custom_palettes,
+        updated_at: current?.updated_at,
+      }))
+      return { previous }
+    },
+    onError: (_error, _next, context) => {
+      if (context?.previous) qc.setQueryData(['appearance'], context.previous)
+    },
+    onSuccess: (settings) => qc.setQueryData(['appearance'], settings),
   })
 }
 

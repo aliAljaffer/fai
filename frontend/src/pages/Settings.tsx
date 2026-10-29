@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { PaletteSelect, PaletteSwatches } from '@/components/ThemePalettePicker'
 import { Input } from '@/components/ui/input'
 import {
   Select,
@@ -13,12 +15,14 @@ import {
 import { Textarea } from '@/components/ui/textarea'
 import {
   useAISettings,
+  useAppearance,
   useBoards,
   useCalendarFeedURL,
   useColumns,
   useCreateWorkspace,
   useJiraImport,
   useUpdateAISettings,
+  useUpdateAppearance,
   useUpdateWorkspace,
   useWorkspaces,
 } from '../api/hooks'
@@ -31,10 +35,11 @@ import {
   setAutoDownload,
   useUpdateState,
 } from '../lib/updates'
+import { allPalettes, customPaletteId, DEFAULT_PALETTE_ID, findPalette } from '../lib/themes'
 import { columnColor, useColumnColors } from '../store/columnColors'
 import { useUIStore } from '../store/ui'
 import { useWorkspaceStore } from '../store/workspace'
-import type { Workspace } from '../api/types'
+import type { AppearanceSettings, Workspace } from '../api/types'
 
 const TAG_PATTERN = /^[A-Za-z]{3,4}$/
 
@@ -203,6 +208,238 @@ function WorkspacesCard() {
             </Button>
           </div>
           {error && <p className="text-xs text-destructive">{error}</p>}
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+const CUSTOM_PALETTE_COLORS = ['#F8F9FA', '#E9ECEF', '#ADB5BD', '#6C757D', '#212529']
+const NO_CUSTOM_PALETTES: AppearanceSettings['custom_palettes'] = []
+
+function AppearanceCard() {
+  const { data: workspaces } = useWorkspaces()
+  const { data: appearance, isError, refetch } = useAppearance()
+  const updateAppearance = useUpdateAppearance()
+  const customPalettes = appearance?.custom_palettes ?? NO_CUSTOM_PALETTES
+  const workspacePalettes = appearance?.workspace_palettes ?? {}
+  const globalPaletteId = appearance?.global_palette_id ?? DEFAULT_PALETTE_ID
+  const palettes = useMemo(() => allPalettes(customPalettes), [customPalettes])
+  const globalPalette = findPalette(globalPaletteId, customPalettes)
+  const [name, setName] = useState('')
+  const [colors, setColors] = useState<string[]>(CUSTOM_PALETTE_COLORS)
+  const pending = updateAppearance.isPending
+
+  function save(next: AppearanceSettings) {
+    updateAppearance.mutate(
+      {
+        global_palette_id: next.global_palette_id,
+        workspace_palettes: next.workspace_palettes,
+        custom_palettes: next.custom_palettes,
+      },
+      { onError: (error) => toast.error(serverError(error)) },
+    )
+  }
+
+  function addPalette() {
+    if (!appearance) return
+    const trimmed = name.trim()
+    if (!trimmed) return
+    save({
+      ...appearance,
+      custom_palettes: [
+        ...customPalettes,
+        { id: customPaletteId(trimmed), name: trimmed, colors: [...colors] },
+      ],
+    })
+    setName('')
+  }
+
+  function removePalette(id: string) {
+    if (!appearance) return
+    const nextWorkspaces = Object.fromEntries(
+      Object.entries(workspacePalettes).filter(([, paletteId]) => paletteId !== id),
+    )
+    save({
+      ...appearance,
+      global_palette_id: globalPaletteId === id ? DEFAULT_PALETTE_ID : globalPaletteId,
+      workspace_palettes: nextWorkspaces,
+      custom_palettes: customPalettes.filter((palette) => palette.id !== id),
+    })
+  }
+
+  function setGlobal(id: string) {
+    if (appearance) save({ ...appearance, global_palette_id: id })
+  }
+
+  function setWorkspace(workspaceId: number, id: string | null) {
+    if (!appearance) return
+    const next = { ...workspacePalettes }
+    if (id) next[String(workspaceId)] = id
+    else delete next[String(workspaceId)]
+    save({ ...appearance, workspace_palettes: next })
+  }
+
+  if (!appearance) {
+    return (
+      <Card className="max-w-xl">
+        <CardHeader>
+          <CardTitle>Appearance</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          <p className="text-sm text-muted-foreground">
+            {isError ? 'Could not load appearance settings.' : 'Loading appearance settings…'}
+          </p>
+          {isError && (
+            <Button size="sm" variant="outline" onClick={() => void refetch()}>
+              Retry
+            </Button>
+          )}
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <Card className="max-w-xl">
+      <CardHeader>
+        <CardTitle>Appearance</CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        <p className="text-sm text-muted-foreground">
+          Pick one palette for every workspace, then override it per workspace. Workspace
+          overrides follow the active workspace. Changes apply to every machine.
+        </p>
+
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-sm font-medium">Global theme</span>
+            {pending && <span className="text-xs text-muted-foreground">Saving…</span>}
+          </div>
+          <PaletteSelect
+            value={globalPalette.id}
+            palettes={palettes}
+            onChange={setGlobal}
+            ariaLabel="Global theme"
+            disabled={pending}
+          />
+          <div className="flex items-center gap-2 rounded-md border px-2 py-1.5">
+            <PaletteSwatches colors={globalPalette.colors} />
+            <span className="text-sm">{globalPalette.name}</span>
+            {globalPalette.custom && (
+              <span className="rounded border px-1 text-[0.65rem] text-muted-foreground">
+                Custom
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-2 border-t pt-3">
+          <span className="text-sm font-medium">Workspace overrides</span>
+          {workspaces?.map((workspace) => {
+            const overrideId = workspacePalettes[String(workspace.id)]
+            const effective = findPalette(overrideId ?? globalPalette.id, customPalettes)
+            const overrideValue =
+              overrideId && palettes.some((palette) => palette.id === overrideId)
+                ? overrideId
+                : 'inherit'
+            return (
+              <div
+                key={workspace.id}
+                className="flex flex-col gap-2 rounded-md border px-2 py-1.5 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="truncate text-sm">{workspace.name}</span>
+                  <span className="rounded border px-1 font-mono text-[0.65rem] text-muted-foreground">
+                    {workspace.tag}
+                  </span>
+                  <PaletteSwatches colors={effective.colors} className="hidden sm:inline-flex" />
+                </div>
+                <div className="w-full sm:w-64">
+                  <PaletteSelect
+                    value={overrideValue}
+                    palettes={palettes}
+                    inheritLabel={`Use global (${globalPalette.name})`}
+                    onChange={(value) =>
+                      setWorkspace(workspace.id, value === 'inherit' ? null : value)
+                    }
+                    ariaLabel={`Theme for ${workspace.name}`}
+                    disabled={pending}
+                  />
+                </div>
+              </div>
+            )
+          })}
+          {!workspaces?.length && (
+            <p className="text-sm text-muted-foreground">No workspaces yet.</p>
+          )}
+        </div>
+
+        <div className="flex flex-col gap-3 border-t pt-3">
+          <div>
+            <span className="text-sm font-medium">Custom palette</span>
+            <p className="text-xs text-muted-foreground">
+              Pick five colors. Custom palettes appear in both selectors.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              value={name}
+              aria-label="Custom palette name"
+              placeholder="Palette name"
+              className="h-8 min-w-40 flex-1 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              onChange={(event) => setName(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.nativeEvent.isComposing) return
+                if (event.key === 'Enter') addPalette()
+              }}
+            />
+            <Button size="sm" disabled={!name.trim() || pending} onClick={addPalette}>
+              Add palette
+            </Button>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {colors.map((color, index) => (
+              <input
+                key={index}
+                type="color"
+                value={color}
+                aria-label={`Custom palette color ${index + 1}`}
+                className="h-8 w-10 shrink-0 cursor-pointer rounded border border-input bg-transparent p-0.5"
+                onChange={(event) => {
+                  const value = event.target.value
+                  setColors((current) =>
+                    current.map((item, itemIndex) => (itemIndex === index ? value : item)),
+                  )
+                }}
+              />
+            ))}
+            <PaletteSwatches colors={colors} />
+          </div>
+          {customPalettes.length > 0 && (
+            <div className="flex flex-col gap-1">
+              {customPalettes.map((palette) => (
+                <div
+                  key={palette.id}
+                  className="flex items-center justify-between gap-2 rounded-md border px-2 py-1.5"
+                >
+                  <div className="flex min-w-0 items-center gap-2">
+                    <PaletteSwatches colors={palette.colors} />
+                    <span className="truncate text-sm">{palette.name}</span>
+                  </div>
+                  <Button
+                    size="icon-xs"
+                    variant="ghost"
+                    aria-label={`Remove ${palette.name}`}
+                    disabled={pending}
+                    onClick={() => removePalette(palette.id)}
+                  >
+                    <Trash2 />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </CardContent>
     </Card>
@@ -487,6 +724,8 @@ export function Settings() {
     <div className="flex flex-col gap-6">
       <WorkspacesCard />
 
+      <AppearanceCard />
+
       <AICard />
 
       <Card className="max-w-xl">
@@ -570,7 +809,7 @@ export function Settings() {
         </CardHeader>
         <CardContent className="flex flex-col gap-2">
           <p className="text-sm text-muted-foreground">
-            Colors the status text in the List view. Saved in this browser only.
+            Override the status pill colors in the List view. Defaults follow the active theme. Saved in this browser only.
           </p>
           {columns?.map((column) => (
             <label

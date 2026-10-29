@@ -22,6 +22,7 @@ import { Settings } from './pages/Settings'
 import { Stats } from './pages/Stats'
 import { CommandPalette } from './components/CommandPalette'
 import { AppIcon } from './components/Logo'
+import { ThemeController } from './components/ThemeController'
 import { ThemeToggle } from './components/ThemeToggle'
 import { PendingOutcomesBanner } from './components/calendar/PendingOutcomesBanner'
 import { TimerWidget } from './components/TimerWidget'
@@ -46,6 +47,7 @@ export function App() {
 
   return (
     <div className="flex min-h-screen flex-col">
+      <ThemeController />
       <nav className="flex items-center gap-5 border-b px-6 py-3">
         <span className="mr-2 flex items-center gap-2">
           <AppIcon className="h-5 w-5" />

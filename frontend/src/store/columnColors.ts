@@ -27,3 +27,15 @@ export function columnColor(column: BoardColumn | undefined, overrides: Record<s
   if (/progress|doing|active|review/i.test(column.name)) return STATUS_COLORS.doing
   return STATUS_COLORS.todo
 }
+
+export function columnColorCss(
+  column: BoardColumn | undefined,
+  overrides: Record<string, string>,
+) {
+  if (!column) return 'var(--status-todo)'
+  const saved = overrides[String(column.id)]
+  if (saved) return saved
+  if (column.is_done) return 'var(--status-done)'
+  if (/progress|doing|active|review/i.test(column.name)) return 'var(--status-doing)'
+  return 'var(--status-todo)'
+}

@@ -197,6 +197,19 @@ export interface LabelSuggestions {
   labels: string[]
 }
 
+export interface CustomPalette {
+  id: string
+  name: string
+  colors: string[]
+}
+
+export interface AppearanceSettings {
+  global_palette_id: string
+  workspace_palettes: Record<string, string>
+  custom_palettes: CustomPalette[]
+  updated_at?: string
+}
+
 export interface AISettings {
   provider: 'anthropic' | 'openai' | 'openai-compat'
   base_url: string

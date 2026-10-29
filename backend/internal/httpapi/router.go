@@ -153,6 +153,8 @@ func NewRouter(s *Server) http.Handler {
 			r.Get("/ai/status", s.aiStatus)
 			r.Get("/ai/settings", s.getAISettings)
 			r.Put("/ai/settings", s.updateAISettings)
+			r.Get("/appearance", s.getAppearance)
+			r.Put("/appearance", s.updateAppearance)
 			r.Group(func(r chi.Router) {
 				r.Use(rateLimitByUser(10, 5))
 				r.Post("/tasks/{taskID}/ai/breakdown", s.aiBreakdown)

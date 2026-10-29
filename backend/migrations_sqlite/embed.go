@@ -25,3 +25,6 @@ var TaskComments string
 
 //go:embed 007_ai_settings.sql
 var AISettings string
+
+//go:embed 008_appearance.sql
+var Appearance string

@@ -178,6 +178,27 @@ type DaySeconds struct {
 	Seconds int64  `json:"seconds"`
 }
 
+type CustomPalette struct {
+	ID     string   `json:"id"`
+	Name   string   `json:"name"`
+	Colors []string `json:"colors"`
+}
+
+type AppearanceSettings struct {
+	GlobalPaletteID   string            `json:"global_palette_id"`
+	WorkspacePalettes map[string]string `json:"workspace_palettes"`
+	CustomPalettes    []CustomPalette   `json:"custom_palettes"`
+	UpdatedAt         time.Time         `json:"updated_at"`
+}
+
+func DefaultAppearance() AppearanceSettings {
+	return AppearanceSettings{
+		GlobalPaletteID:   "light-steel",
+		WorkspacePalettes: map[string]string{},
+		CustomPalettes:    []CustomPalette{},
+	}
+}
+
 // AISettings is the single owner's stored model provider configuration. APIKey
 // is never serialized to clients.
 type AISettings struct {

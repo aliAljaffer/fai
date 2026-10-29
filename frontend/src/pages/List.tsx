@@ -18,20 +18,21 @@ import { useBoards, useColumns, useJiraLinks, useTags, useTasks } from '../api/h
 import { BulkTaskBar } from '../components/board/BulkTaskBar'
 import { TaskTypeIcon } from '../components/TaskTypeIcon'
 import { taskStatus } from '../lib/taskType'
+import { StatusPill } from '../components/StatusPill'
 import { TagChip } from '../components/TagChip'
 import { useDebounced } from '../lib/useDebounced'
-import { columnColor, useColumnColors } from '../store/columnColors'
+import { columnColorCss, useColumnColors } from '../store/columnColors'
 import { useUIStore } from '../store/ui'
 import { useWorkspaceStore } from '../store/workspace'
 import { cn } from '@/lib/utils'
 import type { JiraLink, Task } from '../api/types'
 
-type SortKey = 'title' | 'priority' | 'due_date' | 'created_at' | 'updated_at' | 'jira'
+type SortKey = 'title' | 'priority' | 'due_date' | 'created_at' | 'updated_at'
 type ColumnKey = 'column' | 'tags' | Exclude<SortKey, 'title'>
 
 const priorityRank: Record<string, number> = { high: 0, medium: 1, low: 2 }
 
-function compare(a: Task, b: Task, key: SortKey, jiraLinkById: Map<number, JiraLink>) {
+function compare(a: Task, b: Task, key: SortKey) {
   if (key === 'priority') return (priorityRank[a.priority] ?? 3) - (priorityRank[b.priority] ?? 3)
   if (key === 'due_date') {
     if (!a.due_date) return 1
@@ -41,31 +42,21 @@ function compare(a: Task, b: Task, key: SortKey, jiraLinkById: Map<number, JiraL
   if (key === 'created_at' || key === 'updated_at') {
     return a[key].localeCompare(b[key])
   }
-  if (key === 'jira') {
-    const keyA = jiraLinkById.get(a.id)?.jira_key
-    const keyB = jiraLinkById.get(b.id)?.jira_key
-    if (!keyA || !keyB) {
-      if (!keyA && !keyB) return a.title.localeCompare(b.title)
-      return keyA ? -1 : 1
-    }
-    return keyA.localeCompare(keyB) || a.title.localeCompare(b.title)
-  }
   return a.title.localeCompare(b.title)
 }
 
 const optionalColumns: { key: ColumnKey; label: string }[] = [
-  { key: 'column', label: 'Column' },
+  { key: 'column', label: 'Status' },
   { key: 'tags', label: 'Labels' },
   { key: 'priority', label: 'Priority' },
   { key: 'due_date', label: 'Due' },
   { key: 'created_at', label: 'Created' },
   { key: 'updated_at', label: 'Last updated' },
-  { key: 'jira', label: 'Jira' },
 ]
 
 const byKey = new Map(optionalColumns.map((column) => [column.key, column]))
 
-const defaultVisible: ColumnKey[] = ['column', 'tags', 'priority', 'due_date', 'updated_at', 'jira']
+const defaultVisible: ColumnKey[] = ['column', 'tags', 'priority', 'due_date', 'updated_at']
 
 function loadVisibleColumns(): Set<ColumnKey> {
   try {
@@ -80,14 +71,15 @@ function loadVisibleColumns(): Set<ColumnKey> {
   return new Set(defaultVisible)
 }
 
-function JiraKey({ link }: { link?: JiraLink }) {
+function JiraChip({ link }: { link?: JiraLink }) {
   if (!link) return null
   return (
     <a
       href={link.jira_url}
       target="_blank"
       rel="noreferrer"
-      className="text-xs font-medium text-primary hover:underline"
+      aria-label={`Open ${link.jira_key} in Jira`}
+      className="ml-auto shrink-0 rounded border px-1 font-mono text-[0.65rem] text-primary hover:underline"
       onClick={(event) => event.stopPropagation()}
     >
       {link.jira_key}
@@ -160,15 +152,15 @@ export function List() {
       byParent.set(task.parent_task_id, list)
     }
     for (const list of byParent.values()) {
-      list.sort((a, b) => compare(a, b, sort.key, jiraLinkById) * sort.dir)
+      list.sort((a, b) => compare(a, b, sort.key) * sort.dir)
     }
 
     const topLevel = (tasks ?? []).filter(
       (task) => !task.parent_task_id || !taskIds.has(task.parent_task_id),
     )
-    topLevel.sort((a, b) => compare(a, b, sort.key, jiraLinkById) * sort.dir)
+    topLevel.sort((a, b) => compare(a, b, sort.key) * sort.dir)
     return { roots: topLevel, childrenByParent: byParent }
-  }, [tasks, taskIds, sort, jiraLinkById])
+  }, [tasks, taskIds, sort])
 
   // Rows currently on screen: roots plus expanded subtasks. Select-all and
   // shift-click ranges operate on these, not on filtered-but-collapsed rows.
@@ -246,15 +238,15 @@ export function List() {
   const arrow = (key: SortKey) => (sort.key === key ? (sort.dir === 1 ? ' ↑' : ' ↓') : '')
 
   const cells: Record<ColumnKey, (task: Task) => ReactNode> = {
-    column: (task) => (
-      <span className="inline-flex items-center gap-1.5">
-        <span
-          className="size-1.5 shrink-0 rounded-full"
-          style={{ backgroundColor: columnColor(columnById.get(task.column_id), colors) }}
+    column: (task) => {
+      const column = columnById.get(task.column_id)
+      return (
+        <StatusPill
+          label={column?.name ?? 'Unknown'}
+          color={columnColorCss(column, colors)}
         />
-        {columnById.get(task.column_id)?.name}
-      </span>
-    ),
+      )
+    },
     tags: (task) => (
       <div className="flex flex-wrap gap-1">
         {(task.tags ?? []).map((tag) => (
@@ -270,16 +262,6 @@ export function List() {
     due_date: (task) => task.due_date ?? '—',
     created_at: (task) => formatTimestamp(task.created_at),
     updated_at: (task) => formatTimestamp(task.updated_at),
-    jira: (task) => (
-      <div className="flex items-center gap-2">
-        <JiraKey link={jiraLinkById.get(task.id)} />
-        {task.ref && (
-          <span className="rounded border px-1 font-mono text-[0.65rem] text-muted-foreground">
-            {task.ref}
-          </span>
-        )}
-      </div>
-    ),
   }
 
   const renderRow = (task: Task, depth: number, leading?: ReactNode) => {
@@ -302,7 +284,10 @@ export function List() {
           />
         </TableCell>
         <TableCell>
-          <div className="flex items-center gap-1" style={{ paddingLeft: `${depth * 1.25}rem` }}>
+          <div
+            className="flex min-w-0 items-center gap-1"
+            style={{ paddingLeft: `${depth * 1.25}rem` }}
+          >
             {leading ?? <span className="inline-block size-3.5 shrink-0" />}
             <TaskTypeIcon
               kind={task.kind}
@@ -310,9 +295,15 @@ export function List() {
               size={14}
               label={task.kind === 'arc' ? 'Arc' : task.kind === 'step' ? 'Step' : 'Task'}
             />
-            <span className={cn('truncate', done && 'text-muted-foreground line-through')}>
+            <span
+              className={cn(
+                'min-w-0 flex-1 truncate',
+                done && 'text-muted-foreground line-through',
+              )}
+            >
               {task.title}
             </span>
+            <JiraChip link={jiraLinkById.get(task.id)} />
           </div>
         </TableCell>
         {visibleList.map((column) => (
@@ -456,7 +447,6 @@ export function List() {
             {visibleList.map(({ key, label }) => (
               <TableHead
                 key={key}
-                className={cn(key === 'jira' && 'w-24')}
                 onClick={key !== 'column' && key !== 'tags' ? () => toggleSort(key) : undefined}
               >
                 {label}

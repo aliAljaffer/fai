@@ -96,6 +96,9 @@ func New(path string) (*Store, error) {
 	if _, err := db.ExecContext(ctx, migrationssqlite.AISettings); err != nil {
 		return nil, fmt.Errorf("applying sqlite ai settings schema: %w", err)
 	}
+	if _, err := db.ExecContext(ctx, migrationssqlite.Appearance); err != nil {
+		return nil, fmt.Errorf("applying sqlite appearance schema: %w", err)
+	}
 
 	return &Store{q: sqlitedb.New(db), db: db}, nil
 }
