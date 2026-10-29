@@ -36,6 +36,10 @@ type Config struct {
 	AIBaseURL            string
 	AIAPIKey             string
 	AIModel              string
+	// ElevenLabsAPIKey enables ElevenLabs speech-to-text for voice notes and
+	// takes precedence over the chat provider's Transcribe method.
+	ElevenLabsAPIKey   string
+	ElevenLabsSTTModel string
 	// TelegramBotToken empty disables the assistant bot.
 	TelegramBotToken      string
 	TelegramAllowedUserID int64
@@ -97,6 +101,8 @@ func Load() Config {
 		AIBaseURL:             os.Getenv("AI_BASE_URL"),
 		AIAPIKey:              os.Getenv("AI_API_KEY"),
 		AIModel:               os.Getenv("AI_MODEL"),
+		ElevenLabsAPIKey:      os.Getenv("ELEVENLABS_API_KEY"),
+		ElevenLabsSTTModel:    envOr("ELEVENLABS_STT_MODEL", "scribe_v2"),
 		TelegramBotToken:      os.Getenv("TELEGRAM_BOT_TOKEN"),
 		TelegramAllowedUserID: envInt64("TELEGRAM_ALLOWED_USER_ID"),
 		TelegramStateFile:     envOr("TELEGRAM_STATE_FILE", "fai-telegram-offset"),

@@ -220,6 +220,10 @@ saved there live in the database and override the environment. AI endpoints are
 rate-limited per user. With no key in either place, the UI hides every AI
 action.
 
+Set `ELEVENLABS_API_KEY` to transcribe voice notes with ElevenLabs instead of
+the chat provider. `ELEVENLABS_STT_MODEL` defaults to `scribe_v2`. The key needs
+the `speech_to_text` permission.
+
 ### Telegram assistant
 
 The Telegram assistant reuses the web chat actions: create tasks and reminders,
@@ -228,10 +232,11 @@ inside the API binary and needs an AI key because the model chooses the action.
 
 It allows one owner. Set the allowlist or the assistant stays off. Only private
 chats are accepted. Voice notes are transcribed, echoed back as text, and then
-handled like a typed message. Transcription needs an OpenAI-compatible provider.
-If the gateway rejects Telegram's OGG/Opus, the backend converts the note to
-mono MP3 with the ffmpeg binary bundled in the image and retries. The last 10
-messages per chat live in memory and
+handled like a typed message. ElevenLabs handles transcription when
+`ELEVENLABS_API_KEY` is set; otherwise the chat provider must accept audio, which
+rules out Anthropic. If a transcription request rejects Telegram's OGG/Opus, the
+backend converts the note to mono MP3 with the ffmpeg binary bundled in the
+image and retries. The last 10 messages per chat live in memory and
 are lost on restart. Message IDs are remembered for 10 minutes, so a transport
 retry does not create a task twice.
 

@@ -23,6 +23,7 @@ import (
 	"github.com/alialjaffer/fai/backend/internal/store/lite"
 	"github.com/alialjaffer/fai/backend/internal/store/pg"
 	"github.com/alialjaffer/fai/backend/internal/telegram"
+	"github.com/alialjaffer/fai/backend/internal/transcribe"
 )
 
 func main() {
@@ -91,6 +92,10 @@ func main() {
 		AttachmentsDir:       cfg.AttachmentsDir,
 		StaticDir:            cfg.StaticDir,
 		AuthMiddleware:       authMiddleware,
+	}
+	if cfg.ElevenLabsAPIKey != "" {
+		server.Transcriber = transcribe.NewElevenLabs(cfg.ElevenLabsAPIKey, cfg.ElevenLabsSTTModel)
+		log.Println("ELEVENLABS_API_KEY set: voice notes use ElevenLabs speech-to-text")
 	}
 	router := httpapi.NewRouter(server)
 

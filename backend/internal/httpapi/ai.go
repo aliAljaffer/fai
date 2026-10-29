@@ -493,6 +493,9 @@ func (s *Server) ConfirmChatAction(ctx context.Context, pending PendingChatActio
 }
 
 func (s *Server) Transcribe(ctx context.Context, audio []byte, format string) (string, error) {
+	if s.Transcriber != nil {
+		return s.Transcriber.Transcribe(ctx, audio, format)
+	}
 	provider := s.aiProvider(ctx)
 	if provider == nil {
 		return "", fmt.Errorf("AI is not configured")

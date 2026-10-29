@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"net/http"
 	"sync"
 
@@ -22,6 +23,9 @@ type Server struct {
 	JiraSubtaskIssueType string
 	JiraEpicLinkField    string
 	AI                   ai.Provider
+	// Transcriber handles voice-note transcription independently of the chat
+	// provider. When nil, Server.Transcribe falls back to AI.Transcribe.
+	Transcriber Transcriber
 	// Environment-provided AI configuration, used as the default until the
 	// owner saves model settings in the database.
 	AIProvider     string
@@ -42,6 +46,10 @@ type Server struct {
 	// visible in the UI even while cached events are served.
 	syncMu      sync.Mutex
 	calendarErr map[int64]string
+}
+
+type Transcriber interface {
+	Transcribe(ctx context.Context, audio []byte, format string) (string, error)
 }
 
 func NewRouter(s *Server) http.Handler {
