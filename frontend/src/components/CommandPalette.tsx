@@ -96,11 +96,11 @@ export function CommandPalette() {
         if (!open) setQuery('')
       }}
     >
-      <DialogContent className="overflow-hidden p-0 sm:max-w-lg" showCloseButton={false}>
+      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-hidden p-0 sm:max-w-lg" showCloseButton={false}>
         <DialogTitle className="sr-only">Command palette</DialogTitle>
         <Command
           label="Command palette"
-          className="flex flex-col"
+          className="flex min-h-0 flex-col overflow-hidden"
           value={query}
           onValueChange={setQuery}
         >
@@ -112,7 +112,7 @@ export function CommandPalette() {
               className="h-10 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
             />
           </div>
-          <Command.List className="max-h-80 overflow-y-auto p-2">
+          <Command.List className="max-h-[calc(100dvh-8rem)] min-h-0 overflow-y-auto overscroll-contain p-2">
             <Command.Empty className="py-6 text-center text-sm text-muted-foreground">
               No results.
             </Command.Empty>

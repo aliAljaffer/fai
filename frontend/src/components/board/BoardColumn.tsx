@@ -223,6 +223,43 @@ export function BoardColumn({
           </DropdownMenu>
         </div>
       </div>
+      {adding && (
+        <div className="flex flex-col gap-1.5 pt-2">
+          <Input
+            ref={inputRef}
+            value={title}
+            placeholder="Task title"
+            aria-label={`New task in ${column.name}`}
+            disabled={submitting}
+            onChange={(event) => setTitle(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.nativeEvent.isComposing) return
+              if (event.key === 'Enter') {
+                event.preventDefault()
+                void submit()
+              }
+              if (event.key === 'Escape') {
+                event.preventDefault()
+                onCancelAdding()
+              }
+            }}
+            onBlur={() => {
+              if (!title.trim()) onCancelAdding()
+            }}
+          />
+          <div className="flex items-center justify-between text-[0.65rem] text-muted-foreground">
+            <span>Enter to add, Esc to cancel</span>
+            <div className="flex items-center gap-1">
+              <Button size="xs" variant="ghost" onClick={onCancelAdding}>
+                Cancel
+              </Button>
+              <Button size="xs" disabled={!title.trim() || submitting} onClick={() => void submit()}>
+                Add
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
       <div
         className={cn(
           'flex max-h-[calc(100dvh-14rem)] min-h-24 flex-1 flex-col gap-2 overflow-y-auto rounded-md pt-2 pr-0.5 transition-[background-color,box-shadow] duration-150 motion-reduce:transition-none',
@@ -279,43 +316,7 @@ export function BoardColumn({
           )
         )}
       </div>
-      {adding ? (
-        <div className="flex flex-col gap-1.5 pt-2">
-          <Input
-            ref={inputRef}
-            value={title}
-            placeholder="Task title"
-            aria-label={`New task in ${column.name}`}
-            disabled={submitting}
-            onChange={(event) => setTitle(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.nativeEvent.isComposing) return
-              if (event.key === 'Enter') {
-                event.preventDefault()
-                void submit()
-              }
-              if (event.key === 'Escape') {
-                event.preventDefault()
-                onCancelAdding()
-              }
-            }}
-            onBlur={() => {
-              if (!title.trim()) onCancelAdding()
-            }}
-          />
-          <div className="flex items-center justify-between text-[0.65rem] text-muted-foreground">
-            <span>Enter to add, Esc to cancel</span>
-            <div className="flex items-center gap-1">
-              <Button size="xs" variant="ghost" onClick={onCancelAdding}>
-                Cancel
-              </Button>
-              <Button size="xs" disabled={!title.trim() || submitting} onClick={() => void submit()}>
-                Add
-              </Button>
-            </div>
-          </div>
-        </div>
-      ) : (
+      {!adding && (
         <Button
           variant="ghost"
           size="sm"

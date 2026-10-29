@@ -60,7 +60,7 @@ function TaskCardBody({
     <div className="flex flex-col gap-2">
       <div className="flex items-start gap-1.5">
         <TaskTypeIcon kind={task.kind} status={status} size={14} className="mt-0.5" />
-        <p className={cn('line-clamp-3 text-sm leading-snug', !overlay && 'pr-6')}>{task.title}</p>
+        <p className={cn('line-clamp-3 text-sm leading-snug', !overlay && 'pr-13')}>{task.title}</p>
       </div>
       {!!task.tags?.length && (
         <div className="flex flex-wrap gap-1">
@@ -74,7 +74,7 @@ function TaskCardBody({
         </div>
       )}
       {showMeta && (
-        <div className="flex min-w-0 items-center gap-2 pr-6 text-xs text-muted-foreground">
+        <div className="flex min-w-0 items-center gap-2 pr-13 text-xs text-muted-foreground">
           {task.priority !== 'medium' && (
             <span className={cn('capitalize', task.priority === 'high' && 'text-destructive')}>
               {task.priority}
@@ -94,7 +94,7 @@ function TaskCardBody({
 function SortableTaskCard(props: TaskCardProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: props.task.id,
-    data: { type: 'task' },
+    data: { type: 'task', columnId: props.task.column_id },
     disabled: props.dragDisabled,
   })
   const running = props.runningTaskId === props.task.id
@@ -135,7 +135,7 @@ function SortableTaskCard(props: TaskCardProps) {
         aria-label={`Drag ${props.task.title}`}
         disabled={props.dragDisabled}
         className={cn(
-          'absolute top-1/2 right-0.5 z-10 flex size-5 -translate-y-1/2 touch-none items-center justify-center rounded text-muted-foreground opacity-0 outline-none hover:bg-muted focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring/50 group-hover/task:opacity-100 max-md:opacity-100',
+          'absolute top-1 right-8 z-10 flex size-5 touch-none items-center justify-center rounded text-muted-foreground opacity-0 outline-none hover:bg-muted focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring/50 group-hover/task:opacity-100 max-md:opacity-100',
           props.dragDisabled && 'hidden',
         )}
       >

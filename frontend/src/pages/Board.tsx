@@ -63,8 +63,11 @@ import type { Task } from '../api/types'
 
 const collisionDetection: CollisionDetection = (args) => {
   const hits = pointerWithin(args)
+  const typeOf = (hit: (typeof hits)[number]) =>
+    hit.data?.droppableContainer.data.current?.type as string | undefined
+
   if (args.active.data.current?.type === 'column') {
-    const columnHits = hits.filter((hit) => hit.data?.type === 'column')
+    const columnHits = hits.filter((hit) => typeOf(hit) === 'column')
     const ids = new Set(
       (columnHits.length
         ? columnHits
@@ -79,13 +82,51 @@ const collisionDetection: CollisionDetection = (args) => {
       droppableContainers: args.droppableContainers.filter((container) => ids.has(container.id)),
     })
   }
-  const taskHits = hits.filter((hit) => hit.data?.type === 'task')
-  const candidates = taskHits.length ? taskHits : hits
-  if (!candidates.length) return closestCenter(args)
-  const ids = new Set(candidates.map((hit) => hit.id))
+
+  const activeId = args.active.id
+  const activeColumnId = args.active.data.current?.columnId as number | undefined
+  const initial = args.active.rect.current.initial
+  const pointer = args.pointerCoordinates
+  const onInitialRect = Boolean(
+    initial &&
+      pointer &&
+      pointer.x >= initial.left &&
+      pointer.x <= initial.right &&
+      pointer.y >= initial.top &&
+      pointer.y <= initial.bottom,
+  )
+
+  const pointerHits = hits.filter((hit) => hit.id !== activeId)
+  const taskHits = pointerHits.filter((hit) => typeOf(hit) === 'task')
+  if (taskHits.length) {
+    const ids = new Set(taskHits.map((hit) => hit.id))
+    return closestCenter({
+      ...args,
+      droppableContainers: args.droppableContainers.filter((container) => ids.has(container.id)),
+    })
+  }
+
+  const columnHits = pointerHits.filter((hit) => typeOf(hit) === 'column')
+  const externalColumnIds = new Set(
+    columnHits
+      .filter((hit) => Number(String(hit.id).slice('column-'.length)) !== activeColumnId)
+      .map((hit) => hit.id),
+  )
+  if (externalColumnIds.size) {
+    return closestCenter({
+      ...args,
+      droppableContainers: args.droppableContainers.filter((container) =>
+        externalColumnIds.has(container.id),
+      ),
+    })
+  }
+  if (onInitialRect || !columnHits.length) return []
+
   return closestCenter({
     ...args,
-    droppableContainers: args.droppableContainers.filter((container) => ids.has(container.id)),
+    droppableContainers: args.droppableContainers.filter((container) =>
+      columnHits.some((hit) => hit.id === container.id),
+    ),
   })
 }
 
@@ -136,6 +177,33 @@ function previewTaskMove(
   const moving = { ...active, column_id: targetColumnId }
   const ordered = [...target.slice(0, index), moving, ...target.slice(index)]
   return withPositions([...rest, moving], ordered)
+}
+
+function computePreviewDrop(tasks: Task[], original: Task[], activeId: number) {
+  const preview = tasks.find((task) => task.id === activeId)
+  const current = original.find((task) => task.id === activeId)
+  if (!preview || !current) return null
+
+  const previewColumn = tasksInColumn(tasks, preview.column_id)
+  const previewIndex = previewColumn.findIndex((task) => task.id === activeId)
+  if (previewIndex < 0) return null
+  const beforeTaskId = previewColumn[previewIndex + 1]?.id
+  const afterTaskId = previewColumn[previewIndex - 1]?.id
+
+  const currentColumn = tasksInColumn(original, current.column_id)
+  const currentIndex = currentColumn.findIndex((task) => task.id === activeId)
+  const changed =
+    current.column_id !== preview.column_id ||
+    currentColumn[currentIndex + 1]?.id !== beforeTaskId ||
+    currentColumn[currentIndex - 1]?.id !== afterTaskId
+
+  return {
+    id: activeId,
+    columnId: preview.column_id,
+    beforeTaskId,
+    afterTaskId,
+    changed,
+  }
 }
 
 function computeTaskDrop(tasks: Task[], activeId: number, overId: string) {
@@ -255,6 +323,7 @@ export function Board() {
   const [activeTaskId, setActiveTaskId] = useState<number | null>(null)
   const [overColumnId, setOverColumnId] = useState<number | null>(null)
   const [dragTasks, setDragTasks] = useState<Task[] | null>(null)
+  const dragPointer = useRef<{ x: number; y: number } | null>(null)
   const [composerColumnId, setComposerColumnId] = useState<number | null>(null)
   const [expandedTaskId, setExpandedTaskId] = useState<number | null>(null)
   const [boardEditor, setBoardEditor] = useState<'new' | 'rename' | null>(null)
@@ -477,6 +546,11 @@ export function Board() {
   function handleDragStart(event: DragStartEvent) {
     setOverColumnId(null)
     setExpandedTaskId(null)
+    const activator = event.activatorEvent as PointerEvent | undefined
+    dragPointer.current =
+      typeof activator?.clientY === 'number'
+        ? { x: activator.clientX, y: activator.clientY }
+        : null
     if (event.active.data.current?.type === 'column') {
       setActiveTaskId(null)
       setDragTasks(null)
@@ -503,6 +577,8 @@ export function Board() {
     if (!activeTask || targetColumnId === null) return
     if (activeTask.column_id === targetColumnId) {
       if (!overId.startsWith('column-')) return
+      const original = tasks?.find((task) => task.id === activeId)
+      if (original && original.column_id !== targetColumnId) return
       setDragTasks((current) =>
         current ? previewTaskAtEnd(current, activeId, targetColumnId) : current,
       )
@@ -510,9 +586,14 @@ export function Board() {
     }
 
     const translated = event.active.rect.current.translated
-    const below = Boolean(
-      translated && translated.top > event.over.rect.top + event.over.rect.height,
-    )
+    const pointer = dragPointer.current
+    const below = pointer
+      ? pointer.y + event.delta.y > event.over.rect.top + event.over.rect.height / 2
+      : Boolean(
+          translated &&
+            translated.top + translated.height / 2 >
+              event.over.rect.top + event.over.rect.height / 2,
+        )
     setDragTasks((current) =>
       current
         ? previewTaskMove(current, activeId, targetColumnId, overTask?.id ?? null, below)
@@ -548,24 +629,20 @@ export function Board() {
     }
 
     const taskId = Number(active.id)
+    const originalTask = tasks?.find((task) => task.id === taskId)
+    const previewTask = dragTasks?.find((task) => task.id === taskId)
+    const crossedColumns = Boolean(
+      dragTasks &&
+        originalTask &&
+        previewTask &&
+        originalTask.column_id !== previewTask.column_id,
+    )
+
     let result: ReturnType<typeof computeTaskDrop> = null
-    if (overId === String(active.id)) {
-      const original = tasks?.find((task) => task.id === taskId)
-      const preview = dragTasks?.find((task) => task.id === taskId)
-      if (dragTasks && original && preview && original.column_id !== preview.column_id) {
-        const columnTasks = tasksInColumn(dragTasks, preview.column_id)
-        const index = columnTasks.findIndex((task) => task.id === taskId)
-        const withoutActive = columnTasks.filter((task) => task.id !== taskId)
-        result = {
-          id: taskId,
-          columnId: preview.column_id,
-          beforeTaskId: withoutActive[index]?.id,
-          afterTaskId: withoutActive[index - 1]?.id,
-          changed: true,
-        }
-      }
-    } else {
-      result = dragTasks ? computeTaskDrop(dragTasks, taskId, overId) : null
+    if (dragTasks && (crossedColumns || overId.startsWith('column-'))) {
+      result = computePreviewDrop(dragTasks, tasks!, taskId)
+    } else if (dragTasks && overId !== String(active.id)) {
+      result = computeTaskDrop(dragTasks, taskId, overId)
     }
     setDragTasks(null)
     if (!result || !result.changed) return
