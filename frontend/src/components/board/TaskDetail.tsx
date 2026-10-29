@@ -1,7 +1,7 @@
 import MDEditor from '@uiw/react-md-editor'
 import { Check, Play, Sparkles, Square, X } from 'lucide-react'
 import { useTheme } from 'next-themes'
-import { useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useHotkeys } from 'react-hotkeys-hook'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -68,6 +68,14 @@ export function TaskDetail({
   const { data: running } = useRunningTime()
   const { data: entries } = useTaskTimeEntries(task.id)
   const { data: columns } = useColumns(task.board_id)
+  const columnItems = useMemo(
+    () => (columns ?? []).map((column) => ({ value: String(column.id), label: column.name })),
+    [columns],
+  )
+  const kindItems = useMemo(
+    () => (['arc', 'task', 'step'] as const).map((value) => ({ value, label: TASK_KIND_LABELS[value] })),
+    [],
+  )
   const setType = useSetTaskType(task.id, task.board_id)
   const moveTask = useMoveTask(task.board_id)
   const kind = normalizeKind(task.kind)
@@ -155,6 +163,7 @@ export function TaskDetail({
             <div className="flex items-center gap-2">
               <Select
                 value={kind}
+                items={kindItems}
                 onValueChange={(value) => {
                   if (!value || value === kind) return
                   const next = value as 'arc' | 'task' | 'step'
@@ -190,6 +199,7 @@ export function TaskDetail({
               </Select>
               <Select
                 value={String(task.column_id)}
+                items={columnItems}
                 onValueChange={(value) => {
                   if (!value || Number(value) === task.column_id) return
                   moveTask.mutate(

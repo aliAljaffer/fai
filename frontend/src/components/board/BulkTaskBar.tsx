@@ -14,6 +14,7 @@ import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
@@ -153,7 +154,9 @@ export function BulkTaskBar({
                   )
                 })
               ) : (
-                <DropdownMenuLabel>No labels yet</DropdownMenuLabel>
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel>No labels yet</DropdownMenuLabel>
+                </DropdownMenuGroup>
               )}
             </DropdownMenuContent>
           </DropdownMenu>

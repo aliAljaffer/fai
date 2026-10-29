@@ -9,6 +9,7 @@ import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
@@ -129,6 +130,13 @@ export function List() {
   const workspaceParam = board?.workspace_id ?? boards?.[0]?.workspace_id
 
   const { data: columns } = useColumns(boardId)
+  const columnItems = useMemo(
+    () => [
+      { value: 'all', label: 'All columns' },
+      ...(columns ?? []).map((column) => ({ value: String(column.id), label: column.name })),
+    ],
+    [columns],
+  )
   const { data: tags } = useTags()
   const [q, setQ] = useState('')
   const [columnId, setColumnId] = useState('all')
@@ -417,7 +425,7 @@ export function List() {
           onChange={(e) => setQ(e.target.value)}
           className="max-w-xs"
         />
-        <Select value={columnId} onValueChange={(value) => value && setColumnId(value)}>
+        <Select value={columnId} items={columnItems} onValueChange={(value) => value && setColumnId(value)}>
           <SelectTrigger className="w-40" aria-label="Filter by column">
             <SelectValue />
           </SelectTrigger>
@@ -454,23 +462,25 @@ export function List() {
         <DropdownMenu>
           <DropdownMenuTrigger render={<Button variant="outline" size="sm" className="ml-auto"><SlidersHorizontal /> Columns</Button>} />
           <DropdownMenuContent>
-            <DropdownMenuLabel>Visible columns</DropdownMenuLabel>
-            {optionalColumns.map(({ key, label }) => (
-              <DropdownMenuCheckboxItem
-                key={key}
-                checked={visible.has(key)}
-                onCheckedChange={(checked) =>
-                  setVisible((current) => {
-                    const next = new Set(current)
-                    if (checked) next.add(key)
-                    else next.delete(key)
-                    return next
-                  })
-                }
-              >
-                {label}
-              </DropdownMenuCheckboxItem>
-            ))}
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>Visible columns</DropdownMenuLabel>
+              {optionalColumns.map(({ key, label }) => (
+                <DropdownMenuCheckboxItem
+                  key={key}
+                  checked={visible.has(key)}
+                  onCheckedChange={(checked) =>
+                    setVisible((current) => {
+                      const next = new Set(current)
+                      if (checked) next.add(key)
+                      else next.delete(key)
+                      return next
+                    })
+                  }
+                >
+                  {label}
+                </DropdownMenuCheckboxItem>
+              ))}
+            </DropdownMenuGroup>
           </DropdownMenuContent>
         </DropdownMenu>
         <Button size="sm" disabled={!boardId || !firstColumnId} onClick={() => setNewTaskOpen(true)}>
