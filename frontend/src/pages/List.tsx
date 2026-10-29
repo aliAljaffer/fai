@@ -543,7 +543,9 @@ export function List() {
         )}
         {inlineTaskId === task.id && (
           <TableRow>
-            <TableCell colSpan={2 + visibleList.length} className="p-2">
+            <TableCell colSpan={2 + visibleList.length} className="p-0">
+              {/* Pinned to the visible scroll width so a wide table never pushes the editor off a phone screen. */}
+              <div className="sticky left-0 w-[100cqw] p-2">
               <div className="fai-expand">
                 <div>
               <TaskInlineEditor
@@ -568,6 +570,7 @@ export function List() {
                 }}
               />
                 </div>
+              </div>
               </div>
             </TableCell>
           </TableRow>
@@ -669,6 +672,7 @@ export function List() {
         />
       )}
 
+      <div className="@container">
       <Table>
         <TableHeader>
           <TableRow>
@@ -733,6 +737,7 @@ export function List() {
           )}
         </TableBody>
       </Table>
+      </div>
 
       {showShortcuts && (
         <div className="fixed right-4 bottom-20 z-40 w-64 rounded-lg border bg-popover p-3 text-xs shadow-lg lg:bottom-4">
