@@ -19,7 +19,7 @@ concurrency:
 
 jobs:
   backend:
-    runs-on: ubuntu-latest
+    runs-on: arc-runner-fai
     permissions:
       contents: read
       packages: write
@@ -44,7 +44,7 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.OWNER }}/fai-backend:${{ github.sha }}
 
   frontend:
-    runs-on: ubuntu-latest
+    runs-on: arc-runner-fai
     permissions:
       contents: read
       packages: write
@@ -86,7 +86,7 @@ jobs:
   update-manifests:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: [backend, frontend]
-    runs-on: ubuntu-latest
+    runs-on: arc-runner-fai
     permissions:
       contents: read
     steps:
@@ -105,6 +105,9 @@ jobs:
           repository: aliAljaffer/homelab
           token: ${{ steps.app-token.outputs.token }}
           path: homelab
+
+      - name: Verify runner toolchain
+        run: gh --version
 
       - name: Pin the Fai image digests
         working-directory: homelab
