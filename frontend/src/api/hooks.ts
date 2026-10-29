@@ -695,7 +695,7 @@ export function useRunningTime() {
   return useQuery({
     queryKey: ['time', 'running'],
     queryFn: () => api.get<TimeEntry | null>('/time/running'),
-    refetchInterval: 1000,
+    refetchInterval: 30_000,
   })
 }
 

@@ -1,7 +1,7 @@
 import MDEditor from '@uiw/react-md-editor'
 import { Check, Play, Sparkles, Square, X } from 'lucide-react'
 import { useTheme } from 'next-themes'
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useHotkeys } from 'react-hotkeys-hook'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -62,6 +62,7 @@ export function TaskDetail({
   const [title, setTitle] = useState(task.title)
   const [description, setDescription] = useState(task.description_md)
   const [priority, setPriority] = useState(task.priority)
+  const [, setTick] = useState(0)
   const titleRef = useRef<HTMLInputElement>(null)
   const { resolvedTheme } = useTheme()
   const refs = useRefPicker({ value: description, onChange: setDescription })
@@ -87,6 +88,13 @@ export function TaskDetail({
   const stopTime = useStopTime()
   const isRunning = running?.task_id === task.id
   const totalSeconds = (entries ?? []).reduce((sum, e) => sum + (e.duration_seconds ?? 0), 0)
+
+  useEffect(() => {
+    if (!isRunning) return
+    const id = setInterval(() => setTick((n) => n + 1), 1000)
+    return () => clearInterval(id)
+  }, [isRunning])
+
   const sessionSeconds = isRunning
     ? Math.max(0, Math.floor((Date.now() - new Date(running.started_at).getTime()) / 1000))
     : 0
