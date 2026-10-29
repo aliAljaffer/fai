@@ -16,6 +16,7 @@ export function UndoToast({
   const startedAt = useRef(0)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const paused = useRef(false)
+  const container = useRef<HTMLDivElement>(null)
 
   const clearTimer = useCallback(() => {
     if (timer.current !== null) {
@@ -47,8 +48,26 @@ export function UndoToast({
     return clearTimer
   }, [armTimer, clearTimer])
 
+  useEffect(() => {
+    function keepClear(element: Element | null) {
+      const toast = container.current
+      if (!toast || !element || element === document.body || toast.contains(element)) return
+      const rect = element.getBoundingClientRect()
+      if (rect.bottom > toast.getBoundingClientRect().top - 8 && rect.top < window.innerHeight) {
+        element.scrollIntoView({ block: 'center', behavior: 'smooth' })
+      }
+    }
+    keepClear(document.activeElement)
+    function onFocusIn(event: FocusEvent) {
+      keepClear(event.target as Element | null)
+    }
+    document.addEventListener('focusin', onFocusIn)
+    return () => document.removeEventListener('focusin', onFocusIn)
+  }, [])
+
   return (
     <div
+      ref={container}
       role="status"
       className="flex w-[22rem] max-w-[calc(100vw-2rem)] items-center gap-3 rounded-md border bg-popover px-3 py-2 text-sm text-popover-foreground shadow-md"
       onMouseEnter={pause}

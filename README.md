@@ -228,7 +228,10 @@ inside the API binary and needs an AI key because the model chooses the action.
 
 It allows one owner. Set the allowlist or the assistant stays off. Only private
 chats are accepted. Voice notes are transcribed, echoed back as text, and then
-handled like a typed message. The last 10 messages per chat live in memory and
+handled like a typed message. Transcription needs an OpenAI-compatible provider.
+If the gateway rejects Telegram's OGG/Opus, the backend converts the note to
+mono MP3 with the ffmpeg binary bundled in the image and retries. The last 10
+messages per chat live in memory and
 are lost on restart. Message IDs are remembered for 10 minutes, so a transport
 retry does not create a task twice.
 

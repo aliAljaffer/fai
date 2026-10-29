@@ -7,19 +7,18 @@ agenda on desktop and a seven day list on mobile, Notes autosaves, details use a
 the `/tasks/:id` route, and the Electron menu mirrors the shortcuts. Steps can nest: Tab in the
 inline checklist indents the next item under the previous one, and nested steps render in the
 inline editor and the task detail panel. The undo toast waits 8 seconds, pauses on hover or focus,
-and sits above the mobile tab bar. Remaining gaps:
-
-- Check the undo toast against the focused row on a short viewport by hand. Placement is fixed,
-  so a row near the bottom edge can still sit under it.
+sits above the mobile tab bar, and scrolls a focused row clear of itself when it opens and on every
+focus change. Fixed placement no longer hides a row at the bottom of a short viewport.
 
 ## Telegram assistant
 
 The assistant runs in the API binary over `getUpdates` long polling: allowlist by user and chat,
 private chats only, text and voice, `find_task` and `move_task` with inline confirmation, an
-in-memory 10-message history, and a reminder channel. WhatsApp is out of scope. Remaining work:
+in-memory 10-message history, and a reminder channel. Voice notes are sent as raw OGG/Opus first.
+If the gateway rejects them, the backend transcodes to mono 16 kHz MP3 with the static ffmpeg
+bundled in the image and retries. Transcription stays behind `ai.Provider`, so an OpenAI-compatible
+provider is still required; Anthropic returns a clear error. WhatsApp is out of scope.
 
-- Smoke-test raw OGG/Opus against the gateway. If it is rejected, convert to mono mp3 and add ffmpeg
-  to the backend image.
-- Anthropic has no audio input, so voice requires an OpenAI-compatible provider. Keep transcription
-  behind `ai.Provider` so a swap is one config change.
-- Run one live pass with a real bot token.
+Remaining work:
+
+- Run one live pass with a real bot token. Nothing else is open.

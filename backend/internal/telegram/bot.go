@@ -166,7 +166,17 @@ func (b *Bot) handleVoice(ctx context.Context, message *Message) {
 		b.sendText(ctx, chatID, "Could not download that voice note.")
 		return
 	}
-	transcript, err := b.runner.Transcribe(ctx, audio, audioFormat(message.Voice.MimeType))
+	format := audioFormat(message.Voice.MimeType)
+	transcript, err := b.runner.Transcribe(ctx, audio, format)
+	if err != nil && format == "ogg" {
+		converted, convErr := transcodeToMP3(ctx, audio)
+		switch {
+		case convErr != nil:
+			log.Printf("telegram: transcode: %v", convErr)
+		default:
+			transcript, err = b.runner.Transcribe(ctx, converted, "mp3")
+		}
+	}
 	if err != nil || strings.TrimSpace(transcript) == "" {
 		if err != nil {
 			log.Printf("telegram: transcribe: %v", err)
