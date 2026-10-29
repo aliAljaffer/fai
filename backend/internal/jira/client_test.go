@@ -17,7 +17,7 @@ func TestGetCommentsPaginates(t *testing.T) {
 			fmt.Fprint(w, `{"comments":[{"id":"1","author":{"accountId":"me","displayName":"Me"},"body":{"type":"doc","version":1,"content":[{"type":"paragraph","content":[{"type":"text","text":"One"}]}]}}],"startAt":0,"total":2}`)
 			return
 		}
-		fmt.Fprint(w, `{"comments":[{"id":"2","author":{"accountId":"me","displayName":"Me"},"body":"Two"}],"startAt":1,"total":2}`)
+		fmt.Fprint(w, `{"comments":[{"id":2,"parentId":1,"author":{"accountId":"me","displayName":"Me"},"body":"Two"}],"startAt":1,"total":2}`)
 	}))
 	defer srv.Close()
 
@@ -27,6 +27,9 @@ func TestGetCommentsPaginates(t *testing.T) {
 	}
 	if len(comments) != 2 || comments[0].Body != "One" || comments[1].Body != "Two" {
 		t.Fatalf("comments = %#v", comments)
+	}
+	if comments[1].ID != "2" || comments[1].ParentID != "1" {
+		t.Fatalf("numeric ids not decoded: %#v", comments[1])
 	}
 	if len(starts) != 2 || starts[0] != "0" || starts[1] != "1" {
 		t.Fatalf("startAt values = %#v", starts)

@@ -87,14 +87,36 @@ type searchResponse struct {
 	IsLast        bool   `json:"isLast"`
 }
 
+// flexID accepts a Jira id sent as either a JSON string or a number; comment
+// ids arrive both ways depending on the endpoint.
+type flexID string
+
+func (f *flexID) UnmarshalJSON(b []byte) error {
+	if string(b) == "null" {
+		*f = ""
+		return nil
+	}
+	var s string
+	if err := json.Unmarshal(b, &s); err == nil {
+		*f = flexID(s)
+		return nil
+	}
+	var n json.Number
+	if err := json.Unmarshal(b, &n); err != nil {
+		return err
+	}
+	*f = flexID(n.String())
+	return nil
+}
+
 type commentsResponse struct {
 	StartAt    int `json:"startAt"`
 	MaxResults int `json:"maxResults"`
 	Total      int `json:"total"`
 	Comments   []struct {
-		ID       string          `json:"id"`
+		ID       flexID          `json:"id"`
 		Body     json.RawMessage `json:"body"`
-		ParentID string          `json:"parentId"`
+		ParentID flexID          `json:"parentId"`
 		Author   user            `json:"author"`
 	} `json:"comments"`
 }
@@ -213,8 +235,8 @@ func (c *Client) GetComments(key string) ([]Comment, error) {
 				authorName = i.Author.id()
 			}
 			comments = append(comments, Comment{
-				ID: i.ID, AuthorID: i.Author.id(), AuthorName: authorName,
-				Body: rawToMarkdown(i.Body), ParentID: i.ParentID,
+				ID: string(i.ID), AuthorID: i.Author.id(), AuthorName: authorName,
+				Body: rawToMarkdown(i.Body), ParentID: string(i.ParentID),
 			})
 		}
 		startAt += len(parsed.Comments)
