@@ -89,7 +89,7 @@ func TestFullBackupRestore(t *testing.T) {
 	if _, err := source.StopEntryForTask(ctx, parent.ID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := source.CreateMeetingOutcome(ctx, "2026-10-01", "Backup meeting", "notes", nil, workspace.ID); err != nil {
+	if _, err := source.CreateMeetingOutcome(ctx, "2026-10-01", "Backup meeting", "notes", nil, workspace.ID, store.MeetingEvent{}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := source.CreateCalendarSource(ctx, "Backup calendar", "https://example.com/cal.ics", "#2563eb", workspace.ID); err != nil {

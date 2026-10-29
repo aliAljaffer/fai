@@ -143,6 +143,10 @@ export interface MeetingOutcome {
   ends_at: string | null
   workspace_id: number
   outcome_prompt_sent: boolean
+  calendar_source_id: number | null
+  event_uid: string
+  event_title: string
+  event_url: string
   created_at: string
 }
 
@@ -150,6 +154,7 @@ export interface ExtractedTask {
   title: string
   suggested_done: boolean
   due_date: string | null
+  steps: string[]
 }
 
 export interface Reminder {

@@ -62,7 +62,7 @@ func (p *anthropicProvider) GenerateSubtasks(ctx context.Context, title, descrip
 			"Respond with ONLY a JSON array of short subtask title strings, nothing else.",
 		title, descriptionMD,
 	)
-	text, err := p.Chat(ctx, FaiSystem, []ChatMessage{{Role: "user", Content: prompt}})
+	text, err := p.Chat(ctx, StepSystem, []ChatMessage{{Role: "user", Content: prompt}})
 	if err != nil {
 		return nil, err
 	}
@@ -78,7 +78,7 @@ func (p *anthropicProvider) SuggestLabels(ctx context.Context, title, descriptio
 }
 
 func (p *anthropicProvider) PlanTask(ctx context.Context, title, body string) (TaskPlan, error) {
-	text, err := p.Chat(ctx, FaiSystem, []ChatMessage{{Role: "user", Content: planPrompt(title, body)}})
+	text, err := p.Chat(ctx, StepSystem, []ChatMessage{{Role: "user", Content: planPrompt(title, body)}})
 	if err != nil {
 		return TaskPlan{}, err
 	}

@@ -93,7 +93,7 @@ func (s *Server) aiTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	now := localNow(body.TZOffset)
-	reply, err := provider.Chat(r.Context(), ai.FaiSystem, []ai.ChatMessage{{
+	reply, err := provider.Chat(r.Context(), ai.StepSystem, []ai.ChatMessage{{
 		Role:    "user",
 		Content: aiTaskPrompt(text, now),
 	}})

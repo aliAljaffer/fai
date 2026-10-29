@@ -31,6 +31,10 @@ CREATE TABLE meeting_outcomes (
   ends_at TEXT,
   workspace_id INTEGER NOT NULL REFERENCES workspaces(id),
   outcome_prompt_sent BOOLEAN NOT NULL DEFAULT 0,
+  calendar_source_id INTEGER REFERENCES calendar_sources(id) ON DELETE SET NULL,
+  event_uid TEXT NOT NULL DEFAULT '',
+  event_title TEXT NOT NULL DEFAULT '',
+  event_url TEXT NOT NULL DEFAULT '',
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 CREATE INDEX idx_meeting_outcomes_date ON meeting_outcomes(occurred_on);

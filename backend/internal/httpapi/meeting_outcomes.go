@@ -46,11 +46,15 @@ func (s *Server) listMeetingOutcomes(w http.ResponseWriter, r *http.Request) {
 }
 
 type meetingOutcomeBody struct {
-	OccurredOn  string  `json:"occurred_on"`
-	Title       string  `json:"title"`
-	NotesMd     string  `json:"notes_md"`
-	EndsAt      *string `json:"ends_at"`
-	WorkspaceID int64   `json:"workspace_id"`
+	OccurredOn       string  `json:"occurred_on"`
+	Title            string  `json:"title"`
+	NotesMd          string  `json:"notes_md"`
+	EndsAt           *string `json:"ends_at"`
+	WorkspaceID      int64   `json:"workspace_id"`
+	CalendarSourceID int64   `json:"calendar_source_id"`
+	EventUID         string  `json:"event_uid"`
+	EventTitle       string  `json:"event_title"`
+	EventURL         string  `json:"event_url"`
 }
 
 func (b meetingOutcomeBody) endsAt() *time.Time {
@@ -74,7 +78,8 @@ func (s *Server) createMeetingOutcome(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid occurred_on, expected YYYY-MM-DD")
 		return
 	}
-	outcome, err := s.Store.CreateMeetingOutcome(r.Context(), body.OccurredOn, body.Title, body.NotesMd, body.endsAt(), body.WorkspaceID)
+	outcome, err := s.Store.CreateMeetingOutcome(r.Context(), body.OccurredOn, body.Title, body.NotesMd, body.endsAt(), body.WorkspaceID,
+		store.MeetingEvent{SourceID: body.CalendarSourceID, UID: body.EventUID, Title: body.EventTitle, URL: body.EventURL})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -89,6 +94,21 @@ func (s *Server) getMeetingOutcome(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	outcome, err := s.Store.GetMeetingOutcome(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "meeting outcome not found")
+		return
+	}
+	writeJSON(w, http.StatusOK, outcome)
+}
+
+func (s *Server) getMeetingOutcomeByEvent(w http.ResponseWriter, r *http.Request) {
+	sourceID := optionalInt64Param(r, "source_id")
+	uid := r.URL.Query().Get("uid")
+	if sourceID == nil || uid == "" {
+		writeError(w, http.StatusBadRequest, "source_id and uid are required")
+		return
+	}
+	outcome, err := s.Store.GetMeetingOutcomeByEvent(r.Context(), *sourceID, uid)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "meeting outcome not found")
 		return
@@ -129,10 +149,13 @@ func (s *Server) deleteMeetingOutcome(w http.ResponseWriter, r *http.Request) {
 }
 
 type createTaskFromOutcomeBody struct {
-	Title    string  `json:"title"`
-	MarkDone bool    `json:"mark_done"`
-	BoardID  int64   `json:"board_id"`
-	DueDate  *string `json:"due_date"`
+	Title        string   `json:"title"`
+	MarkDone     bool     `json:"mark_done"`
+	BoardID      int64    `json:"board_id"`
+	DueDate      *string  `json:"due_date"`
+	Kind         string   `json:"kind"`
+	ParentTaskID *int64   `json:"parent_task_id"`
+	Steps        []string `json:"steps"`
 }
 
 func (s *Server) createTaskFromOutcome(w http.ResponseWriter, r *http.Request) {
@@ -153,6 +176,11 @@ func (s *Server) createTaskFromOutcome(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "invalid due_date, expected YYYY-MM-DD")
 			return
 		}
+	}
+	kind := store.NormalizeKind(body.Kind, body.ParentTaskID != nil)
+	if err := s.validateTaskType(r.Context(), 0, kind, body.ParentTaskID); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
 	}
 
 	ctx := r.Context()
@@ -179,19 +207,44 @@ func (s *Server) createTaskFromOutcome(w http.ResponseWriter, r *http.Request) {
 	task, err := s.Store.CreateTask(ctx, store.CreateTaskParams{
 		BoardID: body.BoardID, ColumnID: columnID, Title: body.Title,
 		Priority: "medium", Position: position, MeetingOutcomeID: &outcomeID,
-		DueDate: body.DueDate, CreatedByFai: true,
+		DueDate: body.DueDate, ParentTaskID: body.ParentTaskID, Kind: kind, CreatedByFai: true,
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+
+	if kind == "task" {
+		for _, title := range body.Steps {
+			title = strings.TrimSpace(title)
+			if title == "" {
+				continue
+			}
+			stepPosition, err := s.appendPosition(ctx, columnID)
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, err.Error())
+				return
+			}
+			parentID := task.ID
+			if _, err := s.Store.CreateTask(ctx, store.CreateTaskParams{
+				BoardID: body.BoardID, ColumnID: columnID, Title: title,
+				Priority: "medium", Position: stepPosition, MeetingOutcomeID: &outcomeID,
+				ParentTaskID: &parentID, Kind: "step", CreatedByFai: true,
+			}); err != nil {
+				writeError(w, http.StatusInternalServerError, err.Error())
+				return
+			}
+		}
+	}
+
 	writeJSON(w, http.StatusCreated, task)
 }
 
 type extractedTask struct {
-	Title         string  `json:"title"`
-	SuggestedDone bool    `json:"suggested_done"`
-	DueDate       *string `json:"due_date"`
+	Title         string   `json:"title"`
+	SuggestedDone bool     `json:"suggested_done"`
+	DueDate       *string  `json:"due_date"`
+	Steps         []string `json:"steps"`
 }
 
 func (s *Server) extractTasksFromOutcome(w http.ResponseWriter, r *http.Request) {
@@ -221,10 +274,12 @@ func (s *Server) extractTasksFromOutcome(w http.ResponseWriter, r *http.Request)
 		"For each, decide if it sounds already completed during the meeting (suggested_done) " +
 		"or is still open. Resolve any relative date in the notes against the meeting date " +
 		"and set due_date to that calendar day as yyyy-MM-dd, or null when the notes give no date. " +
+		"Break each task into the concrete steps needed to finish it and list them in steps " +
+		"(0-5 atomic instructions, an empty array when the task is simple). " +
 		"Notes:\n\n" + outcome.NotesMd + "\n\n" +
-		`Respond with ONLY a JSON array of {"title": string, "suggested_done": boolean, "due_date": string or null}, nothing else.`
+		`Respond with ONLY a JSON array of {"title": string, "suggested_done": boolean, "due_date": string or null, "steps": [string]}, nothing else.`
 
-	reply, err := provider.Chat(r.Context(), ai.FaiSystem, []ai.ChatMessage{{Role: "user", Content: prompt}})
+	reply, err := provider.Chat(r.Context(), ai.StepSystem, []ai.ChatMessage{{Role: "user", Content: prompt}})
 	if err != nil {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return

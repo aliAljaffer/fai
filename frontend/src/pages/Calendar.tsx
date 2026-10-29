@@ -21,7 +21,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { LogMeetingOutcomeDialog } from '../components/calendar/LogMeetingOutcomeDialog'
-import { useBoards, useCalendarSources, useColumns, useImportedCalendars, useTasks, useUpdateTask } from '../api/hooks'
+import { useBoards, useCalendarSources, useColumns, useImportedCalendars, useMeetingOutcomeByEvent, useTasks, useUpdateTask } from '../api/hooks'
 import { TaskComposer } from '../components/board/TaskComposer'
 import { useCalendarPrefs } from '../store/calendarPrefs'
 import { useUIStore } from '../store/ui'
@@ -74,6 +74,7 @@ export function Calendar() {
   const [dialogDate, setDialogDate] = useState<string | null>(null)
   const [dayDate, setDayDate] = useState<string | null>(null)
   const [dialogOutcome, setDialogOutcome] = useState<MeetingOutcome | undefined>(undefined)
+  const [dialogEvent, setDialogEvent] = useState<ImportedEvent | undefined>(undefined)
   const [importedEvent, setImportedEvent] = useState<{
     event: ImportedEvent
     sourceName: string
@@ -82,6 +83,7 @@ export function Calendar() {
   const [range, setRange] = useState(initialRange)
   const [draggingTitle, setDraggingTitle] = useState<string | null>(null)
   const calendarRef = useRef<HTMLDivElement>(null)
+  const agendaRef = useRef<HTMLElement>(null)
   const { firstDay, setFirstDay } = useCalendarPrefs()
   const [isMobile, setIsMobile] = useState(() =>
     typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches,
@@ -96,12 +98,45 @@ export function Calendar() {
     return () => query.removeEventListener('change', onChange)
   }, [])
 
+  useEffect(() => {
+    if (!dayDate) return
+    agendaRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  }, [dayDate, importedEvent])
+
   const { data: importedCalendars } = useImportedCalendars(range.from, range.to, workspaceId)
+  const { data: eventOutcome } = useMeetingOutcomeByEvent(
+    importedEvent?.event.source_id,
+    importedEvent?.event.id,
+  )
+  const eventArc = eventOutcome
+    ? (tasks ?? []).find((task) => task.kind === 'arc' && task.meeting_outcome_id === eventOutcome.id)
+    : undefined
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search)
+    const eventId = params.get('event')
+    if (!eventId) return
+    const source = params.get('source')
+    const sourceId = source ? Number(source) : undefined
+    const match = (importedCalendars ?? [])
+      .flatMap((calendar) => calendar.events.map((event) => ({ event, sourceName: calendar.source.name })))
+      .find(({ event }) => event.id === eventId && (sourceId === undefined || event.source_id === sourceId))
+    if (!match) return
+    const date = match.event.all_day
+      ? match.event.start.slice(0, 10)
+      : format(new Date(match.event.start), 'yyyy-MM-dd')
+    setDayDate(date)
+    setImportedEvent({ ...match, date })
+    params.delete('event')
+    params.delete('source')
+    navigate({ pathname: location.pathname, search: params.toString() }, { replace: true })
+  }, [importedCalendars, location, navigate])
 
   useEffect(() => {
     const outcome = (location.state as { outcome?: MeetingOutcome } | null)?.outcome
     if (!outcome) return
     setDialogOutcome(outcome)
+    setDialogEvent(undefined)
     setDialogDate(outcome.occurred_on)
     navigate(location.pathname, { replace: true, state: null })
   }, [location, navigate])
@@ -167,6 +202,7 @@ export function Calendar() {
         ? props.event.start.slice(0, 10)
         : format(new Date(props.event.start), 'yyyy-MM-dd')
       if (date <= today) {
+        setDayDate(date)
         setImportedEvent({ event: props.event, sourceName: props.sourceName, date })
         return
       }
@@ -195,9 +231,10 @@ export function Calendar() {
     setDayDate(format(info.date, 'yyyy-MM-dd'))
   }
 
-  function openNewOutcome(date: Date) {
+  function openNewOutcome(date: Date, event?: ImportedEvent) {
     if (format(date, 'yyyy-MM-dd') > today) return
     setDialogOutcome(undefined)
+    setDialogEvent(event)
     setDialogDate(format(date, 'yyyy-MM-dd'))
   }
 
@@ -304,9 +341,11 @@ export function Calendar() {
             (date) => {
               const dateTasks = (tasks ?? []).filter((task) => task.due_date === date)
               const dateEvents = (importedCalendars ?? []).flatMap((calendar) =>
-                calendar.events.filter((event) =>
-                  (event.all_day ? event.start.slice(0, 10) : format(new Date(event.start), 'yyyy-MM-dd')) === date,
-                ),
+                calendar.events
+                  .filter((event) =>
+                    (event.all_day ? event.start.slice(0, 10) : format(new Date(event.start), 'yyyy-MM-dd')) === date,
+                  )
+                  .map((event) => ({ event, sourceName: calendar.source.name })),
               )
               return (
                 <section key={date} className="rounded-lg border p-3">
@@ -335,9 +374,22 @@ export function Calendar() {
                         </button>
                       </li>
                     ))}
-                    {dateEvents.map((event) => (
-                      <li key={`event-${event.id}`} className="px-1 py-1 text-sm text-muted-foreground">
-                        {event.title}
+                    {dateEvents.map(({ event, sourceName }) => (
+                      <li key={`event-${event.id}`}>
+                        <button
+                          type="button"
+                          className="w-full rounded-sm px-1 py-1 text-left text-sm text-muted-foreground hover:bg-muted"
+                          onClick={() => {
+                            if (date <= today) {
+                              setDayDate(date)
+                              setImportedEvent({ event, sourceName, date })
+                            } else if (event.url) {
+                              window.open(event.url, '_blank', 'noopener,noreferrer')
+                            }
+                          }}
+                        >
+                          {event.title}
+                        </button>
                       </li>
                     ))}
                   </ul>
@@ -349,7 +401,7 @@ export function Calendar() {
       ) : (
       <div
         ref={calendarRef}
-        className="fai-calendar flex flex-col overflow-x-auto rounded-lg border p-3"
+        className="fai-calendar flex flex-col rounded-lg border p-3"
       >
         <div className="min-w-0">
           <FullCalendar
@@ -386,7 +438,7 @@ export function Calendar() {
       )}
 
       {dayDate && boardId && (
-        <section className="flex flex-col gap-3 rounded-lg border p-3" aria-label={`Agenda for ${format(parseISO(dayDate), 'd MMM yyyy')}`}>
+        <section ref={agendaRef} className="flex flex-col gap-3 rounded-lg border p-3" aria-label={`Agenda for ${format(parseISO(dayDate), 'd MMM yyyy')}`}>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-sm font-semibold">{format(parseISO(dayDate), 'EEEE, d MMM yyyy')}</h2>
             <Button size="icon-sm" variant="ghost" aria-label="Close agenda" onClick={() => { setDayDate(null); setImportedEvent(null) }}>
@@ -456,11 +508,23 @@ export function Calendar() {
                   <X />
                 </Button>
               </div>
+              {eventArc && (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="self-start"
+                  onClick={() => {
+                    const params = new URLSearchParams(location.search)
+                    params.set('task', String(eventArc.id))
+                    navigate({ pathname: location.pathname, search: params.toString() })
+                  }}
+                >
+                  Open Arc: {eventArc.title}
+                </Button>
+              )}
               {importedEvent.date <= today && (
                 <Button size="sm" variant="outline" onClick={() => {
-                  const date = importedEvent.date
-                  setImportedEvent(null)
-                  openNewOutcome(parseISO(date))
+                  openNewOutcome(parseISO(importedEvent.date), importedEvent.event)
                 }}>
                   <MessageSquarePlus />
                   Add meeting summary
@@ -484,6 +548,7 @@ export function Calendar() {
           outcome={dialogOutcome}
           occurredOn={dialogDate}
           boardId={boardId}
+          event={dialogEvent}
         />
       )}
     </div>

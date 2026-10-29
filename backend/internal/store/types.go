@@ -176,7 +176,20 @@ type MeetingOutcome struct {
 	EndsAt            *time.Time `json:"ends_at"`
 	WorkspaceID       int64      `json:"workspace_id"`
 	OutcomePromptSent bool       `json:"outcome_prompt_sent"`
+	CalendarSourceID  *int64     `json:"calendar_source_id"`
+	EventUID          string     `json:"event_uid"`
+	EventTitle        string     `json:"event_title"`
+	EventURL          string     `json:"event_url"`
 	CreatedAt         time.Time  `json:"created_at"`
+}
+
+// MeetingEvent links a meeting outcome to the calendar event it was logged from.
+type MeetingEvent struct {
+	SourceID int64
+	// UID is the imported event's occurrence id, so recurring events link separately.
+	UID   string
+	Title string
+	URL   string
 }
 
 type CalendarSource struct {

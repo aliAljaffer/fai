@@ -12,7 +12,9 @@ func toOutcome(m sqlitedb.MeetingOutcome) store.MeetingOutcome {
 	createdAt, _ := parseTime(m.CreatedAt)
 	return store.MeetingOutcome{
 		ID: m.ID, OccurredOn: m.OccurredOn, Title: m.Title, NotesMd: m.NotesMd,
-		EndsAt: nullTimeToPtr(m.EndsAt), WorkspaceID: m.WorkspaceID, OutcomePromptSent: m.OutcomePromptSent, CreatedAt: createdAt,
+		EndsAt: nullTimeToPtr(m.EndsAt), WorkspaceID: m.WorkspaceID, OutcomePromptSent: m.OutcomePromptSent,
+		CalendarSourceID: nullInt64ToPtr(m.CalendarSourceID), EventUID: m.EventUid, EventTitle: m.EventTitle,
+		EventURL: m.EventUrl, CreatedAt: createdAt,
 	}
 }
 
@@ -47,9 +49,21 @@ func (s *Store) GetMeetingOutcome(ctx context.Context, id int64) (store.MeetingO
 	return toOutcome(m), err
 }
 
-func (s *Store) CreateMeetingOutcome(ctx context.Context, occurredOn, title, notesMd string, endsAt *time.Time, workspaceID int64) (store.MeetingOutcome, error) {
+func (s *Store) GetMeetingOutcomeByEvent(ctx context.Context, sourceID int64, eventUID string) (store.MeetingOutcome, error) {
+	m, err := s.q.GetMeetingOutcomeByEvent(ctx, sqlitedb.GetMeetingOutcomeByEventParams{
+		CalendarSourceID: ptrToNullInt64(&sourceID), EventUid: eventUID,
+	})
+	return toOutcome(m), err
+}
+
+func (s *Store) CreateMeetingOutcome(ctx context.Context, occurredOn, title, notesMd string, endsAt *time.Time, workspaceID int64, event store.MeetingEvent) (store.MeetingOutcome, error) {
+	var sourceID *int64
+	if event.UID != "" && event.SourceID != 0 {
+		sourceID = &event.SourceID
+	}
 	m, err := s.q.CreateMeetingOutcome(ctx, sqlitedb.CreateMeetingOutcomeParams{
 		OccurredOn: occurredOn, Title: title, NotesMd: notesMd, EndsAt: ptrTimeToNull(endsAt), WorkspaceID: workspaceID,
+		CalendarSourceID: ptrToNullInt64(sourceID), EventUid: event.UID, EventTitle: event.Title, EventUrl: event.URL,
 	})
 	return toOutcome(m), err
 }

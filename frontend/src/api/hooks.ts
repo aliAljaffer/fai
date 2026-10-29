@@ -1080,11 +1080,38 @@ export function usePendingMeetingOutcomes(workspaceId?: number) {
   })
 }
 
+export function useMeetingOutcome(id: number | null) {
+  return useQuery({
+    queryKey: ['meeting-outcomes', 'one', id],
+    queryFn: () => api.get<MeetingOutcome>(`/meeting-outcomes/${id}`),
+    enabled: id !== null,
+  })
+}
+
+export function useMeetingOutcomeByEvent(sourceId?: number, uid?: string) {
+  return useQuery({
+    queryKey: ['meeting-outcomes', 'event', sourceId ?? null, uid ?? null],
+    queryFn: () =>
+      api.get<MeetingOutcome>(`/meeting-outcomes/by-event?source_id=${sourceId}&uid=${encodeURIComponent(uid ?? '')}`),
+    enabled: sourceId !== undefined && !!uid,
+    retry: false,
+  })
+}
+
 export function useCreateMeetingOutcome(workspaceId?: number) {
   const qc = useQueryClient()
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId)
   return useMutation({
-    mutationFn: (body: { occurred_on: string; title: string; notes_md: string; ends_at?: string }) =>
+    mutationFn: (body: {
+      occurred_on: string
+      title: string
+      notes_md: string
+      ends_at?: string
+      calendar_source_id?: number
+      event_uid?: string
+      event_title?: string
+      event_url?: string
+    }) =>
       api.post<MeetingOutcome>('/meeting-outcomes', {
         ...body,
         workspace_id: workspaceId ?? activeWorkspaceId,
@@ -1119,8 +1146,15 @@ export function useExtractTasksFromOutcome() {
 export function useCreateTaskFromOutcome(outcomeId: number) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (body: { title: string; mark_done: boolean; board_id: number; due_date?: string | null }) =>
-      api.post<Task>(`/meeting-outcomes/${outcomeId}/tasks`, body),
+    mutationFn: (body: {
+      title: string
+      mark_done?: boolean
+      board_id: number
+      due_date?: string | null
+      kind?: 'arc' | 'task' | 'step'
+      parent_task_id?: number | null
+      steps?: string[]
+    }) => api.post<Task>(`/meeting-outcomes/${outcomeId}/tasks`, body),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['tasks'] }),
   })
 }

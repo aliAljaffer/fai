@@ -144,14 +144,14 @@ func TestExtractedTasksUseMeetingDate(t *testing.T) {
 	defer st.Close()
 
 	ctx := context.Background()
-	outcome, err := st.CreateMeetingOutcome(ctx, "2026-10-20", "Weekly sync", "Follow up Friday on the deck.", nil, 0)
+	outcome, err := st.CreateMeetingOutcome(ctx, "2026-10-20", "Weekly sync", "Follow up Friday on the deck.", nil, 0, store.MeetingEvent{})
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	provider := &fakeAI{reply: "```json\n" +
-		`[{"title":"Send deck","suggested_done":false,"due_date":"2026-10-23"},` +
-		`{"title":"No date","suggested_done":true,"due_date":"next week"}]` + "\n```"}
+		`[{"title":"Send deck","suggested_done":false,"due_date":"2026-10-23","steps":["Draft","Send"]},` +
+		`{"title":"No date","suggested_done":true,"due_date":"next week","steps":[]}]` + "\n```"}
 	server := httptest.NewServer(NewRouter(&Server{Store: st, AI: provider}))
 	defer server.Close()
 
@@ -173,6 +173,15 @@ func TestExtractedTasksUseMeetingDate(t *testing.T) {
 	}
 	if tasks[1].DueDate != nil {
 		t.Errorf("unparsed due date should be dropped, got %q", *tasks[1].DueDate)
+	}
+	if len(tasks[0].Steps) != 2 {
+		t.Errorf("steps = %#v", tasks[0].Steps)
+	}
+	if !strings.Contains(provider.messages[0].Content, "steps") {
+		t.Errorf("prompt does not ask for steps: %q", provider.messages[0].Content)
+	}
+	if !strings.Contains(provider.system, "ASD-STE100") {
+		t.Errorf("extraction does not use the step system prompt: %q", provider.system)
 	}
 	if !strings.Contains(provider.messages[0].Content, "2026-10-20") {
 		t.Errorf("prompt does not mention the meeting date: %q", provider.messages[0].Content)
@@ -196,6 +205,93 @@ func TestExtractedTasksUseMeetingDate(t *testing.T) {
 		t.Errorf("invalid due date status = %d", res.StatusCode)
 	}
 	res.Body.Close()
+}
+
+func TestMeetingOutcomeEventLinkAndArcTree(t *testing.T) {
+	st, err := lite.New(filepath.Join(t.TempDir(), "fai.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	ctx := context.Background()
+	source, err := st.CreateCalendarSource(ctx, "Work", "https://example.com/feed.ics", "#336699", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(NewRouter(&Server{Store: st}))
+	defer server.Close()
+
+	body := `{"occurred_on":"2026-10-20","title":"Weekly sync","notes_md":"notes",` +
+		`"calendar_source_id":` + strconv.FormatInt(source.ID, 10) + `,` +
+		`"event_uid":"evt-1","event_title":"Weekly sync","event_url":"https://example.com/e"}`
+	res := postJSON(t, server.URL+"/api/meeting-outcomes", body)
+	if res.StatusCode != http.StatusCreated {
+		t.Fatalf("create outcome status = %d", res.StatusCode)
+	}
+	var outcome store.MeetingOutcome
+	if err := json.NewDecoder(res.Body).Decode(&outcome); err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if outcome.EventUID != "evt-1" || outcome.EventTitle != "Weekly sync" {
+		t.Fatalf("outcome event link = %#v", outcome)
+	}
+
+	res = httpGet(t, server.URL+"/api/meeting-outcomes/by-event?source_id="+
+		strconv.FormatInt(source.ID, 10)+"&uid=evt-1")
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("by-event status = %d", res.StatusCode)
+	}
+	var linked store.MeetingOutcome
+	if err := json.NewDecoder(res.Body).Decode(&linked); err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if linked.ID != outcome.ID {
+		t.Errorf("by-event outcome = %d, want %d", linked.ID, outcome.ID)
+	}
+
+	base := server.URL + "/api/meeting-outcomes/" + strconv.FormatInt(outcome.ID, 10)
+	res = postJSON(t, base+"/tasks", `{"title":"Weekly sync","board_id":1,"kind":"arc"}`)
+	if res.StatusCode != http.StatusCreated {
+		t.Fatalf("create arc status = %d", res.StatusCode)
+	}
+	var arc store.Task
+	if err := json.NewDecoder(res.Body).Decode(&arc); err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if arc.Kind != "arc" {
+		t.Fatalf("arc kind = %q", arc.Kind)
+	}
+
+	res = postJSON(t, base+"/tasks", `{"title":"Send deck","board_id":1,"kind":"task","parent_task_id":`+
+		strconv.FormatInt(arc.ID, 10)+`,"steps":["Draft","Send"]}`)
+	if res.StatusCode != http.StatusCreated {
+		t.Fatalf("create task status = %d", res.StatusCode)
+	}
+	var task store.Task
+	if err := json.NewDecoder(res.Body).Decode(&task); err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if task.Kind != "task" || task.ParentTaskID == nil || *task.ParentTaskID != arc.ID {
+		t.Fatalf("task = %#v", task)
+	}
+
+	steps, err := st.ListSubtasks(ctx, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(steps) != 2 {
+		t.Fatalf("steps = %d, want 2", len(steps))
+	}
+	for _, step := range steps {
+		if step.Kind != "step" {
+			t.Errorf("step kind = %q", step.Kind)
+		}
+	}
 }
 
 func TestAIReminderCreatesReminder(t *testing.T) {

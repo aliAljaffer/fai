@@ -22,7 +22,7 @@ import {
   useExtractTasksFromOutcome,
   useUpdateMeetingOutcome,
 } from '../../api/hooks'
-import type { ExtractedTask, MeetingOutcome } from '../../api/types'
+import type { ExtractedTask, ImportedEvent, MeetingOutcome } from '../../api/types'
 
 export function LogMeetingOutcomeDialog({
   open,
@@ -30,12 +30,14 @@ export function LogMeetingOutcomeDialog({
   outcome,
   occurredOn,
   boardId,
+  event,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   outcome?: MeetingOutcome
   occurredOn: string
   boardId: number
+  event?: ImportedEvent
 }) {
   const { data: aiStatus } = useAIStatus()
   const createOutcome = useCreateMeetingOutcome()
@@ -53,13 +55,13 @@ export function LogMeetingOutcomeDialog({
 
   useEffect(() => {
     if (open) {
-      setTitle(outcome?.title ?? '')
+      setTitle(outcome?.title ?? event?.title ?? '')
       setNotes(outcome?.notes_md ?? '')
       setEndsAt(outcome?.ends_at ? outcome.ends_at.slice(0, 16) : '')
       setSavedOutcome(outcome)
       setSuggestions([])
     }
-  }, [open, outcome])
+  }, [open, outcome, event])
 
   async function save(): Promise<MeetingOutcome | undefined> {
     if (!title.trim()) return undefined
@@ -67,10 +69,19 @@ export function LogMeetingOutcomeDialog({
       title: title.trim(),
       notes_md: notes,
       ends_at: endsAt ? new Date(endsAt).toISOString() : undefined,
+      calendar_source_id: event?.source_id,
+      event_uid: event?.id,
+      event_title: event?.title,
+      event_url: event?.url,
     }
     try {
       const saved = savedOutcome
-        ? await updateOutcome.mutateAsync({ id: savedOutcome.id, ...body })
+        ? await updateOutcome.mutateAsync({
+            id: savedOutcome.id,
+            title: body.title,
+            notes_md: body.notes_md,
+            ends_at: body.ends_at,
+          })
         : await createOutcome.mutateAsync({ occurred_on: occurredOn, ...body })
       setSavedOutcome(saved)
       return saved
@@ -100,15 +111,23 @@ export function LogMeetingOutcomeDialog({
     const selected = suggestions.filter((suggestion) => suggestion.selected)
     if (!selected.length) return
     try {
+      const arc = await createTask.mutateAsync({
+        title: savedOutcome.title || 'Meeting summary',
+        board_id: boardId,
+        kind: 'arc',
+      })
       for (const suggestion of selected) {
         await createTask.mutateAsync({
           title: suggestion.title,
           mark_done: suggestion.suggested_done,
           board_id: boardId,
           due_date: suggestion.due_date,
+          kind: 'task',
+          parent_task_id: arc.id,
+          steps: suggestion.steps,
         })
       }
-      toast.success(`Added ${selected.length} tasks`)
+      toast.success(`Added ${selected.length} tasks to "${arc.title}"`)
       setSuggestions([])
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Could not add tasks')

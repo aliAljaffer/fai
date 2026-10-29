@@ -198,6 +198,7 @@ func NewRouter(s *Server) http.Handler {
 
 			r.Get("/meeting-outcomes", s.listMeetingOutcomes)
 			r.Post("/meeting-outcomes", s.createMeetingOutcome)
+			r.Get("/meeting-outcomes/by-event", s.getMeetingOutcomeByEvent)
 			r.Get("/meeting-outcomes/{outcomeID}", s.getMeetingOutcome)
 			r.Patch("/meeting-outcomes/{outcomeID}", s.updateMeetingOutcome)
 			r.Delete("/meeting-outcomes/{outcomeID}", s.deleteMeetingOutcome)

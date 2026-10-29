@@ -168,7 +168,8 @@ type Store interface {
 	ListMeetingOutcomes(ctx context.Context, occurredOn *string, workspaceID *int64) ([]MeetingOutcome, error)
 	ListPendingMeetingOutcomes(ctx context.Context) ([]MeetingOutcome, error)
 	GetMeetingOutcome(ctx context.Context, id int64) (MeetingOutcome, error)
-	CreateMeetingOutcome(ctx context.Context, occurredOn, title, notesMd string, endsAt *time.Time, workspaceID int64) (MeetingOutcome, error)
+	GetMeetingOutcomeByEvent(ctx context.Context, sourceID int64, eventUID string) (MeetingOutcome, error)
+	CreateMeetingOutcome(ctx context.Context, occurredOn, title, notesMd string, endsAt *time.Time, workspaceID int64, event MeetingEvent) (MeetingOutcome, error)
 	UpdateMeetingOutcome(ctx context.Context, id int64, title, notesMd string, endsAt *time.Time) (MeetingOutcome, error)
 	DeleteMeetingOutcome(ctx context.Context, id int64) error
 	ListDueUnpromptedMeetingOutcomes(ctx context.Context) ([]MeetingOutcome, error)

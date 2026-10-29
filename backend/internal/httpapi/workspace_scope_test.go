@@ -75,10 +75,10 @@ func TestPendingMeetingOutcomesFilteredByWorkspace(t *testing.T) {
 
 	ctx := context.Background()
 	past := time.Now().Add(-time.Hour)
-	if _, err := st.CreateMeetingOutcome(ctx, "2026-10-20", "Personal sync", "", &past, 0); err != nil {
+	if _, err := st.CreateMeetingOutcome(ctx, "2026-10-20", "Personal sync", "", &past, 0, store.MeetingEvent{}); err != nil {
 		t.Fatal(err)
 	}
-	dev, err := st.CreateMeetingOutcome(ctx, "2026-10-21", "Dev sync", "", &past, workspace.ID)
+	dev, err := st.CreateMeetingOutcome(ctx, "2026-10-21", "Dev sync", "", &past, workspace.ID, store.MeetingEvent{})
 	if err != nil {
 		t.Fatal(err)
 	}

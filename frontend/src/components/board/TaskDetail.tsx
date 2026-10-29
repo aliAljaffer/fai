@@ -3,7 +3,7 @@ import { Check, Play, Sparkles, Square, X } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useHotkeys } from 'react-hotkeys-hook'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -33,6 +33,7 @@ import {
   useAIStatus,
   useColumns,
   useCreateTag,
+  useMeetingOutcome,
   useMoveTask,
   useRunningTime,
   useSetTaskType,
@@ -71,6 +72,7 @@ export function TaskDetail({
 
   const { data: running } = useRunningTime()
   const { data: entries } = useTaskTimeEntries(task.id)
+  const { data: outcome } = useMeetingOutcome(task.meeting_outcome_id)
   const { data: columns } = useColumns(task.board_id)
   const columnItems = useMemo(
     () => (columns ?? []).map((column) => ({ value: String(column.id), label: column.name })),
@@ -165,6 +167,27 @@ export function TaskDetail({
               <div className="rounded-lg border p-3">
                 <MarkdownRenderer source={description} />
               </div>
+            )}
+            {outcome?.event_uid && (
+              <p className="text-xs text-muted-foreground">
+                From calendar:{' '}
+                <Link
+                  className="text-primary underline"
+                  to={`/calendar?event=${encodeURIComponent(outcome.event_uid)}&source=${outcome.calendar_source_id ?? ''}`}
+                >
+                  {outcome.event_title || 'event'}
+                </Link>
+                {outcome.event_url && (
+                  <a
+                    className="ml-2 text-primary underline"
+                    href={outcome.event_url}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Open event
+                  </a>
+                )}
+              </p>
             )}
             <div className="flex flex-col gap-1.5">
               <span className="text-xs font-medium text-muted-foreground">Labels</span>

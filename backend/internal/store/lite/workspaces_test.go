@@ -214,10 +214,10 @@ func TestWorkspaceScopingOnLists(t *testing.T) {
 		t.Errorf("dev sources = %#v", sources)
 	}
 
-	if _, err := st.CreateMeetingOutcome(ctx, "2026-10-20", "Personal sync", "notes", nil, 0); err != nil {
+	if _, err := st.CreateMeetingOutcome(ctx, "2026-10-20", "Personal sync", "notes", nil, 0, store.MeetingEvent{}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := st.CreateMeetingOutcome(ctx, "2026-10-21", "Dev sync", "notes", nil, dev.ID); err != nil {
+	if _, err := st.CreateMeetingOutcome(ctx, "2026-10-21", "Dev sync", "notes", nil, dev.ID, store.MeetingEvent{}); err != nil {
 		t.Fatal(err)
 	}
 	outcomes, err := st.ListMeetingOutcomes(ctx, nil, &dev.ID)
