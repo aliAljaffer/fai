@@ -151,6 +151,7 @@ type Task struct {
 	WorkspaceID      int64              `json:"workspace_id"`
 	RefNum           int64              `json:"ref_num"`
 	Kind             string             `json:"kind"`
+	CreatedByFai     bool               `json:"created_by_fai"`
 }
 
 type TaskComment struct {

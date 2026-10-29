@@ -102,6 +102,7 @@ func (s *Server) createTaskFromNote(w http.ResponseWriter, r *http.Request) {
 		DescriptionMd: description,
 		Priority:      "medium",
 		Position:      position,
+		CreatedByFai:  true,
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
@@ -135,6 +136,7 @@ func (s *Server) createTaskFromNote(w http.ResponseWriter, r *http.Request) {
 			Priority:     "medium",
 			Position:     position,
 			ParentTaskID: &parent.ID,
+			CreatedByFai: true,
 		})
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())

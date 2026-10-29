@@ -18,7 +18,7 @@ func toTask(t sqlitedb.Task) store.Task {
 		ID: t.ID, BoardID: t.BoardID, ColumnID: t.ColumnID, WorkspaceID: t.WorkspaceID, RefNum: t.RefNum,
 		Title:         t.Title,
 		DescriptionMd: t.DescriptionMd, Priority: t.Priority, DueDate: nullStringToPtr(t.DueDate),
-		Position: t.Position, ParentTaskID: nullInt64ToPtr(t.ParentTaskID), Kind: t.Kind, MeetingOutcomeID: nullInt64ToPtr(t.MeetingOutcomeID),
+		Position: t.Position, ParentTaskID: nullInt64ToPtr(t.ParentTaskID), Kind: t.Kind, MeetingOutcomeID: nullInt64ToPtr(t.MeetingOutcomeID), CreatedByFai: t.CreatedByFai,
 		CompletedAt: nullTimeToPtr(t.CompletedAt), Archived: t.Archived, Tags: []store.Tag{}, CreatedAt: createdAt, UpdatedAt: updatedAt,
 	}
 }
@@ -72,7 +72,7 @@ func (s *Store) CreateTask(ctx context.Context, p store.CreateTaskParams) (store
 		BoardID: p.BoardID, ColumnID: p.ColumnID, WorkspaceID: workspaceID, RefNum: refNum,
 		Title:         p.Title,
 		DescriptionMd: p.DescriptionMd, Priority: p.Priority, DueDate: ptrToNullString(p.DueDate),
-		Position: p.Position, ParentTaskID: ptrToNullInt64(p.ParentTaskID), Kind: p.Kind, MeetingOutcomeID: ptrToNullInt64(p.MeetingOutcomeID),
+		Position: p.Position, ParentTaskID: ptrToNullInt64(p.ParentTaskID), Kind: p.Kind, MeetingOutcomeID: ptrToNullInt64(p.MeetingOutcomeID), CreatedByFai: p.CreatedByFai,
 	})
 	if err != nil {
 		return store.Task{}, err

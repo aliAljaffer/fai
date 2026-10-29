@@ -90,6 +90,7 @@ type Task struct {
 	ParentTaskID     *int64     `json:"parent_task_id"`
 	Kind             string     `json:"kind"`
 	MeetingOutcomeID *int64     `json:"meeting_outcome_id"`
+	CreatedByFai     bool       `json:"created_by_fai"`
 	CompletedAt      *time.Time `json:"completed_at"`
 	Archived         bool       `json:"archived"`
 	Tags             []Tag      `json:"tags"`

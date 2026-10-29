@@ -26,6 +26,7 @@ type CreateTaskParams struct {
 	ParentTaskID     *int64
 	Kind             string
 	MeetingOutcomeID *int64
+	CreatedByFai     bool
 	// RefNum, when set, reuses an imported task number instead of allocating the
 	// next one. The workspace counter is raised to at least this value.
 	RefNum *int64

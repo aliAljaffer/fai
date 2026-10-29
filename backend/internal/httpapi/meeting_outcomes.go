@@ -179,7 +179,7 @@ func (s *Server) createTaskFromOutcome(w http.ResponseWriter, r *http.Request) {
 	task, err := s.Store.CreateTask(ctx, store.CreateTaskParams{
 		BoardID: body.BoardID, ColumnID: columnID, Title: body.Title,
 		Priority: "medium", Position: position, MeetingOutcomeID: &outcomeID,
-		DueDate: body.DueDate,
+		DueDate: body.DueDate, CreatedByFai: true,
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())

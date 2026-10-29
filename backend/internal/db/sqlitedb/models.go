@@ -141,6 +141,7 @@ type Task struct {
 	ParentTaskID     sql.NullInt64  `json:"parent_task_id"`
 	Kind             string         `json:"kind"`
 	MeetingOutcomeID sql.NullInt64  `json:"meeting_outcome_id"`
+	CreatedByFai     bool           `json:"created_by_fai"`
 	WorkspaceID      int64          `json:"workspace_id"`
 	RefNum           int64          `json:"ref_num"`
 	Title            string         `json:"title"`

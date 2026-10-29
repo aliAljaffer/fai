@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { cn } from '@/lib/utils'
 import { formatDueDate, isPastDue } from '../../lib/format'
+import { FaiTaskIcon } from '../FaiTaskIcon'
 import { TagChip } from '../TagChip'
 import { TaskTypeIcon } from '../TaskTypeIcon'
 import { normalizeKind, taskStatus } from '../../lib/taskType'
@@ -60,6 +61,7 @@ function TaskCardBody({
     <div className="flex flex-col gap-2">
       <div className="flex items-start gap-1.5">
         <TaskTypeIcon kind={task.kind} status={status} size={14} className="mt-0.5" />
+        {task.created_by_fai && <FaiTaskIcon className="mt-1" />}
         <p className={cn('line-clamp-3 text-sm leading-snug', !overlay && 'pr-13')}>{task.title}</p>
       </div>
       {!!task.tags?.length && (
@@ -189,6 +191,7 @@ function SortableTaskCard(props: TaskCardProps) {
                         size={12}
                       />
                     )}
+                    {subtask.created_by_fai && <FaiTaskIcon size={11} />}
                     <span className={cn(done && 'text-muted-foreground line-through')}>
                       {subtask.title}
                     </span>

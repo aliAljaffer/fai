@@ -61,6 +61,7 @@ CREATE TABLE tasks (
   parent_task_id INTEGER REFERENCES tasks(id) ON DELETE SET NULL,
   kind TEXT NOT NULL DEFAULT 'task' CHECK (kind IN ('arc', 'task', 'step')),
   meeting_outcome_id INTEGER REFERENCES meeting_outcomes(id) ON DELETE SET NULL,
+  created_by_fai BOOLEAN NOT NULL DEFAULT 0,
   workspace_id INTEGER NOT NULL REFERENCES workspaces(id),
   ref_num INTEGER NOT NULL,
   title TEXT NOT NULL,

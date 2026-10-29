@@ -265,6 +265,9 @@ func TestChatCreatesTaskFromAction(t *testing.T) {
 	if task.Title != "Refresh the Cloudflare token" || task.DueDate == nil || *task.DueDate != "2099-01-07" {
 		t.Errorf("task = %#v", task)
 	}
+	if !task.CreatedByFai {
+		t.Error("chat-created task is not marked as created by Fai")
+	}
 }
 
 func TestAISuggestLabelsSanitisesOutput(t *testing.T) {

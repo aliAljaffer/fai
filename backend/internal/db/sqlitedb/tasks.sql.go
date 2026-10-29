@@ -20,16 +20,17 @@ func (q *Queries) ArchiveTask(ctx context.Context, id int64) error {
 }
 
 const createTask = `-- name: CreateTask :one
-INSERT INTO tasks (board_id, column_id, workspace_id, ref_num, title, description_md, priority, due_date, position, parent_task_id, kind, meeting_outcome_id, completed_at)
+INSERT INTO tasks (board_id, column_id, workspace_id, ref_num, title, description_md, priority, due_date, position, parent_task_id, kind, meeting_outcome_id, completed_at, created_by_fai)
 VALUES (
   ?1, ?2, ?3, ?4,
   ?5, ?6, ?7,
   CAST(?8 AS TEXT), ?9,
   CAST(?10 AS INTEGER), ?11, CAST(?12 AS INTEGER),
   CASE WHEN (SELECT board_columns.is_done FROM board_columns WHERE board_columns.id = ?2)
-    THEN strftime('%Y-%m-%dT%H:%M:%fZ', 'now') ELSE NULL END
+    THEN strftime('%Y-%m-%dT%H:%M:%fZ', 'now') ELSE NULL END,
+  ?13
 )
-RETURNING id, board_id, column_id, parent_task_id, kind, meeting_outcome_id, workspace_id, ref_num, title, description_md, priority, due_date, position, completed_at, archived, created_at, updated_at
+RETURNING id, board_id, column_id, parent_task_id, kind, meeting_outcome_id, created_by_fai, workspace_id, ref_num, title, description_md, priority, due_date, position, completed_at, archived, created_at, updated_at
 `
 
 type CreateTaskParams struct {
@@ -45,6 +46,7 @@ type CreateTaskParams struct {
 	ParentTaskID     sql.NullInt64  `json:"parent_task_id"`
 	Kind             string         `json:"kind"`
 	MeetingOutcomeID sql.NullInt64  `json:"meeting_outcome_id"`
+	CreatedByFai     bool           `json:"created_by_fai"`
 }
 
 func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (Task, error) {
@@ -61,6 +63,7 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (Task, e
 		arg.ParentTaskID,
 		arg.Kind,
 		arg.MeetingOutcomeID,
+		arg.CreatedByFai,
 	)
 	var i Task
 	err := row.Scan(
@@ -70,6 +73,7 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (Task, e
 		&i.ParentTaskID,
 		&i.Kind,
 		&i.MeetingOutcomeID,
+		&i.CreatedByFai,
 		&i.WorkspaceID,
 		&i.RefNum,
 		&i.Title,
@@ -95,7 +99,7 @@ func (q *Queries) DeleteTask(ctx context.Context, id int64) error {
 }
 
 const getTask = `-- name: GetTask :one
-SELECT id, board_id, column_id, parent_task_id, kind, meeting_outcome_id, workspace_id, ref_num, title, description_md, priority, due_date, position, completed_at, archived, created_at, updated_at FROM tasks WHERE id = ? AND archived = 0
+SELECT id, board_id, column_id, parent_task_id, kind, meeting_outcome_id, created_by_fai, workspace_id, ref_num, title, description_md, priority, due_date, position, completed_at, archived, created_at, updated_at FROM tasks WHERE id = ? AND archived = 0
 `
 
 func (q *Queries) GetTask(ctx context.Context, id int64) (Task, error) {
@@ -108,6 +112,7 @@ func (q *Queries) GetTask(ctx context.Context, id int64) (Task, error) {
 		&i.ParentTaskID,
 		&i.Kind,
 		&i.MeetingOutcomeID,
+		&i.CreatedByFai,
 		&i.WorkspaceID,
 		&i.RefNum,
 		&i.Title,
@@ -124,7 +129,7 @@ func (q *Queries) GetTask(ctx context.Context, id int64) (Task, error) {
 }
 
 const listSubtasks = `-- name: ListSubtasks :many
-SELECT id, board_id, column_id, parent_task_id, kind, meeting_outcome_id, workspace_id, ref_num, title, description_md, priority, due_date, position, completed_at, archived, created_at, updated_at FROM tasks WHERE parent_task_id = ? AND archived = 0 ORDER BY created_at
+SELECT id, board_id, column_id, parent_task_id, kind, meeting_outcome_id, created_by_fai, workspace_id, ref_num, title, description_md, priority, due_date, position, completed_at, archived, created_at, updated_at FROM tasks WHERE parent_task_id = ? AND archived = 0 ORDER BY created_at
 `
 
 func (q *Queries) ListSubtasks(ctx context.Context, parentTaskID sql.NullInt64) ([]Task, error) {
@@ -143,6 +148,7 @@ func (q *Queries) ListSubtasks(ctx context.Context, parentTaskID sql.NullInt64) 
 			&i.ParentTaskID,
 			&i.Kind,
 			&i.MeetingOutcomeID,
+			&i.CreatedByFai,
 			&i.WorkspaceID,
 			&i.RefNum,
 			&i.Title,
@@ -169,7 +175,7 @@ func (q *Queries) ListSubtasks(ctx context.Context, parentTaskID sql.NullInt64) 
 }
 
 const listTasks = `-- name: ListTasks :many
-SELECT DISTINCT t.id, t.board_id, t.column_id, t.parent_task_id, t.kind, t.meeting_outcome_id, t.workspace_id, t.ref_num, t.title, t.description_md, t.priority, t.due_date, t.position, t.completed_at, t.archived, t.created_at, t.updated_at FROM tasks t
+SELECT DISTINCT t.id, t.board_id, t.column_id, t.parent_task_id, t.kind, t.meeting_outcome_id, t.created_by_fai, t.workspace_id, t.ref_num, t.title, t.description_md, t.priority, t.due_date, t.position, t.completed_at, t.archived, t.created_at, t.updated_at FROM tasks t
 LEFT JOIN task_tags tt ON tt.task_id = t.id
 LEFT JOIN tags tg ON tg.id = tt.tag_id
 WHERE t.archived = 0
@@ -210,6 +216,7 @@ func (q *Queries) ListTasks(ctx context.Context, arg ListTasksParams) ([]Task, e
 			&i.ParentTaskID,
 			&i.Kind,
 			&i.MeetingOutcomeID,
+			&i.CreatedByFai,
 			&i.WorkspaceID,
 			&i.RefNum,
 			&i.Title,
@@ -236,7 +243,7 @@ func (q *Queries) ListTasks(ctx context.Context, arg ListTasksParams) ([]Task, e
 }
 
 const listTasksByColumnOrdered = `-- name: ListTasksByColumnOrdered :many
-SELECT id, board_id, column_id, parent_task_id, kind, meeting_outcome_id, workspace_id, ref_num, title, description_md, priority, due_date, position, completed_at, archived, created_at, updated_at FROM tasks WHERE column_id = ? AND archived = 0 ORDER BY position
+SELECT id, board_id, column_id, parent_task_id, kind, meeting_outcome_id, created_by_fai, workspace_id, ref_num, title, description_md, priority, due_date, position, completed_at, archived, created_at, updated_at FROM tasks WHERE column_id = ? AND archived = 0 ORDER BY position
 `
 
 func (q *Queries) ListTasksByColumnOrdered(ctx context.Context, columnID int64) ([]Task, error) {
@@ -255,6 +262,7 @@ func (q *Queries) ListTasksByColumnOrdered(ctx context.Context, columnID int64) 
 			&i.ParentTaskID,
 			&i.Kind,
 			&i.MeetingOutcomeID,
+			&i.CreatedByFai,
 			&i.WorkspaceID,
 			&i.RefNum,
 			&i.Title,
@@ -291,7 +299,7 @@ UPDATE tasks SET
   END,
   updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 WHERE tasks.id = ?3
-RETURNING id, board_id, column_id, parent_task_id, kind, meeting_outcome_id, workspace_id, ref_num, title, description_md, priority, due_date, position, completed_at, archived, created_at, updated_at
+RETURNING id, board_id, column_id, parent_task_id, kind, meeting_outcome_id, created_by_fai, workspace_id, ref_num, title, description_md, priority, due_date, position, completed_at, archived, created_at, updated_at
 `
 
 type MoveTaskParams struct {
@@ -310,6 +318,7 @@ func (q *Queries) MoveTask(ctx context.Context, arg MoveTaskParams) (Task, error
 		&i.ParentTaskID,
 		&i.Kind,
 		&i.MeetingOutcomeID,
+		&i.CreatedByFai,
 		&i.WorkspaceID,
 		&i.RefNum,
 		&i.Title,
@@ -333,7 +342,7 @@ UPDATE tasks SET
   due_date = CASE WHEN ?4 = 1 THEN ?5 ELSE due_date END,
   updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 WHERE tasks.id = ?6 AND archived = 0
-RETURNING id, board_id, column_id, parent_task_id, kind, meeting_outcome_id, workspace_id, ref_num, title, description_md, priority, due_date, position, completed_at, archived, created_at, updated_at
+RETURNING id, board_id, column_id, parent_task_id, kind, meeting_outcome_id, created_by_fai, workspace_id, ref_num, title, description_md, priority, due_date, position, completed_at, archived, created_at, updated_at
 `
 
 type PatchTaskParams struct {
@@ -362,6 +371,7 @@ func (q *Queries) PatchTask(ctx context.Context, arg PatchTaskParams) (Task, err
 		&i.ParentTaskID,
 		&i.Kind,
 		&i.MeetingOutcomeID,
+		&i.CreatedByFai,
 		&i.WorkspaceID,
 		&i.RefNum,
 		&i.Title,
@@ -436,7 +446,7 @@ UPDATE tasks SET
   due_date = CAST(?4 AS TEXT),
   updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 WHERE tasks.id = ?5 AND archived = 0
-RETURNING id, board_id, column_id, parent_task_id, kind, meeting_outcome_id, workspace_id, ref_num, title, description_md, priority, due_date, position, completed_at, archived, created_at, updated_at
+RETURNING id, board_id, column_id, parent_task_id, kind, meeting_outcome_id, created_by_fai, workspace_id, ref_num, title, description_md, priority, due_date, position, completed_at, archived, created_at, updated_at
 `
 
 type UpdateTaskParams struct {
@@ -463,6 +473,7 @@ func (q *Queries) UpdateTask(ctx context.Context, arg UpdateTaskParams) (Task, e
 		&i.ParentTaskID,
 		&i.Kind,
 		&i.MeetingOutcomeID,
+		&i.CreatedByFai,
 		&i.WorkspaceID,
 		&i.RefNum,
 		&i.Title,

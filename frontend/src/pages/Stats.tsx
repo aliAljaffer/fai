@@ -42,6 +42,7 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from '@/components/ui/chart'
+import { FaCat } from 'react-icons/fa'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   useAllColumns,
@@ -218,6 +219,15 @@ export function Stats() {
 
   const openTasks = useMemo(() => tasks.filter((task) => !task.completed_at), [tasks])
   const completedTasks = useMemo(() => tasks.filter((task) => task.completed_at), [tasks])
+  const faiTasks = useMemo(() => tasks.filter((task) => task.created_by_fai), [tasks])
+  const faiCreatedByDay = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const task of faiTasks) {
+      const key = dayKey(new Date(task.created_at))
+      map.set(key, (map.get(key) ?? 0) + 1)
+    }
+    return map
+  }, [faiTasks])
 
   const last30 = useMemo(() => {
     const secondsByDate = new Map((timeData ?? []).map((point) => [point.date, point.seconds]))
@@ -227,6 +237,7 @@ export function Stats() {
         date: key,
         label: format(day, 'MMM d'),
         created: createdByDay.get(key) ?? 0,
+        faiCreated: faiCreatedByDay.get(key) ?? 0,
         completed: completionByDay.get(key) ?? 0,
         hours: round1((secondsByDate.get(key) ?? 0) / 3600),
       }
@@ -236,7 +247,7 @@ export function Stats() {
       const average = window.reduce((sum, item) => sum + item.hours, 0) / window.length
       return { ...day, average: round1(average) }
     })
-  }, [completionByDay, createdByDay, timeData])
+  }, [completionByDay, createdByDay, faiCreatedByDay, timeData])
 
   const weekly = useMemo(() => {
     const base = startOfWeek(subWeeks(TODAY, 11), { weekStartsOn: 1 })
@@ -430,6 +441,12 @@ export function Stats() {
     return round1(values.reduce((sum, value) => sum + value, 0) / values.length)
   }, [completedTasks])
 
+  const faiCompleted = faiTasks.filter((task) => task.completed_at).length
+  const faiOpen = faiTasks.length - faiCompleted
+  const faiCompletionRate = faiTasks.length
+    ? Math.round((faiCompleted / faiTasks.length) * 100)
+    : 0
+  const faiShare = tasks.length ? Math.round((faiTasks.length / tasks.length) * 100) : 0
   const flowTotal = last30.reduce((sum, day) => sum + day.created + day.completed, 0)
   const weeklyTotal = weekly.reduce((sum, week) => sum + week.created + week.completed, 0)
   const weekdayTotal = weekday.reduce((sum, day) => sum + day.completed, 0)
@@ -500,6 +517,39 @@ export function Stats() {
           hint="For tasks completed in 30 days"
           icon={Timer}
         />
+      </div>
+
+      <div>
+        <h2 className="mb-3 flex items-center gap-1.5 text-sm font-medium text-muted-foreground">
+          <FaCat className="size-3.5 text-primary" aria-hidden />
+          Fai
+        </h2>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <StatCard
+            label="Added by Fai"
+            value={faiTasks.length.toLocaleString()}
+            hint={`${faiShare}% of all tasks`}
+            icon={FaCat}
+          />
+          <StatCard
+            label="Fai completion"
+            value={`${faiCompletionRate}%`}
+            hint={`${faiCompleted} of ${faiTasks.length} completed`}
+            icon={Gauge}
+          />
+          <StatCard
+            label="Fai still open"
+            value={faiOpen.toLocaleString()}
+            hint="Created by Fai, not done"
+            icon={ListTodo}
+          />
+          <StatCard
+            label="Fai this month"
+            value={last30.reduce((sum, day) => sum + day.faiCreated, 0).toLocaleString()}
+            hint="Tasks added in the last 30 days"
+            icon={FaCat}
+          />
+        </div>
       </div>
 
       <div>

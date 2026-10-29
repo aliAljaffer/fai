@@ -24,6 +24,7 @@ import { CommentsPanel } from './CommentsPanel'
 import { JiraPanel } from './JiraPanel'
 import { LabelEditor } from './LabelEditor'
 import { SubtasksPanel } from './SubtasksPanel'
+import { FaiTaskIcon } from '../FaiTaskIcon'
 import { TaskTypeIcon } from '../TaskTypeIcon'
 import { TASK_KIND_LABELS, normalizeKind, taskStatus } from '../../lib/taskType'
 import { MarkdownRenderer } from '../MarkdownRenderer'
@@ -102,6 +103,7 @@ export function TaskDetail({
               onChange={(e) => setTitle(e.target.value)}
             />
             <TaskTypeIcon kind={task.kind} status={taskStatus(task, columns)} size={20} />
+            {task.created_by_fai && <FaiTaskIcon size={16} />}
             {task.ref && (
               <Badge variant="outline" className="shrink-0 font-mono text-[0.65rem] text-muted-foreground">
                 {task.ref}

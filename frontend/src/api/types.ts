@@ -186,6 +186,7 @@ export interface Task {
   parent_task_id: number | null
   kind: 'arc' | 'task' | 'step'
   meeting_outcome_id: number | null
+  created_by_fai: boolean
   completed_at: string | null
   archived: boolean
   tags: Tag[]

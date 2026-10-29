@@ -112,7 +112,7 @@ func (s *Store) DumpBackup(ctx context.Context) (store.BackupData, error) {
 
 	rows, err = s.db.QueryContext(ctx, `
 		SELECT id, board_id, column_id, workspace_id, ref_num, title, description_md, priority, due_date,
-		       position, parent_task_id, kind, meeting_outcome_id, completed_at, archived, created_at, updated_at
+		       position, parent_task_id, kind, meeting_outcome_id, created_by_fai, completed_at, archived, created_at, updated_at
 		FROM tasks ORDER BY id`)
 	if err != nil {
 		return out, err
@@ -124,7 +124,7 @@ func (s *Store) DumpBackup(ctx context.Context) (store.BackupData, error) {
 		if err := rows.Scan(
 			&item.ID, &item.BoardID, &item.ColumnID, &item.WorkspaceID, &item.RefNum, &item.Title,
 			&item.DescriptionMd, &item.Priority, &dueDate, &item.Position, &item.ParentTaskID, &item.Kind,
-			&item.MeetingOutcomeID, &completedAt, &item.Archived, &createdAt, &updatedAt,
+			&item.MeetingOutcomeID, &item.CreatedByFai, &completedAt, &item.Archived, &createdAt, &updatedAt,
 		); err != nil {
 			rows.Close()
 			return out, err
@@ -462,10 +462,10 @@ func (s *Store) RestoreBackup(ctx context.Context, data store.BackupData) error 
 	for _, item := range data.Tasks {
 		if _, err := tx.ExecContext(ctx, `
 			INSERT INTO tasks (id, board_id, column_id, workspace_id, ref_num, title, description_md, priority, due_date,
-				position, parent_task_id, kind, meeting_outcome_id, completed_at, archived, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)`,
+				position, parent_task_id, kind, meeting_outcome_id, created_by_fai, completed_at, archived, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?)`,
 			item.ID, item.BoardID, item.ColumnID, item.WorkspaceID, item.RefNum, item.Title, item.DescriptionMd,
-			item.Priority, ptrToNullString(item.DueDate), item.Position, item.Kind, ptrToNullInt64(item.MeetingOutcomeID),
+			item.Priority, ptrToNullString(item.DueDate), item.Position, item.Kind, ptrToNullInt64(item.MeetingOutcomeID), item.CreatedByFai,
 			ptrTimeToNull(item.CompletedAt), item.Archived, formatTime(item.CreatedAt), formatTime(item.UpdatedAt)); err != nil {
 			return err
 		}

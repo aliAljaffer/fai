@@ -108,7 +108,7 @@ func (s *Store) DumpBackup(ctx context.Context) (store.BackupData, error) {
 
 	rows, err = s.pool.Query(ctx, `
 		SELECT id, board_id, column_id, workspace_id, ref_num, title, description_md, priority, due_date,
-		       position, parent_task_id, kind, meeting_outcome_id, completed_at, archived, created_at, updated_at
+		       position, parent_task_id, kind, meeting_outcome_id, created_by_fai, completed_at, archived, created_at, updated_at
 		FROM tasks ORDER BY id`)
 	if err != nil {
 		return out, err
@@ -120,7 +120,7 @@ func (s *Store) DumpBackup(ctx context.Context) (store.BackupData, error) {
 		if err := rows.Scan(
 			&item.ID, &item.BoardID, &item.ColumnID, &item.WorkspaceID, &item.RefNum, &item.Title,
 			&item.DescriptionMd, &item.Priority, &dueDate, &item.Position, &item.ParentTaskID, &item.Kind,
-			&item.MeetingOutcomeID, &completedAt, &item.Archived, &item.CreatedAt, &item.UpdatedAt,
+			&item.MeetingOutcomeID, &item.CreatedByFai, &completedAt, &item.Archived, &item.CreatedAt, &item.UpdatedAt,
 		); err != nil {
 			rows.Close()
 			return out, err
@@ -447,11 +447,11 @@ func (s *Store) RestoreBackup(ctx context.Context, data store.BackupData) error 
 		}
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO tasks (id, board_id, column_id, workspace_id, ref_num, title, description_md, priority, due_date,
-				position, parent_task_id, kind, meeting_outcome_id, completed_at, archived, created_at, updated_at)
+				position, parent_task_id, kind, meeting_outcome_id, created_by_fai, completed_at, archived, created_at, updated_at)
 			OVERRIDING SYSTEM VALUE
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NULL, $11, $12, $13, $14, $15, $16)`,
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NULL, $11, $12, $13, $14, $15, $16, $17)`,
 			item.ID, item.BoardID, item.ColumnID, item.WorkspaceID, item.RefNum, item.Title, item.DescriptionMd,
-			item.Priority, dueDate, item.Position, item.Kind, ptrToInt8(item.MeetingOutcomeID),
+			item.Priority, dueDate, item.Position, item.Kind, ptrToInt8(item.MeetingOutcomeID), item.CreatedByFai,
 			ptrToTs(item.CompletedAt), item.Archived, item.CreatedAt, item.UpdatedAt); err != nil {
 			return err
 		}

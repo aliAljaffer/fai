@@ -6,24 +6,24 @@ import "time"
 // Attachment bytes are not part of it; the storage keys point at files the
 // caller packs separately. Secrets are deliberately absent.
 type BackupData struct {
-	Workspaces          []BackupWorkspace          `json:"workspaces"`
-	WorkspaceTagAliases []BackupWorkspaceTagAlias  `json:"workspace_tag_aliases"`
-	Boards              []BackupBoard              `json:"boards"`
-	Columns             []BackupColumn             `json:"columns"`
-	Tags                []BackupTag                `json:"tags"`
-	Tasks               []BackupTask               `json:"tasks"`
-	TaskTags            []BackupTaskTag            `json:"task_tags"`
-	Notes               []BackupNote               `json:"notes"`
-	NoteTags            []BackupNoteTag            `json:"note_tags"`
-	Reminders           []BackupReminder           `json:"reminders"`
-	TimeEntries         []BackupTimeEntry          `json:"time_entries"`
-	JiraLinks           []BackupJiraLink           `json:"jira_links"`
-	Attachments          []BackupAttachment         `json:"attachments"`
-	CalendarSources      []BackupCalendarSource     `json:"calendar_sources"`
-	MeetingOutcomes      []BackupMeetingOutcome     `json:"meeting_outcomes"`
-	TaskComments         []BackupTaskComment        `json:"task_comments"`
-	AISettings           *BackupAISettings          `json:"ai_settings"`
-	Appearance           *AppearanceSettings        `json:"appearance"`
+	Workspaces          []BackupWorkspace         `json:"workspaces"`
+	WorkspaceTagAliases []BackupWorkspaceTagAlias `json:"workspace_tag_aliases"`
+	Boards              []BackupBoard             `json:"boards"`
+	Columns             []BackupColumn            `json:"columns"`
+	Tags                []BackupTag               `json:"tags"`
+	Tasks               []BackupTask              `json:"tasks"`
+	TaskTags            []BackupTaskTag           `json:"task_tags"`
+	Notes               []BackupNote              `json:"notes"`
+	NoteTags            []BackupNoteTag           `json:"note_tags"`
+	Reminders           []BackupReminder          `json:"reminders"`
+	TimeEntries         []BackupTimeEntry         `json:"time_entries"`
+	JiraLinks           []BackupJiraLink          `json:"jira_links"`
+	Attachments         []BackupAttachment        `json:"attachments"`
+	CalendarSources     []BackupCalendarSource    `json:"calendar_sources"`
+	MeetingOutcomes     []BackupMeetingOutcome    `json:"meeting_outcomes"`
+	TaskComments        []BackupTaskComment       `json:"task_comments"`
+	AISettings          *BackupAISettings         `json:"ai_settings"`
+	Appearance          *AppearanceSettings       `json:"appearance"`
 }
 
 type BackupWorkspace struct {
@@ -76,6 +76,7 @@ type BackupTask struct {
 	ParentTaskID     *int64     `json:"parent_task_id"`
 	Kind             string     `json:"kind"`
 	MeetingOutcomeID *int64     `json:"meeting_outcome_id"`
+	CreatedByFai     bool       `json:"created_by_fai"`
 	CompletedAt      *time.Time `json:"completed_at"`
 	Archived         bool       `json:"archived"`
 	CreatedAt        time.Time  `json:"created_at"`

@@ -72,6 +72,7 @@ func New(path string) (*Store, error) {
 		{"tasks", "workspace_id", "INTEGER REFERENCES workspaces(id)"},
 		{"tasks", "ref_num", "INTEGER"},
 		{"tasks", "kind", "TEXT NOT NULL DEFAULT 'task'"},
+		{"tasks", "created_by_fai", "BOOLEAN NOT NULL DEFAULT 0"},
 	}
 	kindAdded := false
 	for _, c := range columns {

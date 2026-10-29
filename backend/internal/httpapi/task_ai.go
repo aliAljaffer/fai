@@ -125,12 +125,13 @@ func (s *Server) aiTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	task, err := s.Store.CreateTask(r.Context(), store.CreateTaskParams{
-		BoardID:  boardID,
-		ColumnID: columnID,
-		Title:    title,
-		Priority: priority,
-		DueDate:  due,
-		Position: position,
+		BoardID:      boardID,
+		ColumnID:     columnID,
+		Title:        title,
+		Priority:     priority,
+		DueDate:      due,
+		Position:     position,
+		CreatedByFai: true,
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())

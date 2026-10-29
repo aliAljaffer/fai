@@ -21,6 +21,7 @@ import { showUndo } from '../lib/undo'
 import { BulkTaskBar } from '../components/board/BulkTaskBar'
 import { TaskComposer } from '../components/board/TaskComposer'
 import { TaskInlineEditor } from '../components/board/TaskInlineEditor'
+import { FaiTaskIcon } from '../components/FaiTaskIcon'
 import { TaskTypeIcon } from '../components/TaskTypeIcon'
 import { taskStatus } from '../lib/taskType'
 import { StatusPill } from '../components/StatusPill'
@@ -474,6 +475,7 @@ export function List() {
               size={14}
               label={task.kind === 'arc' ? 'Arc' : task.kind === 'step' ? 'Step' : 'Task'}
             />
+            {task.created_by_fai && <FaiTaskIcon />}
             <button
               type="button"
               className={cn(

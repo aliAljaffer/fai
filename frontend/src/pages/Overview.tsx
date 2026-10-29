@@ -8,22 +8,26 @@ import {
   Clock,
   Plus,
   TriangleAlert,
+  User,
   type LucideIcon,
 } from 'lucide-react'
+import { FaCat } from 'react-icons/fa'
 import { useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { FaiTaskIcon } from '../components/FaiTaskIcon'
 import { TagChip } from '../components/TagChip'
 import { TaskTypeIcon } from '../components/TaskTypeIcon'
 import {
   useBoards,
+  useChatHistory,
   useImportedCalendars,
   useReminders,
   useWorkspaceTasks,
 } from '../api/hooks'
-import { formatDueIn } from '../lib/format'
+import { formatDueIn, formatTimestamp } from '../lib/format'
 import { cn } from '@/lib/utils'
 import { useUIStore } from '../store/ui'
 import { useWorkspaceStore } from '../store/workspace'
@@ -79,6 +83,15 @@ function StatTile({
   )
 }
 
+function FaiStat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-lg border bg-muted/30 p-3">
+      <p className="text-xl font-semibold tabular-nums">{value}</p>
+      <p className="text-xs text-muted-foreground">{label}</p>
+    </div>
+  )
+}
+
 function TaskRow({ task, onOpen }: { task: Task; onOpen: (id: number) => void }) {
   return (
     <button
@@ -91,6 +104,7 @@ function TaskRow({ task, onOpen }: { task: Task; onOpen: (id: number) => void })
         size={16}
         label={task.kind === 'arc' ? 'Arc' : task.kind === 'step' ? 'Step' : 'Task'}
       />
+      {task.created_by_fai && <FaiTaskIcon />}
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-medium">{task.title}</span>
         <span className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
@@ -160,6 +174,7 @@ export function Overview() {
   const board = boards?.find((item) => item.id === selectedBoardId) ?? boards?.[0]
   const { data: tasks, isLoading: tasksLoading } = useWorkspaceTasks(workspaceId)
   const { data: reminders } = useReminders(workspaceId)
+  const { data: chatHistory } = useChatHistory(workspaceId)
 
   const [now] = useState(() => new Date())
   const today = format(now, 'yyyy-MM-dd')
@@ -194,6 +209,13 @@ export function Overview() {
         (task) => task.completed_at && task.completed_at.slice(0, 10) === today,
       ),
     [tasks, today],
+  )
+  const faiTasks = useMemo(() => (tasks ?? []).filter((task) => task.created_by_fai), [tasks])
+  const faiOpen = faiTasks.filter((task) => !task.completed_at).length
+  const faiDone = faiTasks.length - faiOpen
+  const recentChat = useMemo(
+    () => [...(chatHistory ?? [])].slice(0, 4).reverse(),
+    [chatHistory],
   )
 
   const events = useMemo(
@@ -409,6 +431,65 @@ export function Overview() {
             </CardContent>
           </Card>
         </div>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-3">
+        <Card className="lg:col-span-2">
+          <CardHeader className="flex flex-row items-center justify-between gap-2">
+            <div>
+              <CardTitle className="flex items-center gap-1.5">
+                <FaCat className="size-3.5 text-primary" aria-hidden />
+                Fai chat
+              </CardTitle>
+              <CardDescription>The last few messages with Fai.</CardDescription>
+            </div>
+            <Button variant="ghost" size="xs" onClick={() => navigate('/chat')}>
+              Chat
+              <ArrowRight />
+            </Button>
+          </CardHeader>
+          <CardContent>
+            {recentChat.length ? (
+              <div className="flex flex-col divide-y">
+                {recentChat.map((message) => (
+                  <div key={message.id} className="flex items-start gap-3 py-2 first:pt-0 last:pb-0">
+                    <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                      {message.role === 'assistant' ? (
+                        <FaCat className="size-3 text-primary" aria-label="Fai" role="img" />
+                      ) : (
+                        <User className="size-3" aria-label="You" role="img" />
+                      )}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="line-clamp-2 text-sm">{message.content}</p>
+                      <p className="text-[0.65rem] text-muted-foreground">
+                        {formatTimestamp(message.created_at)}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <EmptyLine>No chat with Fai yet. Ask what to work on next.</EmptyLine>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-1.5">
+              <FaCat className="size-3.5 text-primary" aria-hidden />
+              Fai stats
+            </CardTitle>
+            <CardDescription>What Fai has added in this workspace.</CardDescription>
+          </CardHeader>
+          <CardContent className="grid grid-cols-2 gap-3">
+            <FaiStat label="Tasks added" value={faiTasks.length} />
+            <FaiStat label="Still open" value={faiOpen} />
+            <FaiStat label="Completed" value={faiDone} />
+            <FaiStat label="Recent messages" value={chatHistory?.length ?? 0} />
+          </CardContent>
+        </Card>
       </div>
 
       {upcomingGroups.length > 0 && (

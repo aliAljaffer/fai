@@ -55,7 +55,7 @@ func (s *Server) aiBreakdown(w http.ResponseWriter, r *http.Request) {
 		}
 		sub, err := s.Store.CreateTask(ctx, store.CreateTaskParams{
 			BoardID: task.BoardID, ColumnID: task.ColumnID, Title: title,
-			Priority: "medium", Position: position, ParentTaskID: &task.ID,
+			Priority: "medium", Position: position, ParentTaskID: &task.ID, CreatedByFai: true,
 		})
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
@@ -290,7 +290,7 @@ func (s *Server) applyChatAction(ctx context.Context, action chatAction) (ChatCr
 		}
 		task, err := s.Store.CreateTask(ctx, store.CreateTaskParams{
 			BoardID: boardID, ColumnID: columnID, Title: title,
-			Priority: "medium", DueDate: due, Position: position,
+			Priority: "medium", DueDate: due, Position: position, CreatedByFai: true,
 		})
 		if err != nil {
 			return ChatCreated{}, err
