@@ -160,6 +160,7 @@ export interface Reminder {
   workspace_id: number
   sent: boolean
   created_at: string
+  completed_at: string | null
 }
 
 export interface TimeEntry {

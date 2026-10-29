@@ -10,11 +10,32 @@ import (
 	"database/sql"
 )
 
+const completeReminder = `-- name: CompleteReminder :one
+UPDATE reminders SET completed_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?
+RETURNING id, title, remind_at, task_id, workspace_id, sent, created_at, completed_at
+`
+
+func (q *Queries) CompleteReminder(ctx context.Context, id int64) (Reminder, error) {
+	row := q.db.QueryRowContext(ctx, completeReminder, id)
+	var i Reminder
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.RemindAt,
+		&i.TaskID,
+		&i.WorkspaceID,
+		&i.Sent,
+		&i.CreatedAt,
+		&i.CompletedAt,
+	)
+	return i, err
+}
+
 const createReminder = `-- name: CreateReminder :one
 INSERT INTO reminders (title, remind_at, task_id, workspace_id)
 VALUES (?1, ?2, CAST(?3 AS INTEGER),
   COALESCE(NULLIF(CAST(?4 AS INTEGER), 0), (SELECT id FROM workspaces ORDER BY id LIMIT 1)))
-RETURNING id, title, remind_at, task_id, workspace_id, sent, created_at
+RETURNING id, title, remind_at, task_id, workspace_id, sent, created_at, completed_at
 `
 
 type CreateReminderParams struct {
@@ -40,6 +61,7 @@ func (q *Queries) CreateReminder(ctx context.Context, arg CreateReminderParams) 
 		&i.WorkspaceID,
 		&i.Sent,
 		&i.CreatedAt,
+		&i.CompletedAt,
 	)
 	return i, err
 }
@@ -54,8 +76,8 @@ func (q *Queries) DeleteReminder(ctx context.Context, id int64) error {
 }
 
 const listDueUnsentReminders = `-- name: ListDueUnsentReminders :many
-SELECT id, title, remind_at, task_id, workspace_id, sent, created_at
-FROM reminders WHERE sent = 0 AND remind_at <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+SELECT id, title, remind_at, task_id, workspace_id, sent, created_at, completed_at
+FROM reminders WHERE sent = 0 AND completed_at IS NULL AND remind_at <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 `
 
 func (q *Queries) ListDueUnsentReminders(ctx context.Context) ([]Reminder, error) {
@@ -75,6 +97,7 @@ func (q *Queries) ListDueUnsentReminders(ctx context.Context) ([]Reminder, error
 			&i.WorkspaceID,
 			&i.Sent,
 			&i.CreatedAt,
+			&i.CompletedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -90,7 +113,7 @@ func (q *Queries) ListDueUnsentReminders(ctx context.Context) ([]Reminder, error
 }
 
 const listReminders = `-- name: ListReminders :many
-SELECT id, title, remind_at, task_id, workspace_id, sent, created_at FROM reminders
+SELECT id, title, remind_at, task_id, workspace_id, sent, created_at, completed_at FROM reminders
 WHERE CAST(?1 AS INTEGER) IS NULL OR workspace_id = ?1
 ORDER BY remind_at
 `
@@ -112,6 +135,7 @@ func (q *Queries) ListReminders(ctx context.Context, workspaceID sql.NullInt64) 
 			&i.WorkspaceID,
 			&i.Sent,
 			&i.CreatedAt,
+			&i.CompletedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -135,10 +159,31 @@ func (q *Queries) MarkReminderSent(ctx context.Context, id int64) error {
 	return err
 }
 
+const reopenReminder = `-- name: ReopenReminder :one
+UPDATE reminders SET completed_at = NULL WHERE id = ?
+RETURNING id, title, remind_at, task_id, workspace_id, sent, created_at, completed_at
+`
+
+func (q *Queries) ReopenReminder(ctx context.Context, id int64) (Reminder, error) {
+	row := q.db.QueryRowContext(ctx, reopenReminder, id)
+	var i Reminder
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.RemindAt,
+		&i.TaskID,
+		&i.WorkspaceID,
+		&i.Sent,
+		&i.CreatedAt,
+		&i.CompletedAt,
+	)
+	return i, err
+}
+
 const updateReminder = `-- name: UpdateReminder :one
 UPDATE reminders SET title = ?1, remind_at = ?2, task_id = CAST(?3 AS INTEGER), sent = 0
 WHERE id = ?4
-RETURNING id, title, remind_at, task_id, workspace_id, sent, created_at
+RETURNING id, title, remind_at, task_id, workspace_id, sent, created_at, completed_at
 `
 
 type UpdateReminderParams struct {
@@ -164,6 +209,7 @@ func (q *Queries) UpdateReminder(ctx context.Context, arg UpdateReminderParams) 
 		&i.WorkspaceID,
 		&i.Sent,
 		&i.CreatedAt,
+		&i.CompletedAt,
 	)
 	return i, err
 }

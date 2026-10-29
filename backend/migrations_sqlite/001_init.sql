@@ -159,9 +159,11 @@ CREATE TABLE reminders (
   task_id INTEGER REFERENCES tasks(id) ON DELETE SET NULL,
   workspace_id INTEGER NOT NULL REFERENCES workspaces(id),
   sent BOOLEAN NOT NULL DEFAULT 0,
-  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  completed_at TEXT
 );
 CREATE INDEX idx_reminders_due_unsent ON reminders(remind_at) WHERE sent = 0;
+CREATE INDEX idx_reminders_completed_at ON reminders(completed_at) WHERE completed_at IS NOT NULL;
 
 INSERT INTO boards (name, workspace_id)
 SELECT 'Personal', id FROM workspaces WHERE tag = 'FAI';

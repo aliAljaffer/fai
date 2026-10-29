@@ -11,7 +11,7 @@ import (
 func toReminder(r sqlitedb.Reminder) store.Reminder {
 	remindAt, _ := parseTime(r.RemindAt)
 	createdAt, _ := parseTime(r.CreatedAt)
-	return store.Reminder{ID: r.ID, Title: r.Title, RemindAt: remindAt, TaskID: nullInt64ToPtr(r.TaskID), WorkspaceID: r.WorkspaceID, Sent: r.Sent, CreatedAt: createdAt}
+	return store.Reminder{ID: r.ID, Title: r.Title, RemindAt: remindAt, TaskID: nullInt64ToPtr(r.TaskID), WorkspaceID: r.WorkspaceID, Sent: r.Sent, CreatedAt: createdAt, CompletedAt: nullTimeToPtr(r.CompletedAt)}
 }
 
 func (s *Store) ListReminders(ctx context.Context, workspaceID *int64) ([]store.Reminder, error) {
@@ -33,6 +33,15 @@ func (s *Store) CreateReminder(ctx context.Context, title string, remindAt time.
 
 func (s *Store) UpdateReminder(ctx context.Context, id int64, title string, remindAt time.Time, taskID *int64) (store.Reminder, error) {
 	r, err := s.q.UpdateReminder(ctx, sqlitedb.UpdateReminderParams{ID: id, Title: title, RemindAt: formatTime(remindAt), TaskID: ptrToNullInt64(taskID)})
+	return toReminder(r), err
+}
+
+func (s *Store) SetReminderCompleted(ctx context.Context, id int64, completed bool) (store.Reminder, error) {
+	if completed {
+		r, err := s.q.CompleteReminder(ctx, id)
+		return toReminder(r), err
+	}
+	r, err := s.q.ReopenReminder(ctx, id)
 	return toReminder(r), err
 }
 

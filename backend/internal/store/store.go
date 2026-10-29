@@ -136,6 +136,7 @@ type Store interface {
 	ListReminders(ctx context.Context, workspaceID *int64) ([]Reminder, error)
 	CreateReminder(ctx context.Context, title string, remindAt time.Time, taskID *int64, workspaceID int64) (Reminder, error)
 	UpdateReminder(ctx context.Context, id int64, title string, remindAt time.Time, taskID *int64) (Reminder, error)
+	SetReminderCompleted(ctx context.Context, id int64, completed bool) (Reminder, error)
 	DeleteReminder(ctx context.Context, id int64) error
 	ListDueUnsentReminders(ctx context.Context) ([]Reminder, error)
 	MarkReminderSent(ctx context.Context, id int64) error

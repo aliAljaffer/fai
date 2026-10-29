@@ -13,6 +13,7 @@ import (
 type Querier interface {
 	AddTaskTag(ctx context.Context, arg AddTaskTagParams) error
 	ArchiveTask(ctx context.Context, id int64) error
+	CompleteReminder(ctx context.Context, id int64) (Reminder, error)
 	CompletionsByDay(ctx context.Context, arg CompletionsByDayParams) ([]CompletionsByDayRow, error)
 	CreateAttachment(ctx context.Context, arg CreateAttachmentParams) (Attachment, error)
 	CreateBoard(ctx context.Context, arg CreateBoardParams) (Board, error)
@@ -71,6 +72,7 @@ type Querier interface {
 	MoveTask(ctx context.Context, arg MoveTaskParams) (MoveTaskRow, error)
 	PatchTask(ctx context.Context, arg PatchTaskParams) (Task, error)
 	RemoveTaskTag(ctx context.Context, arg RemoveTaskTagParams) error
+	ReopenReminder(ctx context.Context, id int64) (Reminder, error)
 	RestoreTask(ctx context.Context, id int64) error
 	SearchNotes(ctx context.Context, arg SearchNotesParams) ([]SearchNotesRow, error)
 	SearchTasks(ctx context.Context, arg SearchTasksParams) ([]SearchTasksRow, error)

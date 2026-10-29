@@ -12,7 +12,8 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
-import type { BoardColumn as BoardColumnType, Task } from '../../api/types'
+import type { BoardColumn as BoardColumnType, Reminder, Task } from '../../api/types'
+import { CompletedReminderCard } from './ReminderCard'
 import { TaskCard } from './TaskCard'
 import { TaskInlineEditor } from './TaskInlineEditor'
 
@@ -20,6 +21,7 @@ export function BoardColumn({
   column,
   columns,
   tasks,
+  reminders = [],
   subtasksByParent,
   totalCount,
   hasFilters,
@@ -47,6 +49,7 @@ export function BoardColumn({
   column: BoardColumnType
   columns: BoardColumnType[]
   tasks: Task[]
+  reminders?: Reminder[]
   subtasksByParent: Map<number, Task[]>
   totalCount: number
   hasFilters: boolean
@@ -185,7 +188,9 @@ export function BoardColumn({
         )}
         <div className="flex shrink-0 items-center gap-1">
           <span className="text-xs tabular-nums text-muted-foreground">
-            {hasFilters && tasks.length !== totalCount ? `${tasks.length}/${totalCount}` : tasks.length}
+            {hasFilters && tasks.length !== totalCount
+              ? `${tasks.length + reminders.length}/${totalCount + reminders.length}`
+              : tasks.length + reminders.length}
           </span>
           <DropdownMenu>
             <DropdownMenuTrigger
@@ -285,6 +290,9 @@ export function BoardColumn({
             />
           ))}
         </SortableContext>
+        {reminders.map((reminder) => (
+          <CompletedReminderCard key={`reminder-${reminder.id}`} reminder={reminder} />
+        ))}
         {expandedTask && (
           <div className="fai-expand">
             <div>
@@ -299,7 +307,7 @@ export function BoardColumn({
             </div>
           </div>
         )}
-        {!tasks.length && !adding && !dragging && (
+        {!tasks.length && !reminders.length && !adding && !dragging && (
           hasFilters ? (
             <p className="flex h-16 items-center justify-center text-xs text-muted-foreground">
               No matching tasks.

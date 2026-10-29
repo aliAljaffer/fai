@@ -198,19 +198,21 @@ func (s *Store) DumpBackup(ctx context.Context) (store.BackupData, error) {
 	}
 	rows.Close()
 
-	rows, err = s.db.QueryContext(ctx, `SELECT id, title, remind_at, task_id, workspace_id, sent, created_at FROM reminders ORDER BY id`)
+	rows, err = s.db.QueryContext(ctx, `SELECT id, title, remind_at, task_id, workspace_id, sent, created_at, completed_at FROM reminders ORDER BY id`)
 	if err != nil {
 		return out, err
 	}
 	for rows.Next() {
 		var item store.BackupReminder
 		var remindAt, createdAt string
-		if err := rows.Scan(&item.ID, &item.Title, &remindAt, &item.TaskID, &item.WorkspaceID, &item.Sent, &createdAt); err != nil {
+		var completedAt sql.NullString
+		if err := rows.Scan(&item.ID, &item.Title, &remindAt, &item.TaskID, &item.WorkspaceID, &item.Sent, &createdAt, &completedAt); err != nil {
 			rows.Close()
 			return out, err
 		}
 		item.RemindAt, _ = parseTime(remindAt)
 		item.CreatedAt, _ = parseTime(createdAt)
+		item.CompletedAt = nullTimeToPtr(completedAt)
 		out.Reminders = append(out.Reminders, item)
 	}
 	if err := rows.Err(); err != nil {
@@ -496,9 +498,9 @@ func (s *Store) RestoreBackup(ctx context.Context, data store.BackupData) error 
 	}
 	for _, item := range data.Reminders {
 		if _, err := tx.ExecContext(ctx,
-			`INSERT INTO reminders (id, title, remind_at, task_id, workspace_id, sent, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+			`INSERT INTO reminders (id, title, remind_at, task_id, workspace_id, sent, created_at, completed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 			item.ID, item.Title, formatTime(item.RemindAt), ptrToNullInt64(item.TaskID), item.WorkspaceID,
-			item.Sent, formatTime(item.CreatedAt)); err != nil {
+			item.Sent, formatTime(item.CreatedAt), ptrTimeToNull(item.CompletedAt)); err != nil {
 			return err
 		}
 	}

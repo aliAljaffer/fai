@@ -9,7 +9,7 @@ import (
 )
 
 func toReminder(r sqlc.Reminder) store.Reminder {
-	return store.Reminder{ID: r.ID, Title: r.Title, RemindAt: r.RemindAt, TaskID: int8ToPtr(r.TaskID), WorkspaceID: r.WorkspaceID, Sent: r.Sent, CreatedAt: r.CreatedAt}
+	return store.Reminder{ID: r.ID, Title: r.Title, RemindAt: r.RemindAt, TaskID: int8ToPtr(r.TaskID), WorkspaceID: r.WorkspaceID, Sent: r.Sent, CreatedAt: r.CreatedAt, CompletedAt: tsToPtr(r.CompletedAt)}
 }
 
 func (s *Store) ListReminders(ctx context.Context, workspaceID *int64) ([]store.Reminder, error) {
@@ -31,6 +31,15 @@ func (s *Store) CreateReminder(ctx context.Context, title string, remindAt time.
 
 func (s *Store) UpdateReminder(ctx context.Context, id int64, title string, remindAt time.Time, taskID *int64) (store.Reminder, error) {
 	r, err := s.q.UpdateReminder(ctx, sqlc.UpdateReminderParams{ID: id, Title: title, RemindAt: remindAt, TaskID: ptrToInt8(taskID)})
+	return toReminder(r), err
+}
+
+func (s *Store) SetReminderCompleted(ctx context.Context, id int64, completed bool) (store.Reminder, error) {
+	if completed {
+		r, err := s.q.CompleteReminder(ctx, id)
+		return toReminder(r), err
+	}
+	r, err := s.q.ReopenReminder(ctx, id)
 	return toReminder(r), err
 }
 

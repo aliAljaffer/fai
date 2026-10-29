@@ -43,6 +43,7 @@ import {
   useReorderColumns,
   useDeleteTask,
   useRestoreTasks,
+  useReminders,
   useRunningTime,
   useStartTime,
   useStopTime,
@@ -304,6 +305,7 @@ export function Board() {
   const tasksQuery = useTasks(boardId)
   const columns = columnsQuery.data
   const tasks = tasksQuery.data
+  const { data: reminders } = useReminders(workspaceId)
   const createTask = useCreateTask(boardId)
   const createColumn = useCreateColumn(boardId)
   const updateColumn = useUpdateColumn(boardId)
@@ -500,6 +502,21 @@ export function Board() {
     })
   }, [topLevelTasks, query, priority])
 
+  const completedReminders = useMemo(() => {
+    const needle = query.trim().toLowerCase()
+    return (reminders ?? [])
+      .filter(
+        (reminder) =>
+          reminder.completed_at && (!needle || reminder.title.toLowerCase().includes(needle)),
+      )
+      .sort(
+        (a, b) =>
+          new Date(b.completed_at ?? 0).getTime() - new Date(a.completed_at ?? 0).getTime(),
+      )
+  }, [reminders, query])
+
+  const doneColumnId = orderedColumns.find((column) => column.is_done)?.id
+
   const tasksByColumn = useMemo(() => {
     const map = new Map<number, Task[]>()
     for (const task of dragTasks ?? filteredTasks) {
@@ -525,7 +542,8 @@ export function Board() {
   const openCount = topLevelTasks.filter(
     (task) => !task.completed_at && !doneColumnIds.has(task.column_id),
   ).length
-  const doneCount = topLevelTasks.length - openCount
+  const doneCount =
+    topLevelTasks.length - openCount + (reminders ?? []).filter((reminder) => reminder.completed_at).length
   const overdueCount = topLevelTasks.filter(
     (task) =>
       !doneColumnIds.has(task.column_id) &&
@@ -992,7 +1010,7 @@ export function Board() {
           <BoardSkeleton columns={columns?.length ?? 4} />
         ) : (
           <div className="flex w-full min-w-0 items-start gap-4 overflow-x-auto pb-2">
-            <RemindersColumn />
+            <RemindersColumn canComplete={Boolean(doneColumnId)} />
 
             {!orderedColumns.length && !addingColumn && (
               <div className="flex w-full max-w-xl flex-col items-start gap-2 rounded-md border border-dashed p-6">
@@ -1017,6 +1035,7 @@ export function Board() {
                   column={column}
                   columns={orderedColumns}
                   tasks={tasksByColumn.get(column.id) ?? []}
+                  reminders={column.id === doneColumnId ? completedReminders : undefined}
                   subtasksByParent={subtasksByParent}
                   totalCount={totalByColumn.get(column.id) ?? 0}
                   hasFilters={hasFilters}

@@ -118,13 +118,14 @@ type NotesFt struct {
 }
 
 type Reminder struct {
-	ID          int64         `json:"id"`
-	Title       string        `json:"title"`
-	RemindAt    string        `json:"remind_at"`
-	TaskID      sql.NullInt64 `json:"task_id"`
-	WorkspaceID int64         `json:"workspace_id"`
-	Sent        bool          `json:"sent"`
-	CreatedAt   string        `json:"created_at"`
+	ID          int64          `json:"id"`
+	Title       string         `json:"title"`
+	RemindAt    string         `json:"remind_at"`
+	TaskID      sql.NullInt64  `json:"task_id"`
+	WorkspaceID int64          `json:"workspace_id"`
+	Sent        bool           `json:"sent"`
+	CreatedAt   string         `json:"created_at"`
+	CompletedAt sql.NullString `json:"completed_at"`
 }
 
 type Tag struct {

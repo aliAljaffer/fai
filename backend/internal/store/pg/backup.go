@@ -189,16 +189,18 @@ func (s *Store) DumpBackup(ctx context.Context) (store.BackupData, error) {
 	}
 	rows.Close()
 
-	rows, err = s.pool.Query(ctx, `SELECT id, title, remind_at, task_id, workspace_id, sent, created_at FROM reminders ORDER BY id`)
+	rows, err = s.pool.Query(ctx, `SELECT id, title, remind_at, task_id, workspace_id, sent, created_at, completed_at FROM reminders ORDER BY id`)
 	if err != nil {
 		return out, err
 	}
 	for rows.Next() {
 		var item store.BackupReminder
-		if err := rows.Scan(&item.ID, &item.Title, &item.RemindAt, &item.TaskID, &item.WorkspaceID, &item.Sent, &item.CreatedAt); err != nil {
+		var completedAt pgtype.Timestamptz
+		if err := rows.Scan(&item.ID, &item.Title, &item.RemindAt, &item.TaskID, &item.WorkspaceID, &item.Sent, &item.CreatedAt, &completedAt); err != nil {
 			rows.Close()
 			return out, err
 		}
+		item.CompletedAt = tsToPtr(completedAt)
 		out.Reminders = append(out.Reminders, item)
 	}
 	if err := rows.Err(); err != nil {
@@ -481,8 +483,8 @@ func (s *Store) RestoreBackup(ctx context.Context, data store.BackupData) error 
 	}
 	for _, item := range data.Reminders {
 		if _, err := tx.Exec(ctx,
-			`INSERT INTO reminders (id, title, remind_at, task_id, workspace_id, sent, created_at) OVERRIDING SYSTEM VALUE VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-			item.ID, item.Title, item.RemindAt, ptrToInt8(item.TaskID), item.WorkspaceID, item.Sent, item.CreatedAt); err != nil {
+			`INSERT INTO reminders (id, title, remind_at, task_id, workspace_id, sent, created_at, completed_at) OVERRIDING SYSTEM VALUE VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+			item.ID, item.Title, item.RemindAt, ptrToInt8(item.TaskID), item.WorkspaceID, item.Sent, item.CreatedAt, ptrToTs(item.CompletedAt)); err != nil {
 			return err
 		}
 	}

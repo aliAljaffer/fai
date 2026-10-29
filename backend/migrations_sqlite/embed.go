@@ -31,3 +31,6 @@ var Appearance string
 
 //go:embed 009_chat_messages.sql
 var ChatMessages string
+
+//go:embed 010_reminder_completion.sql
+var ReminderCompletion string

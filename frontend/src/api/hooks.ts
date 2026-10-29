@@ -661,6 +661,15 @@ export function useUpdateReminder() {
   })
 }
 
+export function useCompleteReminder() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, completed }: { id: number; completed: boolean }) =>
+      api.patch<Reminder>(`/reminders/${id}/completion`, { completed }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['reminders'] }),
+  })
+}
+
 export function useDeleteReminder() {
   const qc = useQueryClient()
   return useMutation({

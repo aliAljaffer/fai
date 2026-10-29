@@ -66,6 +66,7 @@ func New(path string) (*Store, error) {
 		{"boards", "workspace_id", "INTEGER REFERENCES workspaces(id)"},
 		{"notes", "workspace_id", "INTEGER REFERENCES workspaces(id)"},
 		{"reminders", "workspace_id", "INTEGER REFERENCES workspaces(id)"},
+		{"reminders", "completed_at", "TEXT"},
 		{"calendar_sources", "workspace_id", "INTEGER REFERENCES workspaces(id)"},
 		{"meeting_outcomes", "workspace_id", "INTEGER REFERENCES workspaces(id)"},
 		{"tasks", "workspace_id", "INTEGER REFERENCES workspaces(id)"},
@@ -101,6 +102,9 @@ func New(path string) (*Store, error) {
 	}
 	if _, err := db.ExecContext(ctx, migrationssqlite.ChatMessages); err != nil {
 		return nil, fmt.Errorf("applying sqlite chat messages schema: %w", err)
+	}
+	if _, err := db.ExecContext(ctx, migrationssqlite.ReminderCompletion); err != nil {
+		return nil, fmt.Errorf("applying sqlite reminder completion schema: %w", err)
 	}
 
 	return &Store{q: sqlitedb.New(db), db: db}, nil

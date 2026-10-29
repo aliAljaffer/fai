@@ -79,6 +79,27 @@ func (s *Server) updateReminder(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, reminder)
 }
 
+func (s *Server) completeReminder(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseID(r, "reminderID")
+	if !ok {
+		writeError(w, http.StatusBadRequest, "invalid reminder id")
+		return
+	}
+	var body struct {
+		Completed bool `json:"completed"`
+	}
+	if err := decodeJSON(r, &body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid body")
+		return
+	}
+	reminder, err := s.Store.SetReminderCompleted(r.Context(), id, body.Completed)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, reminder)
+}
+
 func (s *Server) deleteReminder(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseID(r, "reminderID")
 	if !ok {

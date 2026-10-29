@@ -116,13 +116,14 @@ type NoteTag struct {
 }
 
 type Reminder struct {
-	ID          int64       `json:"id"`
-	Title       string      `json:"title"`
-	RemindAt    time.Time   `json:"remind_at"`
-	TaskID      pgtype.Int8 `json:"task_id"`
-	Sent        bool        `json:"sent"`
-	CreatedAt   time.Time   `json:"created_at"`
-	WorkspaceID int64       `json:"workspace_id"`
+	ID          int64              `json:"id"`
+	Title       string             `json:"title"`
+	RemindAt    time.Time          `json:"remind_at"`
+	TaskID      pgtype.Int8        `json:"task_id"`
+	Sent        bool               `json:"sent"`
+	CreatedAt   time.Time          `json:"created_at"`
+	WorkspaceID int64              `json:"workspace_id"`
+	CompletedAt pgtype.Timestamptz `json:"completed_at"`
 }
 
 type Tag struct {

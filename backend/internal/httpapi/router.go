@@ -160,6 +160,7 @@ func NewRouter(s *Server) http.Handler {
 			r.Get("/reminders", s.listReminders)
 			r.Post("/reminders", s.createReminder)
 			r.Patch("/reminders/{reminderID}", s.updateReminder)
+			r.Patch("/reminders/{reminderID}/completion", s.completeReminder)
 			r.Delete("/reminders/{reminderID}", s.deleteReminder)
 
 			r.Get("/jira/links", s.jiraLinks)

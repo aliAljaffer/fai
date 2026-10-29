@@ -157,13 +157,14 @@ type JiraLink struct {
 }
 
 type Reminder struct {
-	ID          int64     `json:"id"`
-	Title       string    `json:"title"`
-	RemindAt    time.Time `json:"remind_at"`
-	TaskID      *int64    `json:"task_id"`
-	WorkspaceID int64     `json:"workspace_id"`
-	Sent        bool      `json:"sent"`
-	CreatedAt   time.Time `json:"created_at"`
+	ID          int64      `json:"id"`
+	Title       string     `json:"title"`
+	RemindAt    time.Time  `json:"remind_at"`
+	TaskID      *int64     `json:"task_id"`
+	WorkspaceID int64      `json:"workspace_id"`
+	Sent        bool       `json:"sent"`
+	CreatedAt   time.Time  `json:"created_at"`
+	CompletedAt *time.Time `json:"completed_at"`
 }
 
 type MeetingOutcome struct {
