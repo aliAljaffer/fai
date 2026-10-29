@@ -531,7 +531,7 @@ func TestJiraExportTree(t *testing.T) {
 		t.Errorf("solo task type = %q, want Task", got)
 	}
 	bigChild := createdBySummary("Big child 1")
-	if bigChild.IssueType != "Sub-task" || bigChild.ParentKey != "DEV-1" {
+	if bigChild.IssueType != "Task" || bigChild.ParentKey != "DEV-1" {
 		t.Errorf("arc child = %#v", bigChild)
 	}
 	smallChild := createdBySummary("Small child 1")

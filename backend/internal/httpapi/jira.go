@@ -594,17 +594,17 @@ func (e *jiraExporter) record(res jiraExportResult) {
 	}
 }
 
-// issueType derives the Jira type from the child count. A task with more than
-// three children becomes an Epic, and every child becomes a subtask.
+// issueType is the inverse of jiraKind: arcs export as Epics, steps as
+// sub-tasks, and tasks as the configured task type.
 func (e *jiraExporter) issueType(task store.Task) string {
-	if task.ParentTaskID != nil {
-		return e.subtaskType
-	}
-	children, err := e.s.Store.ListSubtasks(e.ctx, task.ID)
-	if err == nil && len(children) > 3 {
+	switch task.Kind {
+	case "arc":
 		return e.epicType
+	case "step":
+		return e.subtaskType
+	default:
+		return e.taskType
 	}
-	return e.taskType
 }
 
 // create links the task to a new Jira issue, or skips it when already linked.
@@ -620,9 +620,9 @@ func (e *jiraExporter) create(task store.Task, issueType, parentKey string) (str
 
 	parent := ""
 	epic := ""
-	if task.ParentTaskID != nil {
+	if task.Kind == "step" {
 		parent = parentKey
-	} else if issueType == e.epicType && parentKey != "" {
+	} else if task.Kind == "task" && parentKey != "" {
 		epic = parentKey
 	}
 	key, err := e.s.Jira.CreateIssue(e.projectKey, task.Title, issueType, parent, epic, e.epicLinkField)

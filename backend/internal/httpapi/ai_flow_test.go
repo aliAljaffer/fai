@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -332,6 +333,62 @@ func TestAISuggestLabelsSanitisesOutput(t *testing.T) {
 	res.Body.Close()
 	if res.StatusCode != http.StatusNotFound {
 		t.Errorf("missing task status = %d", res.StatusCode)
+	}
+}
+
+func TestAISuggestLabelsBatch(t *testing.T) {
+	st, err := lite.New(filepath.Join(t.TempDir(), "fai.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	ctx := context.Background()
+	first, err := st.CreateTask(ctx, store.CreateTaskParams{
+		BoardID: 1, ColumnID: 1, Title: "Fix the invoice export", Priority: "medium", Position: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := st.CreateTask(ctx, store.CreateTaskParams{
+		BoardID: 1, ColumnID: 1, Title: "Call the bank", Priority: "medium", Position: 2,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	provider := &fakeAI{reply: `[["#Billing Ops","billing"],["phone"]]`}
+	server := httptest.NewServer(NewRouter(&Server{Store: st, AI: provider}))
+	defer server.Close()
+
+	body := fmt.Sprintf(`{"task_ids":[%d,%d]}`, first.ID, second.ID)
+	res := postJSON(t, server.URL+"/api/ai/labels", body)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("batch labels status = %d", res.StatusCode)
+	}
+	var out struct {
+		Results []aiLabelsBatchResult `json:"results"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&out); err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+
+	if len(out.Results) != 2 {
+		t.Fatalf("results = %#v", out.Results)
+	}
+	if out.Results[0].TaskID != first.ID || out.Results[0].Labels[0] != "billing-ops" || out.Results[0].Labels[1] != "billing" {
+		t.Errorf("first result = %#v", out.Results[0])
+	}
+	if out.Results[1].TaskID != second.ID || len(out.Results[1].Labels) != 1 || out.Results[1].Labels[0] != "phone" {
+		t.Errorf("second result = %#v", out.Results[1])
+	}
+
+	tooMany := `{"task_ids":[` + strings.Repeat("1,", maxLabelBatch) + `1]}`
+	res = postJSON(t, server.URL+"/api/ai/labels", tooMany)
+	res.Body.Close()
+	if res.StatusCode != http.StatusBadRequest {
+		t.Errorf("oversized batch status = %d", res.StatusCode)
 	}
 }
 

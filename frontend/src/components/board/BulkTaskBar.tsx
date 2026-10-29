@@ -1,4 +1,5 @@
-import { Trash2, X } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { Check, Sparkles, Trash2, Upload, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import {
@@ -17,9 +18,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { useBulkTaskActions, useRestoreTasks, type BulkTaskAction } from '../../api/hooks'
+import {
+  useAIStatus,
+  useBulkTaskActions,
+  useCreateTag,
+  useExportJiraTasks,
+  useRestoreTasks,
+  useSuggestLabelsBatch,
+  type BulkTaskAction,
+} from '../../api/hooks'
 import { showUndo } from '../../lib/undo'
 import type { BoardColumn, Tag, Task } from '../../api/types'
+
+// Matches the backend cap on one label suggestion request.
+const labelBatchSize = 20
 
 export function BulkTaskBar({
   tasks,
@@ -34,8 +46,28 @@ export function BulkTaskBar({
 }) {
   const bulk = useBulkTaskActions()
   const restore = useRestoreTasks(undefined)
+  const { data: aiStatus } = useAIStatus()
+  const createTag = useCreateTag()
+  const suggestBatch = useSuggestLabelsBatch()
+  const exportJira = useExportJiraTasks()
   const busy = bulk.isPending || restore.isPending
   const count = tasks.length
+  const [suggestions, setSuggestions] = useState<Record<number, string[]>>({})
+  const [suggesting, setSuggesting] = useState(false)
+
+  // Label suggestions live per task, so a label only applies to the selected
+  // tasks the AI proposed it for, not to every task in the selection.
+  const suggestedLabels = useMemo(() => {
+    const groups = new Map<string, number[]>()
+    for (const task of tasks) {
+      const attached = new Set((task.tags ?? []).map((tag) => tag.name.toLowerCase()))
+      for (const label of suggestions[task.id] ?? []) {
+        if (attached.has(label)) continue
+        groups.set(label, [...(groups.get(label) ?? []), task.id])
+      }
+    }
+    return [...groups].map(([label, taskIds]) => ({ label, taskIds }))
+  }, [tasks, suggestions])
 
   const doneColumnIds = new Set(columns.filter((column) => column.is_done).map((column) => column.id))
   const doneColumn = columns.find((column) => column.is_done)
@@ -59,6 +91,64 @@ export function BulkTaskBar({
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Bulk action failed')
       return false
+    }
+  }
+
+  async function suggestLabels() {
+    setSuggesting(true)
+    try {
+      const ids = tasks.map((task) => task.id)
+      const merged: Record<number, string[]> = {}
+      for (let i = 0; i < ids.length; i += labelBatchSize) {
+        const { results } = await suggestBatch.mutateAsync(ids.slice(i, i + labelBatchSize))
+        for (const result of results) merged[result.task_id] = result.labels
+      }
+      setSuggestions(merged)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not suggest labels')
+    } finally {
+      setSuggesting(false)
+    }
+  }
+
+  async function exportToJira() {
+    try {
+      const response = await exportJira.mutateAsync(tasks.map((task) => task.id))
+      const counts = [
+        `${response.created} created`,
+        response.skipped ? `${response.skipped} skipped` : '',
+        response.failed ? `${response.failed} failed` : '',
+      ]
+        .filter(Boolean)
+        .join(', ')
+      if (response.failed) toast.error(`Jira export: ${counts}`)
+      else toast.success(`Jira export: ${counts}`)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Jira export failed')
+    }
+  }
+
+  function dismissLabel(label: string) {
+    setSuggestions((current) =>
+      Object.fromEntries(
+        Object.entries(current)
+          .map(([id, labels]) => [id, labels.filter((item) => item !== label)] as const)
+          .filter(([, labels]) => labels.length),
+      ),
+    )
+  }
+
+  async function acceptLabel(label: string, taskIds: number[]) {
+    dismissLabel(label)
+    try {
+      const existing = tags.find((tag) => tag.name.toLowerCase() === label)
+      const tag = existing ?? (await createTag.mutateAsync({ name: label }))
+      await bulk.mutateAsync({
+        tasks: tasks.filter((task) => taskIds.includes(task.id)),
+        action: { type: 'addTag', tagId: tag.id },
+      })
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not add label')
     }
   }
 
@@ -153,6 +243,18 @@ export function BulkTaskBar({
             </DropdownMenuContent>
           </DropdownMenu>
 
+          {aiStatus?.configured && (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={busy || suggesting}
+              onClick={() => void suggestLabels()}
+            >
+              <Sparkles />
+              {suggesting ? 'Thinking…' : 'Suggest labels'}
+            </Button>
+          )}
+
           <Input
             type="date"
             aria-label="Set due date"
@@ -202,6 +304,16 @@ export function BulkTaskBar({
             </Button>
           )}
 
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={busy || exportJira.isPending}
+            onClick={() => void exportToJira()}
+          >
+            <Upload />
+            {exportJira.isPending ? 'Exporting…' : 'Export to Jira'}
+          </Button>
+
           <Button size="sm" variant="destructive" disabled={busy} onClick={() => void remove()}>
             <Trash2 />
             Delete
@@ -210,6 +322,34 @@ export function BulkTaskBar({
             <X />
             Clear
           </Button>
+
+          {suggestedLabels.map(({ label, taskIds }) => (
+            <span
+              key={label}
+              className="inline-flex items-center gap-0.5 rounded-full border border-dashed py-0.5 pr-0.5 pl-2 text-xs text-muted-foreground"
+            >
+              {label}
+              {taskIds.length < count && <span className="tabular-nums">×{taskIds.length}</span>}
+              <button
+                type="button"
+                className="rounded-full p-0.5 hover:bg-muted hover:text-foreground"
+                aria-label={`Accept ${label}`}
+                title="Accept"
+                onClick={() => void acceptLabel(label, taskIds)}
+              >
+                <Check className="size-3" />
+              </button>
+              <button
+                type="button"
+                className="rounded-full p-0.5 hover:bg-muted hover:text-foreground"
+                aria-label={`Reject ${label}`}
+                title="Reject"
+                onClick={() => dismissLabel(label)}
+              >
+                <X className="size-3" />
+              </button>
+            </span>
+          ))}
         </div>
       </div>
 

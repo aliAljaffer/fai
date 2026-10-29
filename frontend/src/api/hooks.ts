@@ -13,6 +13,7 @@ import type {
   JiraExportResponse,
   JiraLink,
   JiraSuggestion,
+  LabelSuggestionBatch,
   LabelSuggestions,
   MeetingOutcome,
   Note,
@@ -786,6 +787,15 @@ export function useExportJira(taskId: number) {
   })
 }
 
+export function useExportJiraTasks() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (taskIds: number[]) =>
+      api.post<JiraExportResponse>('/jira/export', { task_ids: taskIds }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['jira'] }),
+  })
+}
+
 export function useAIStatus() {
   return useQuery({ queryKey: ['ai', 'status'], queryFn: () => api.get<{ configured: boolean }>('/ai/status') })
 }
@@ -891,6 +901,13 @@ export function useAIBreakdown(taskId: number) {
 export function useSuggestLabels(taskId: number) {
   return useMutation({
     mutationFn: () => api.post<LabelSuggestions>(`/tasks/${taskId}/ai/labels`),
+  })
+}
+
+export function useSuggestLabelsBatch() {
+  return useMutation({
+    mutationFn: (taskIds: number[]) =>
+      api.post<LabelSuggestionBatch>('/ai/labels', { task_ids: taskIds }),
   })
 }
 

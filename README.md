@@ -259,9 +259,11 @@ Jira Cloud's `/rest/api/3/search/jql` endpoint is required. The older
 `/rest/api/3/search` endpoint returns `410 Gone`.
 
 Issue types map one way each: Jira Epic to Arc, Sub-task to Step, and every
-other type (including Story and Bug) to Task. On export, `JIRA_EPIC_ISSUE_TYPE`
-(default `Epic`), `JIRA_TASK_ISSUE_TYPE` (default `Task`), and
-`JIRA_SUBTASK_ISSUE_TYPE` (default `Sub-task`) name the target types.
+other type (including Story and Bug) to Task. Export converts the kinds back the
+same way: arcs become Epics, steps become sub-tasks, and tasks become the task
+type. `JIRA_EPIC_ISSUE_TYPE` (default `Epic`), `JIRA_TASK_ISSUE_TYPE` (default
+`Task`), and `JIRA_SUBTASK_ISSUE_TYPE` (default `Sub-task`) name the target
+types.
 `JIRA_EPIC_LINK_FIELD` (default `parent`) attaches a task to its arc. On
 company-managed projects, set it to `customfield_10014` or the field id your
 project uses.

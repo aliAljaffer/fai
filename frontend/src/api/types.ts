@@ -243,6 +243,10 @@ export interface LabelSuggestions {
   labels: string[]
 }
 
+export interface LabelSuggestionBatch {
+  results: { task_id: number; labels: string[] }[]
+}
+
 export interface CustomPalette {
   id: string
   name: string

@@ -102,6 +102,84 @@ func (s *Server) aiSuggestLabels(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string][]string{"labels": sanitiseLabels(labels)})
 }
 
+type aiLabelsBatchBody struct {
+	TaskIDs []int64 `json:"task_ids"`
+}
+
+type aiLabelsBatchResult struct {
+	TaskID int64    `json:"task_id"`
+	Labels []string `json:"labels"`
+}
+
+const maxLabelBatch = 20
+
+// aiSuggestLabelsBatch labels many tasks with one model call. The selection is
+// capped so a large list view selection cannot build a huge prompt.
+func (s *Server) aiSuggestLabelsBatch(w http.ResponseWriter, r *http.Request) {
+	provider := s.aiProvider(r.Context())
+	if provider == nil {
+		writeError(w, http.StatusServiceUnavailable, "AI is not configured")
+		return
+	}
+	var body aiLabelsBatchBody
+	if err := decodeJSON(r, &body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid body")
+		return
+	}
+	if len(body.TaskIDs) == 0 {
+		writeError(w, http.StatusBadRequest, "task_ids is required")
+		return
+	}
+	if len(body.TaskIDs) > maxLabelBatch {
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("at most %d tasks per request", maxLabelBatch))
+		return
+	}
+
+	ctx := r.Context()
+	tasks := make([]store.Task, 0, len(body.TaskIDs))
+	for _, id := range body.TaskIDs {
+		task, err := s.Store.GetTask(ctx, id)
+		if err != nil {
+			writeError(w, http.StatusNotFound, "task not found")
+			return
+		}
+		tasks = append(tasks, task)
+	}
+
+	tags, err := s.Store.ListTags(ctx)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	existing := make([]string, 0, len(tags))
+	for _, tag := range tags {
+		existing = append(existing, tag.Name)
+	}
+
+	batch := make([]ai.LabelTask, 0, len(tasks))
+	for _, task := range tasks {
+		batch = append(batch, ai.LabelTask{Title: task.Title, Description: task.DescriptionMd})
+	}
+	text, err := provider.Chat(ctx, ai.FaiSystem, []ai.ChatMessage{
+		{Role: "user", Content: ai.LabelsBatchPrompt(batch, existing)},
+	})
+	if err != nil {
+		writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	labels, err := ai.ParseLabelBatches(text, len(tasks))
+	if err != nil {
+		writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+
+	results := make([]aiLabelsBatchResult, 0, len(tasks))
+	for i, task := range tasks {
+		results = append(results, aiLabelsBatchResult{TaskID: task.ID, Labels: sanitiseLabels(labels[i])})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"results": results})
+}
+
 func sanitiseLabels(raw []string) []string {
 	seen := make(map[string]struct{}, len(raw))
 	out := make([]string, 0, len(raw))
@@ -206,7 +284,7 @@ func (s *Server) RunChat(ctx context.Context, messages []ai.ChatMessage, tzOffse
 	}
 
 	now := localNow(tzOffset)
-	system := ai.FaiSystem + "\n\nCurrent local time: " + now.Format("Monday, 2006-01-02 15:04 -07:00") + ".\n" + chatActionInstructions
+	system := ai.StepSystem + "\n\nCurrent local time: " + now.Format("Monday, 2006-01-02 15:04 -07:00") + ".\n" + chatActionInstructions
 	if context := s.faiContext(ctx); context != "" {
 		system += "\n\nOpen task refs, task titles, board columns, and note titles from Fai. Use them only when relevant, and do not invent anything that is not listed:\n" + context
 	}
