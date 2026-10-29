@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Trash2 } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
+import { Download, Trash2, TriangleAlert, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -20,7 +20,12 @@ import {
   useCalendarFeedURL,
   useColumns,
   useCreateWorkspace,
+  useExportBackup,
+  useExportWorkspaceTasks,
+  useImportWorkspaceTasks,
   useJiraImport,
+  useResetWorkspace,
+  useRestoreBackup,
   useUpdateAISettings,
   useUpdateAppearance,
   useUpdateWorkspace,
@@ -39,7 +44,7 @@ import { allPalettes, customPaletteId, DEFAULT_PALETTE_ID, findPalette } from '.
 import { columnColor, useColumnColors } from '../store/columnColors'
 import { useUIStore } from '../store/ui'
 import { useWorkspaceStore } from '../store/workspace'
-import type { AppearanceSettings, Workspace } from '../api/types'
+import type { AppearanceSettings, Workspace, WorkspaceTasksExport } from '../api/types'
 
 const TAG_PATTERN = /^[A-Za-z]{3,4}$/
 
@@ -207,6 +212,290 @@ function WorkspacesCard() {
               Create workspace
             </Button>
           </div>
+          {error && <p className="text-xs text-destructive">{error}</p>}
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function WorkspaceDataCard() {
+  const { data: workspaces } = useWorkspaces()
+  const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId)
+  const exportTasks = useExportWorkspaceTasks()
+  const importTasks = useImportWorkspaceTasks()
+  const resetWorkspace = useResetWorkspace()
+  const [workspaceId, setWorkspaceId] = useState<number>()
+  const [confirmText, setConfirmText] = useState('')
+  const [importError, setImportError] = useState('')
+  const fileInput = useRef<HTMLInputElement>(null)
+
+  const selectedWorkspaceId =
+    workspaceId ??
+    workspaces?.find((item) => item.id === activeWorkspaceId)?.id ??
+    workspaces?.[0]?.id
+  const workspace = workspaces?.find((item) => item.id === selectedWorkspaceId)
+  const canReset = confirmText.trim() === 'I understand'
+
+  function download() {
+    if (!workspace) return
+    exportTasks.mutate(workspace.id, {
+      onSuccess: (data) => {
+        const url = URL.createObjectURL(
+          new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }),
+        )
+        const link = document.createElement('a')
+        link.href = url
+        link.download = `fai-${workspace.tag.toLowerCase()}-tasks.json`
+        document.body.appendChild(link)
+        link.click()
+        link.remove()
+        URL.revokeObjectURL(url)
+        toast.success(`Exported ${data.tasks.length} tasks`)
+      },
+      onError: (error) => toast.error(serverError(error)),
+    })
+  }
+
+  async function importFile(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file || !workspace) return
+    setImportError('')
+    try {
+      const data = JSON.parse(await file.text()) as WorkspaceTasksExport
+      if (!data || !Array.isArray(data.tasks)) {
+        throw new Error('This file is not a workspace task export.')
+      }
+      importTasks.mutate(
+        { workspaceId: workspace.id, data },
+        {
+          onSuccess: (result) => toast.success(`Imported ${result.imported} tasks`),
+          onError: (error) => setImportError(serverError(error)),
+        },
+      )
+    } catch (error) {
+      setImportError(error instanceof Error ? error.message : 'Could not read the file.')
+    }
+  }
+
+  function reset() {
+    if (!workspace || !canReset) return
+    resetWorkspace.mutate(workspace.id, {
+      onSuccess: (result) => {
+        toast.success(`Deleted ${result.deleted} tasks`)
+        setConfirmText('')
+      },
+      onError: (error) => toast.error(serverError(error)),
+    })
+  }
+
+  return (
+    <Card className="max-w-xl">
+      <CardHeader>
+        <CardTitle>Workspace data</CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
+        <p className="text-sm text-muted-foreground">
+          Export the selected workspace's tasks as JSON, or import a previous export. Import
+          adds tasks to the workspace and keeps existing tasks. Task numbers are preserved
+          from the file, so an import fails if a number is already in use. Boards and columns
+          referenced by the file are created when missing.
+        </p>
+
+        <div className="flex flex-col gap-1.5">
+          <label className="text-sm font-medium" htmlFor="workspace-data-workspace">
+            Workspace
+          </label>
+          <Select
+            items={(workspaces ?? []).map((item) => ({
+              value: String(item.id),
+              label: `${item.name} (${item.tag})`,
+            }))}
+            value={workspace ? String(workspace.id) : undefined}
+            onValueChange={(value) => value && setWorkspaceId(Number(value))}
+          >
+            <SelectTrigger id="workspace-data-workspace" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {workspaces?.map((item) => (
+                <SelectItem key={item.id} value={String(item.id)}>
+                  {item.name}
+                  <span className="text-muted-foreground">({item.tag})</span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!workspace || exportTasks.isPending}
+            onClick={download}
+          >
+            <Download />
+            {exportTasks.isPending ? 'Exporting…' : 'Export JSON'}
+          </Button>
+          <input
+            ref={fileInput}
+            type="file"
+            accept="application/json,.json"
+            className="hidden"
+            onChange={(event) => void importFile(event)}
+          />
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!workspace || importTasks.isPending}
+            onClick={() => fileInput.current?.click()}
+          >
+            <Upload />
+            {importTasks.isPending ? 'Importing…' : 'Import JSON'}
+          </Button>
+        </div>
+        {importError && <p className="text-xs text-destructive">{importError}</p>}
+
+        <div className="flex flex-col gap-2 rounded-md border border-destructive/40 bg-destructive/5 p-3">
+          <div className="flex items-center gap-2 text-sm font-medium text-destructive">
+            <TriangleAlert className="size-4" />
+            Reset workspace
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Deletes every task in {workspace?.name ?? 'the selected workspace'} and resets the
+            task number to 1. Boards and columns stay. This cannot be undone. Export first if
+            you need a copy.
+          </p>
+          <Input
+            value={confirmText}
+            aria-label="Reset confirmation"
+            placeholder='Type "I understand"'
+            onChange={(event) => setConfirmText(event.target.value)}
+          />
+          <Button
+            size="sm"
+            variant="destructive"
+            disabled={!workspace || !canReset || resetWorkspace.isPending}
+            onClick={reset}
+          >
+            {resetWorkspace.isPending ? 'Resetting…' : 'Delete all tasks and reset'}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function BackupCard() {
+  const exportBackup = useExportBackup()
+  const restoreBackup = useRestoreBackup()
+  const [file, setFile] = useState<File | null>(null)
+  const [confirmText, setConfirmText] = useState('')
+  const [error, setError] = useState('')
+  const fileInput = useRef<HTMLInputElement>(null)
+
+  const canRestore = file !== null && confirmText.trim() === 'I understand'
+
+  function pickFile(event: ChangeEvent<HTMLInputElement>) {
+    const chosen = event.target.files?.[0]
+    event.target.value = ''
+    setFile(chosen ?? null)
+    setError('')
+  }
+
+  function restore() {
+    if (!file || !canRestore) return
+    setError('')
+    restoreBackup.mutate(
+      { file, confirm: confirmText.trim() },
+      {
+        onSuccess: (result) => {
+          toast.success(
+            `Restored ${result.counts.tasks ?? 0} tasks, ${result.counts.notes ?? 0} notes, and ${result.counts.attachments ?? 0} attachments`,
+          )
+          setFile(null)
+          setConfirmText('')
+          useWorkspaceStore.getState().setActiveWorkspaceId(undefined)
+          useUIStore.getState().setSelectedBoardId(undefined)
+        },
+        onError: (err) => setError(serverError(err)),
+      },
+    )
+  }
+
+  return (
+    <Card className="max-w-xl">
+      <CardHeader>
+        <CardTitle>Backup &amp; restore</CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
+        <p className="text-sm text-muted-foreground">
+          Download a full backup of this Fai instance: workspaces, boards, tasks, notes,
+          reminders, comments, time entries, calendar sources, Jira links, attachments, and
+          appearance. AI keys and integration secrets are not included; re-enter them after a
+          restore. Treat the backup file as sensitive: it contains notes and private calendar
+          URLs.
+        </p>
+
+        <div>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={exportBackup.isPending}
+            onClick={() =>
+              exportBackup.mutate(undefined, {
+                onSuccess: () => toast.success('Backup downloaded'),
+                onError: (err) => {
+                  if (err instanceof Error && err.name === 'AbortError') return
+                  toast.error(serverError(err))
+                },
+              })
+            }
+          >
+            <Download />
+            {exportBackup.isPending ? 'Preparing…' : 'Download backup'}
+          </Button>
+        </div>
+
+        <div className="flex flex-col gap-2 rounded-md border border-destructive/40 bg-destructive/5 p-3">
+          <div className="flex items-center gap-2 text-sm font-medium text-destructive">
+            <TriangleAlert className="size-4" />
+            Restore from backup
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Restoring replaces every workspace, task, note, and attachment in this instance.
+            Create a backup first if you need the current data. This cannot be undone.
+          </p>
+          <input
+            ref={fileInput}
+            type="file"
+            accept="application/zip,.zip"
+            className="hidden"
+            onChange={pickFile}
+          />
+          <div className="flex flex-wrap items-center gap-2">
+            <Button size="sm" variant="outline" onClick={() => fileInput.current?.click()}>
+              <Upload />
+              {file ? 'Choose another file' : 'Choose backup file'}
+            </Button>
+            {file && <span className="truncate text-xs text-muted-foreground">{file.name}</span>}
+          </div>
+          <Input
+            value={confirmText}
+            aria-label="Restore confirmation"
+            placeholder='Type "I understand"'
+            onChange={(event) => setConfirmText(event.target.value)}
+          />
+          <Button
+            size="sm"
+            variant="destructive"
+            disabled={!canRestore || restoreBackup.isPending}
+            onClick={restore}
+          >
+            {restoreBackup.isPending ? 'Restoring…' : 'Replace instance'}
+          </Button>
           {error && <p className="text-xs text-destructive">{error}</p>}
         </div>
       </CardContent>
@@ -723,6 +1012,10 @@ export function Settings() {
   return (
     <div className="flex flex-col gap-6">
       <WorkspacesCard />
+
+      <WorkspaceDataCard />
+
+      <BackupCard />
 
       <AppearanceCard />
 

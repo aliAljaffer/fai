@@ -4,6 +4,7 @@ import type {
   AISettings,
   AppearanceSettings,
   Attachment,
+  BackupRestoreResult,
   Board,
   BoardColumn,
   CalendarSource,
@@ -23,6 +24,9 @@ import type {
   TaskRef,
   TimeEntry,
   Workspace,
+  WorkspaceResetResult,
+  WorkspaceTasksExport,
+  WorkspaceTasksImportResult,
 } from './types'
 import { useWorkspaceStore } from '../store/workspace'
 
@@ -52,6 +56,69 @@ export function useUpdateWorkspace() {
       qc.invalidateQueries({ queryKey: ['boards'] })
       qc.invalidateQueries({ queryKey: ['tasks'] })
       qc.invalidateQueries({ queryKey: ['notes'] })
+    },
+  })
+}
+
+export function useExportBackup() {
+  return useMutation({
+    mutationFn: () => {
+      const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+$/, '')
+      return api.streamDownload('/backup', `fai-backup-${stamp}.zip`)
+    },
+  })
+}
+
+export function useRestoreBackup() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ file, confirm }: { file: File; confirm: string }) => {
+      const form = new FormData()
+      form.append('file', file)
+      form.append('confirm', confirm)
+      return api.postForm<BackupRestoreResult>('/backup/restore', form)
+    },
+    onSuccess: () => {
+      qc.invalidateQueries()
+    },
+  })
+}
+
+export function useExportWorkspaceTasks() {
+  return useMutation({
+    mutationFn: (workspaceId: number) =>
+      api.get<WorkspaceTasksExport>(`/workspaces/${workspaceId}/tasks/export`),
+  })
+}
+
+export function useImportWorkspaceTasks() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ workspaceId, data }: { workspaceId: number; data: WorkspaceTasksExport }) =>
+      api.post<WorkspaceTasksImportResult>(`/workspaces/${workspaceId}/tasks/import`, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['tasks'] })
+      qc.invalidateQueries({ queryKey: ['task'] })
+      qc.invalidateQueries({ queryKey: ['tags'] })
+      qc.invalidateQueries({ queryKey: ['boards'] })
+      qc.invalidateQueries({ queryKey: ['columns'] })
+    },
+  })
+}
+
+export function useResetWorkspace() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (workspaceId: number) =>
+      api.post<WorkspaceResetResult>(`/workspaces/${workspaceId}/reset`, {
+        confirm: 'I understand',
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['tasks'] })
+      qc.invalidateQueries({ queryKey: ['task'] })
+      qc.invalidateQueries({ queryKey: ['tags'] })
+      qc.invalidateQueries({ queryKey: ['boards'] })
+      qc.invalidateQueries({ queryKey: ['columns'] })
     },
   })
 }

@@ -40,4 +40,37 @@ export const api = {
     link.remove()
     URL.revokeObjectURL(url)
   },
+  streamDownload: async (path: string, filename: string) => {
+    type SavePicker = (options: {
+      suggestedName: string
+    }) => Promise<{ createWritable: () => Promise<WritableStream<Uint8Array>> }>
+    const picker = (window as unknown as { showSaveFilePicker?: SavePicker }).showSaveFilePicker
+    const authHeaders = async (): Promise<Record<string, string>> => {
+      const token = await getAccessToken()
+      return token ? { Authorization: `Bearer ${token}` } : {}
+    }
+    if (!picker) {
+      const res = await fetch(`/api${path}`, { headers: await authHeaders() })
+      if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
+      const url = URL.createObjectURL(await res.blob())
+      const link = document.createElement('a')
+      link.href = url
+      link.download = filename
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      URL.revokeObjectURL(url)
+      return
+    }
+    const handle = await picker({ suggestedName: filename })
+    const res = await fetch(`/api${path}`, { headers: await authHeaders() })
+    if (!res.ok || !res.body) throw new Error(`${res.status} ${res.statusText}`)
+    const writable = await handle.createWritable()
+    try {
+      await res.body.pipeTo(writable)
+    } catch (error) {
+      await writable.abort().catch(() => undefined)
+      throw error
+    }
+  },
 }

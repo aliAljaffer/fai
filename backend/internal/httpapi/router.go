@@ -85,6 +85,11 @@ func NewRouter(s *Server) http.Handler {
 			r.Get("/workspaces", s.listWorkspaces)
 			r.Post("/workspaces", s.createWorkspace)
 			r.Patch("/workspaces/{workspaceID}", s.updateWorkspace)
+			r.Get("/workspaces/{workspaceID}/tasks/export", s.exportWorkspaceTasks)
+			r.Post("/workspaces/{workspaceID}/tasks/import", s.importWorkspaceTasks)
+			r.Post("/workspaces/{workspaceID}/reset", s.resetWorkspace)
+			r.Get("/backup", s.exportBackup)
+			r.Post("/backup/restore", s.restoreBackup)
 			r.Get("/refs/resolve", s.resolveRefs)
 
 			r.Get("/boards", s.listBoards)

@@ -5,6 +5,50 @@ export interface Workspace {
   created_at: string
 }
 
+export interface WorkspaceTaskTagExport {
+  name: string
+  color: string
+}
+
+export interface WorkspaceTaskExport {
+  ref: string
+  ref_num: number
+  board: string
+  column: string
+  column_position: number
+  column_is_done: boolean
+  title: string
+  description_md: string
+  priority: string
+  due_date: string | null
+  kind: 'arc' | 'task' | 'step'
+  parent_ref: string | null
+  position: number
+  completed_at: string | null
+  archived: boolean
+  tags: WorkspaceTaskTagExport[]
+}
+
+export interface WorkspaceTasksExport {
+  version: number
+  workspace: { name: string; tag: string }
+  exported_at: string
+  tasks: WorkspaceTaskExport[]
+}
+
+export interface WorkspaceTasksImportResult {
+  imported: number
+}
+
+export interface WorkspaceResetResult {
+  deleted: number
+}
+
+export interface BackupRestoreResult {
+  restored: boolean
+  counts: Record<string, number>
+}
+
 export interface Board {
   id: number
   name: string

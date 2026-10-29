@@ -24,7 +24,7 @@ func (s *Store) CreateTask(ctx context.Context, p store.CreateTaskParams) (store
 	}
 	defer tx.Rollback(ctx)
 
-	workspaceID, refNum, err := s.allocateRef(ctx, tx, p.BoardID)
+	workspaceID, refNum, err := s.allocateRef(ctx, tx, p.BoardID, p.RefNum)
 	if err != nil {
 		return store.Task{}, err
 	}
@@ -58,13 +58,23 @@ func (s *Store) CreateTask(ctx context.Context, p store.CreateTaskParams) (store
 }
 
 // allocateRef bumps the workspace counter and inserts the task in one transaction,
-// so concurrent creates cannot take the same ref_num.
-func (s *Store) allocateRef(ctx context.Context, tx pgx.Tx, boardID int64) (int64, int64, error) {
-	var workspaceID, refNum int64
+// so concurrent creates cannot take the same ref_num. An explicit refNum keeps a
+// number from an import and only raises the counter.
+func (s *Store) allocateRef(ctx context.Context, tx pgx.Tx, boardID int64, requested *int64) (int64, int64, error) {
+	var workspaceID int64
 	err := tx.QueryRow(ctx, `SELECT workspace_id FROM boards WHERE id = $1`, boardID).Scan(&workspaceID)
 	if err != nil {
 		return 0, 0, err
 	}
+	if requested != nil && *requested > 0 {
+		refNum := *requested
+		_, err := tx.Exec(ctx, `UPDATE workspaces SET ref_seq = GREATEST(ref_seq, $1) WHERE id = $2`, refNum, workspaceID)
+		if err != nil {
+			return 0, 0, err
+		}
+		return workspaceID, refNum, nil
+	}
+	var refNum int64
 	err = tx.QueryRow(ctx, `UPDATE workspaces SET ref_seq = ref_seq + 1 WHERE id = $1 RETURNING ref_seq`, workspaceID).
 		Scan(&refNum)
 	if err != nil {

@@ -26,6 +26,9 @@ type CreateTaskParams struct {
 	ParentTaskID     *int64
 	Kind             string
 	MeetingOutcomeID *int64
+	// RefNum, when set, reuses an imported task number instead of allocating the
+	// next one. The workspace counter is raised to at least this value.
+	RefNum *int64
 }
 
 type ListTasksParams struct {
@@ -46,6 +49,10 @@ type Store interface {
 	GetWorkspace(ctx context.Context, id int64) (Workspace, error)
 	CreateWorkspace(ctx context.Context, name, tag string) (Workspace, error)
 	UpdateWorkspace(ctx context.Context, id int64, name, tag *string) (Workspace, error)
+	// ResetWorkspaceTasks deletes every task in the workspace (and everything
+	// that cascades from tasks) and resets ref_seq. It also returns the storage
+	// keys of task attachments so the caller can remove the files.
+	ResetWorkspaceTasks(ctx context.Context, workspaceID int64) (int64, []string, error)
 
 	// Boards
 	ListBoards(ctx context.Context, workspaceID *int64) ([]Board, error)
@@ -169,6 +176,11 @@ type Store interface {
 	// Appearance is the shared palette selection for the hosted app.
 	GetAppearance(ctx context.Context) (AppearanceSettings, error)
 	SaveAppearance(ctx context.Context, settings AppearanceSettings) (AppearanceSettings, error)
+
+	// Backup and restore operate on the whole instance. RestoreBackup replaces
+	// every row; it never merges.
+	DumpBackup(ctx context.Context) (BackupData, error)
+	RestoreBackup(ctx context.Context, data BackupData) error
 
 	Close()
 }

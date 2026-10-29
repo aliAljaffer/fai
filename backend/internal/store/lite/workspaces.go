@@ -136,6 +136,61 @@ func (s *Store) UpdateWorkspace(ctx context.Context, id int64, name, tag *string
 	return w, nil
 }
 
+func (s *Store) ResetWorkspaceTasks(ctx context.Context, workspaceID int64) (int64, []string, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, nil, err
+	}
+	defer tx.Rollback()
+
+	var exists int
+	if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM workspaces WHERE id = ?`, workspaceID).Scan(&exists); err != nil {
+		return 0, nil, err
+	}
+	if exists == 0 {
+		return 0, nil, store.ErrNotFound
+	}
+
+	rows, err := tx.QueryContext(ctx, `
+		SELECT a.storage_key
+		FROM attachments a
+		JOIN tasks t ON t.id = a.task_id
+		WHERE t.workspace_id = ?`, workspaceID)
+	if err != nil {
+		return 0, nil, err
+	}
+	keys := []string{}
+	for rows.Next() {
+		var key string
+		if err := rows.Scan(&key); err != nil {
+			rows.Close()
+			return 0, nil, err
+		}
+		keys = append(keys, key)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return 0, nil, err
+	}
+	rows.Close()
+
+	res, err := tx.ExecContext(ctx, `DELETE FROM tasks WHERE workspace_id = ?`, workspaceID)
+	if err != nil {
+		return 0, nil, err
+	}
+	deleted, err := res.RowsAffected()
+	if err != nil {
+		return 0, nil, err
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE workspaces SET ref_seq = 0 WHERE id = ?`, workspaceID); err != nil {
+		return 0, nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, nil, err
+	}
+	return deleted, keys, nil
+}
+
 func (s *Store) ResolveRefs(ctx context.Context, query string, workspaceID *int64) ([]store.TaskRef, error) {
 	query = strings.TrimSpace(query)
 	if query == "" {
