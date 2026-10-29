@@ -32,6 +32,7 @@ type Config struct {
 	PublicURL            string
 	AttachmentsDir       string
 	AIProvider           string
+	AIBaseURL            string
 	AIAPIKey             string
 	AIModel              string
 	// StaticDir serves the built frontend SPA from the same origin as the API.
@@ -84,6 +85,7 @@ func Load() Config {
 		PublicURL:            os.Getenv("PUBLIC_URL"),
 		AttachmentsDir:       os.Getenv("ATTACHMENTS_DIR"),
 		AIProvider:           os.Getenv("AI_PROVIDER"),
+		AIBaseURL:            os.Getenv("AI_BASE_URL"),
 		AIAPIKey:             os.Getenv("AI_API_KEY"),
 		AIModel:              os.Getenv("AI_MODEL"),
 		StaticDir:            os.Getenv("STATIC_DIR"),

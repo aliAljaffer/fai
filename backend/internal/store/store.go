@@ -161,5 +161,10 @@ type Store interface {
 	ResolveRefs(ctx context.Context, query string, workspaceID *int64) ([]TaskRef, error)
 	ListTaskReferences(ctx context.Context, taskID int64) ([]Backlink, error)
 
+	// AI settings. GetAISettings returns ErrNotFound until the owner saves a
+	// provider, so the server can fall back to environment configuration.
+	GetAISettings(ctx context.Context) (AISettings, error)
+	SaveAISettings(ctx context.Context, settings AISettings) (AISettings, error)
+
 	Close()
 }

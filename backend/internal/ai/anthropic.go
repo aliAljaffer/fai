@@ -17,12 +17,16 @@ type anthropicProvider struct {
 	model  string
 }
 
-func newAnthropic(apiKey, model string) Provider {
+func newAnthropic(baseURL, apiKey, model string) Provider {
 	if model == "" {
 		model = defaultAnthropicModel
 	}
+	options := []option.RequestOption{option.WithAPIKey(apiKey)}
+	if baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/"); baseURL != "" {
+		options = append(options, option.WithBaseURL(baseURL))
+	}
 	return &anthropicProvider{
-		client: anthropic.NewClient(option.WithAPIKey(apiKey)),
+		client: anthropic.NewClient(options...),
 		model:  model,
 	}
 }

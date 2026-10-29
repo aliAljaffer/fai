@@ -137,7 +137,8 @@ func localNow(offset *int) time.Time {
 }
 
 func (s *Server) aiReminder(w http.ResponseWriter, r *http.Request) {
-	if s.AI == nil {
+	provider := s.aiProvider(r.Context())
+	if provider == nil {
 		writeError(w, http.StatusServiceUnavailable, "AI is not configured")
 		return
 	}
@@ -168,7 +169,7 @@ func (s *Server) aiReminder(w http.ResponseWriter, r *http.Request) {
 
 	now := localNow(body.TZOffset)
 
-	reply, err := s.AI.Chat(r.Context(), ai.FaiSystem, []ai.ChatMessage{{
+	reply, err := provider.Chat(r.Context(), ai.FaiSystem, []ai.ChatMessage{{
 		Role:    "user",
 		Content: aiReminderPrompt(text, now),
 	}})

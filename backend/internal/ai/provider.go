@@ -1,6 +1,9 @@
 package ai
 
-import "context"
+import (
+	"context"
+	"strings"
+)
 
 // ChatMessage is one conversation turn. Only user and assistant roles are
 // accepted from clients; the system instruction is chosen by the server.
@@ -20,6 +23,25 @@ const FaiSystem = "You are Fai, the assistant built into a personal task, note, 
 	"Be direct and practical. Use only the data the app gives you and say when you do not know. " +
 	"Do not invent tasks, dates, or facts. Do not use em dashes. Keep replies short."
 
+const (
+	ProviderAnthropic    = "anthropic"
+	ProviderOpenAI       = "openai"
+	ProviderOpenAICompat = "openai-compat"
+)
+
+// NormalizeProvider maps known aliases to the stored provider name. Unknown
+// values fall back to Anthropic, which keeps an unset AI_PROVIDER working.
+func NormalizeProvider(provider string) string {
+	switch strings.ToLower(strings.TrimSpace(provider)) {
+	case ProviderOpenAI:
+		return ProviderOpenAI
+	case ProviderOpenAICompat, "opencode-zen", "opencode":
+		return ProviderOpenAICompat
+	default:
+		return ProviderAnthropic
+	}
+}
+
 type Provider interface {
 	Chat(ctx context.Context, system string, messages []ChatMessage) (string, error)
 	GenerateSubtasks(ctx context.Context, title, descriptionMD string) ([]string, error)
@@ -27,17 +49,19 @@ type Provider interface {
 	PlanTask(ctx context.Context, title, body string) (TaskPlan, error)
 }
 
-// NewProvider returns nil if no AI_API_KEY is configured, so every AI endpoint
+// NewProvider returns nil if no API key is configured, so every AI endpoint
 // can degrade gracefully (503, hidden in the UI) rather than treating AI as a
 // hard dependency.
-func NewProvider(provider, apiKey, model string) Provider {
-	if apiKey == "" {
+func NewProvider(provider, baseURL, apiKey, model string) Provider {
+	if strings.TrimSpace(apiKey) == "" {
 		return nil
 	}
-	switch provider {
-	case "openai-compat", "opencode-zen":
-		return newOpenAICompat(apiKey, model)
+	switch NormalizeProvider(provider) {
+	case ProviderOpenAI:
+		return newOpenAICompat(baseURL, openAIBaseURL, apiKey, model)
+	case ProviderOpenAICompat:
+		return newOpenAICompat(baseURL, openCodeZenBaseURL, apiKey, model)
 	default:
-		return newAnthropic(apiKey, model)
+		return newAnthropic(baseURL, apiKey, model)
 	}
 }

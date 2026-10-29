@@ -106,10 +106,12 @@ minute.
 ## AI
 
 `AI_API_KEY` enables the optional task breakdown, note-to-task plans, meeting extraction,
-and chat features; `AI_PROVIDER=opencode-zen`
-talks to OpenCode Zen's OpenAI-compatible endpoint with `AI_MODEL` (for example
-`claude-haiku-4-5`), while any other value uses Anthropic's Messages API. The endpoints
-are rate-limited per authenticated subject. Unset means the UI hides the AI actions.
+and chat features. `AI_PROVIDER` accepts `anthropic`, `openai`, or `openai-compat`
+(alias `opencode-zen`); `AI_MODEL` names the model, and `AI_BASE_URL` points at a custom
+endpoint, including any OpenAI-compatible server. You can also set the provider, model,
+base URL, and API key in Settings, which stores them in the database and overrides the
+environment values. The endpoints are rate-limited per authenticated subject. With no key
+in either place, the UI hides the AI actions.
 
 ## Jira
 

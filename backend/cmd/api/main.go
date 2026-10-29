@@ -67,7 +67,7 @@ func main() {
 	if jiraClient == nil {
 		log.Println("JIRA_BASE_URL/EMAIL/API_TOKEN unset — Jira import disabled")
 	}
-	aiProvider := ai.NewProvider(cfg.AIProvider, cfg.AIAPIKey, cfg.AIModel)
+	aiProvider := ai.NewProvider(cfg.AIProvider, cfg.AIBaseURL, cfg.AIAPIKey, cfg.AIModel)
 	if aiProvider == nil {
 		log.Println("AI_API_KEY unset — AI features disabled")
 	}
@@ -81,6 +81,10 @@ func main() {
 		JiraSubtaskIssueType: cfg.JiraSubtaskIssueType,
 		JiraEpicLinkField:    cfg.JiraEpicLinkField,
 		AI:                   aiProvider,
+		AIProvider:           cfg.AIProvider,
+		AIBaseURL:            cfg.AIBaseURL,
+		AIModel:              cfg.AIModel,
+		AIAPIKey:             cfg.AIAPIKey,
 		ICSToken:             cfg.ICSToken,
 		PublicURL:            cfg.PublicURL,
 		AttachmentsDir:       cfg.AttachmentsDir,

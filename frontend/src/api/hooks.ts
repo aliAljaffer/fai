@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from './client'
 import type {
+  AISettings,
   Attachment,
   Board,
   BoardColumn,
@@ -584,6 +585,30 @@ export function useExportJira(taskId: number) {
 
 export function useAIStatus() {
   return useQuery({ queryKey: ['ai', 'status'], queryFn: () => api.get<{ configured: boolean }>('/ai/status') })
+}
+
+export function useAISettings() {
+  return useQuery({
+    queryKey: ['ai', 'settings'],
+    queryFn: () => api.get<AISettings>('/ai/settings'),
+  })
+}
+
+export function useUpdateAISettings() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: {
+      provider: AISettings['provider']
+      base_url: string
+      model: string
+      api_key?: string
+      clear_api_key?: boolean
+    }) => api.put<AISettings>('/ai/settings', body),
+    onSuccess: (settings) => {
+      qc.setQueryData(['ai', 'settings'], settings)
+      qc.invalidateQueries({ queryKey: ['ai', 'status'] })
+    },
+  })
 }
 
 export function useSetTaskType(taskId: number, boardId: number | undefined) {

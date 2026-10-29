@@ -6,13 +6,18 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 )
 
-const openCodeZenBaseURL = "https://opencode.ai/zen/v1"
-const defaultOpenAICompatModel = "gpt-4o-mini"
+const (
+	openCodeZenBaseURL       = "https://opencode.ai/zen/v1"
+	openAIBaseURL            = "https://api.openai.com/v1"
+	defaultOpenAICompatModel = "gpt-4o-mini"
+)
 
 // openAICompat is a small client for any OpenAI-compatible /chat/completions
-// endpoint, configured against OpenCode Zen by default.
+// endpoint. The base URL comes from stored settings, then falls back to the
+// provider's default.
 type openAICompatProvider struct {
 	baseURL string
 	apiKey  string
@@ -20,11 +25,15 @@ type openAICompatProvider struct {
 	http    *http.Client
 }
 
-func newOpenAICompat(apiKey, model string) Provider {
+func newOpenAICompat(baseURL, fallbackBaseURL, apiKey, model string) Provider {
+	baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	if baseURL == "" {
+		baseURL = fallbackBaseURL
+	}
 	if model == "" {
 		model = defaultOpenAICompatModel
 	}
-	return &openAICompatProvider{baseURL: openCodeZenBaseURL, apiKey: apiKey, model: model, http: &http.Client{}}
+	return &openAICompatProvider{baseURL: baseURL, apiKey: apiKey, model: model, http: &http.Client{}}
 }
 
 type chatRequest struct {

@@ -178,6 +178,16 @@ type DaySeconds struct {
 	Seconds int64  `json:"seconds"`
 }
 
+// AISettings is the single owner's stored model provider configuration. APIKey
+// is never serialized to clients.
+type AISettings struct {
+	Provider  string    `json:"provider"`
+	BaseURL   string    `json:"base_url"`
+	Model     string    `json:"model"`
+	APIKey    string    `json:"-"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
 // NormalizeKind fills an omitted kind from the parent link, so callers that do
 // not care about issue types still create valid rows.
 func NormalizeKind(kind string, hasParent bool) string {

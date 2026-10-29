@@ -195,7 +195,8 @@ type extractedTask struct {
 }
 
 func (s *Server) extractTasksFromOutcome(w http.ResponseWriter, r *http.Request) {
-	if s.AI == nil {
+	provider := s.aiProvider(r.Context())
+	if provider == nil {
 		writeError(w, http.StatusServiceUnavailable, "AI is not configured")
 		return
 	}
@@ -223,7 +224,7 @@ func (s *Server) extractTasksFromOutcome(w http.ResponseWriter, r *http.Request)
 		"Notes:\n\n" + outcome.NotesMd + "\n\n" +
 		`Respond with ONLY a JSON array of {"title": string, "suggested_done": boolean, "due_date": string or null}, nothing else.`
 
-	reply, err := s.AI.Chat(r.Context(), ai.FaiSystem, []ai.ChatMessage{{Role: "user", Content: prompt}})
+	reply, err := provider.Chat(r.Context(), ai.FaiSystem, []ai.ChatMessage{{Role: "user", Content: prompt}})
 	if err != nil {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return

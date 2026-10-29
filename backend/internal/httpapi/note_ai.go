@@ -8,7 +8,8 @@ import (
 )
 
 func (s *Server) planNoteTask(w http.ResponseWriter, r *http.Request) {
-	if s.AI == nil {
+	provider := s.aiProvider(r.Context())
+	if provider == nil {
 		writeError(w, http.StatusServiceUnavailable, "AI is not configured")
 		return
 	}
@@ -36,7 +37,7 @@ func (s *Server) planNoteTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	plan, err := s.AI.PlanTask(r.Context(), note.Title, note.BodyMd)
+	plan, err := provider.PlanTask(r.Context(), note.Title, note.BodyMd)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return

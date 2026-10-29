@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -12,11 +12,13 @@ import {
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import {
+  useAISettings,
   useBoards,
   useCalendarFeedURL,
   useColumns,
   useCreateWorkspace,
   useJiraImport,
+  useUpdateAISettings,
   useUpdateWorkspace,
   useWorkspaces,
 } from '../api/hooks'
@@ -207,6 +209,172 @@ function WorkspacesCard() {
   )
 }
 
+const AI_PROVIDERS = [
+  { value: 'anthropic', label: 'Anthropic', model: 'claude-sonnet-5' },
+  { value: 'openai', label: 'OpenAI', model: 'gpt-4o-mini' },
+  { value: 'openai-compat', label: 'OpenAI compatible', model: 'gpt-4o-mini' },
+] as const
+
+type AIProviderValue = (typeof AI_PROVIDERS)[number]['value']
+
+function aiModelPlaceholder(provider: AIProviderValue) {
+  return AI_PROVIDERS.find((item) => item.value === provider)?.model ?? ''
+}
+
+function AICard() {
+  const { data: settings } = useAISettings()
+  const updateSettings = useUpdateAISettings()
+  const [provider, setProvider] = useState<AIProviderValue>('anthropic')
+  const [baseURL, setBaseURL] = useState('')
+  const [model, setModel] = useState('')
+  const [apiKey, setAPIKey] = useState('')
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (!settings) return
+    setProvider(settings.provider)
+    setBaseURL(settings.base_url)
+    setModel(settings.model)
+    setAPIKey('')
+    setError('')
+  }, [settings])
+
+  function save() {
+    setError('')
+    updateSettings.mutate(
+      {
+        provider,
+        base_url: baseURL.trim(),
+        model: model.trim(),
+        api_key: apiKey.trim() || undefined,
+      },
+      {
+        onSuccess: () => toast.success('AI settings saved'),
+        onError: (err) => setError(serverError(err)),
+      },
+    )
+  }
+
+  const status = !settings
+    ? 'Loading AI settings…'
+    : settings.configured
+      ? 'AI is configured.'
+      : 'AI is not configured. Add an API key to enable it.'
+  const sourceNote =
+    settings?.source === 'environment'
+      ? 'Currently using server environment settings. Saving here overrides them.'
+      : 'Choose the provider and model used for chat, task breakdown, note plans, and meeting extraction.'
+
+  return (
+    <Card className="max-w-xl">
+      <CardHeader>
+        <CardTitle>AI provider</CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
+        <p className="text-sm text-muted-foreground">{status}</p>
+        <p className="text-xs text-muted-foreground">{sourceNote}</p>
+
+        <div className="flex flex-col gap-1.5">
+          <label className="text-sm font-medium" htmlFor="ai-provider">
+            Provider
+          </label>
+          <Select
+            items={AI_PROVIDERS.map((item) => ({ value: item.value, label: item.label }))}
+            value={provider}
+            onValueChange={(value) => value && setProvider(value as AIProviderValue)}
+          >
+            <SelectTrigger id="ai-provider" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {AI_PROVIDERS.map((item) => (
+                <SelectItem key={item.value} value={item.value}>
+                  {item.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label className="text-sm font-medium" htmlFor="ai-model">
+            Model
+          </label>
+          <Input
+            id="ai-model"
+            value={model}
+            placeholder={aiModelPlaceholder(provider)}
+            onChange={(event) => setModel(event.target.value)}
+          />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label className="text-sm font-medium" htmlFor="ai-base-url">
+            Base URL
+          </label>
+          <Input
+            id="ai-base-url"
+            value={baseURL}
+            placeholder={
+              provider === 'openai'
+                ? 'https://api.openai.com/v1'
+                : provider === 'openai-compat'
+                  ? 'https://your-endpoint/v1'
+                  : 'Anthropic default'
+            }
+            onChange={(event) => setBaseURL(event.target.value)}
+          />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label className="text-sm font-medium" htmlFor="ai-api-key">
+            API key
+          </label>
+          <Input
+            id="ai-api-key"
+            type="password"
+            value={apiKey}
+            autoComplete="off"
+            placeholder={settings?.has_api_key ? 'Saved, leave blank to keep' : 'Paste the API key'}
+            onChange={(event) => setAPIKey(event.target.value)}
+          />
+        </div>
+
+        {error && <p className="text-xs text-destructive">{error}</p>}
+        <div className="flex items-center gap-2">
+          <Button size="sm" disabled={updateSettings.isPending} onClick={save}>
+            {updateSettings.isPending ? 'Saving…' : 'Save AI settings'}
+          </Button>
+          {settings?.source === 'database' && settings.has_api_key && (
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={updateSettings.isPending}
+              onClick={() => {
+                setError('')
+                updateSettings.mutate(
+                  {
+                    provider,
+                    base_url: baseURL.trim(),
+                    model: model.trim(),
+                    clear_api_key: true,
+                  },
+                  {
+                    onSuccess: () => toast.success('Stored API key removed'),
+                    onError: (err) => setError(serverError(err)),
+                  },
+                )
+              }}
+            >
+              Remove stored key
+            </Button>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
 function AboutCard() {
   const state = useUpdateState()
   const desktop = isDesktop()
@@ -318,6 +486,8 @@ export function Settings() {
   return (
     <div className="flex flex-col gap-6">
       <WorkspacesCard />
+
+      <AICard />
 
       <Card className="max-w-xl">
         <CardHeader>

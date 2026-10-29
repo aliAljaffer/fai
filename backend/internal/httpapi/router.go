@@ -22,9 +22,15 @@ type Server struct {
 	JiraSubtaskIssueType string
 	JiraEpicLinkField    string
 	AI                   ai.Provider
-	ICSToken             string
-	PublicURL            string
-	AttachmentsDir       string
+	// Environment-provided AI configuration, used as the default until the
+	// owner saves model settings in the database.
+	AIProvider     string
+	AIBaseURL      string
+	AIModel        string
+	AIAPIKey       string
+	ICSToken       string
+	PublicURL      string
+	AttachmentsDir string
 	// StaticDir, when set, serves the built SPA from the API server. The
 	// Electron build uses this so the window can load a normal http origin.
 	StaticDir string
@@ -145,6 +151,8 @@ func NewRouter(s *Server) http.Handler {
 			r.Get("/tasks/{taskID}/jira/suggestions", s.jiraSuggestions)
 
 			r.Get("/ai/status", s.aiStatus)
+			r.Get("/ai/settings", s.getAISettings)
+			r.Put("/ai/settings", s.updateAISettings)
 			r.Group(func(r chi.Router) {
 				r.Use(rateLimitByUser(10, 5))
 				r.Post("/tasks/{taskID}/ai/breakdown", s.aiBreakdown)

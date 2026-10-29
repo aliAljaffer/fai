@@ -13,11 +13,12 @@ import (
 )
 
 func (s *Server) aiStatus(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]bool{"configured": s.AI != nil})
+	writeJSON(w, http.StatusOK, map[string]bool{"configured": s.aiProvider(r.Context()) != nil})
 }
 
 func (s *Server) aiBreakdown(w http.ResponseWriter, r *http.Request) {
-	if s.AI == nil {
+	provider := s.aiProvider(r.Context())
+	if provider == nil {
 		writeError(w, http.StatusServiceUnavailable, "AI is not configured")
 		return
 	}
@@ -34,7 +35,7 @@ func (s *Server) aiBreakdown(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	titles, err := s.AI.GenerateSubtasks(ctx, task.Title, task.DescriptionMd)
+	titles, err := provider.GenerateSubtasks(ctx, task.Title, task.DescriptionMd)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
@@ -65,7 +66,8 @@ func (s *Server) aiBreakdown(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) aiSuggestLabels(w http.ResponseWriter, r *http.Request) {
-	if s.AI == nil {
+	provider := s.aiProvider(r.Context())
+	if provider == nil {
 		writeError(w, http.StatusServiceUnavailable, "AI is not configured")
 		return
 	}
@@ -91,7 +93,7 @@ func (s *Server) aiSuggestLabels(w http.ResponseWriter, r *http.Request) {
 		existing = append(existing, tag.Name)
 	}
 
-	labels, err := s.AI.SuggestLabels(ctx, task.Title, task.DescriptionMd, existing)
+	labels, err := provider.SuggestLabels(ctx, task.Title, task.DescriptionMd, existing)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
@@ -235,7 +237,8 @@ func (s *Server) defaultBoardColumn(ctx context.Context) (int64, int64, error) {
 }
 
 func (s *Server) aiChat(w http.ResponseWriter, r *http.Request) {
-	if s.AI == nil {
+	provider := s.aiProvider(r.Context())
+	if provider == nil {
 		writeError(w, http.StatusServiceUnavailable, "AI is not configured")
 		return
 	}
@@ -281,7 +284,7 @@ func (s *Server) aiChat(w http.ResponseWriter, r *http.Request) {
 		system += "\n\nOpen task titles and note titles from Fai. Use them only when relevant, and do not invent anything that is not listed:\n" + context
 	}
 
-	reply, err := s.AI.Chat(r.Context(), system, messages)
+	reply, err := provider.Chat(r.Context(), system, messages)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return

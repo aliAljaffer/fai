@@ -38,7 +38,9 @@ export function Chat() {
     return (
       <div className="flex max-w-xl flex-col gap-2">
         <h1 className="text-lg font-semibold">Chat</h1>
-        <p className="text-sm text-muted-foreground">AI is not configured on this server.</p>
+        <p className="text-sm text-muted-foreground">
+          AI is not configured. Add a provider in Settings to use chat.
+        </p>
       </div>
     )
   }

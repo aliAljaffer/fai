@@ -22,3 +22,6 @@ var Workspaces string
 
 //go:embed 006_task_comments.sql
 var TaskComments string
+
+//go:embed 007_ai_settings.sql
+var AISettings string

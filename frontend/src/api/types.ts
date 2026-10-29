@@ -196,3 +196,13 @@ export interface TaskBacklink {
 export interface LabelSuggestions {
   labels: string[]
 }
+
+export interface AISettings {
+  provider: 'anthropic' | 'openai' | 'openai-compat'
+  base_url: string
+  model: string
+  has_api_key: boolean
+  configured: boolean
+  source: 'database' | 'environment'
+  updated_at: string | null
+}
