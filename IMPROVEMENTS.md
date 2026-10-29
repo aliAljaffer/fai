@@ -121,3 +121,110 @@ full segregation: any work item can be referenced from any workspace.
   so a cross-workspace reference is deliberate.
 - The calendar ICS feed is one global token. Per-workspace feeds need a token per workspace, or one
   token with a workspace parameter.
+
+## Assistant on Telegram or WhatsApp
+
+Talk to Fai from a phone by text or voice, create tasks and reminders, and change task status.
+Verdict from review: feasible. Telegram first, WhatsApp later. Most of the work already exists in
+`POST /api/ai/chat` and `applyChatAction` (`backend/internal/httpapi/ai.go`).
+
+### Transport
+
+- Telegram first. BotFather token, no cost, voice notes, unrestricted outbound messages, and long
+  polling. No public route, no webhook, no Caddy change.
+- Use `getUpdates` long polling, not a webhook. Fai only makes outbound calls, it works behind NAT,
+  and the offset prevents duplicate handling. One poller is enough for one owner. Switch to a
+  webhook only if the backend runs more than one replica.
+- WhatsApp later. Cloud API needs a Meta business account, a verified number, a public webhook
+  (there is no polling), the 24 hour service window, and templates for proactive messages. The
+  blockers are account setup and template rules, not code. Keep the transport behind a small
+  interface so the same handler serves both.
+
+### Bot placement
+
+- Run the bot inside the existing Go binary from `backend/cmd/api/main.go`, reusing the store, the
+  AI provider, and `applyChatAction`.
+- Do not call `/api` over HTTP. Call the handler logic directly, so the bot needs no OIDC token or
+  service account.
+- Single owner: allowlist by both `from.id` and `chat.id`, accept private chats only, and silently
+  drop everyone else. Keep the token in an env var and never log it.
+
+### Conversation state
+
+- `/api/ai/chat` is stateless and the client resends the last 10 messages. Keep the last 10
+  messages per chat in an in-memory map keyed by chat ID. Loss on restart is acceptable for a chat.
+  If persistence is needed later, add a `chat_messages` table (already an open item under
+  Workspaces).
+
+### Audio
+
+- Telegram voice notes are OGG/Opus. Download with `getFile` and cap the length at 60 to 90 seconds.
+- Use an audio-capable model through OpenCode Go instead of a dedicated STT endpoint. OpenCode Go
+  has no `/audio/transcriptions` route. It does include MiMo-V2.5, MiMo-V2.5-Pro, MiMo-V2.6-Flash,
+  MiMo-V2.6-Pro, and Gemini 4 Argon. OpenCode's own voice feature uses MiMo-V2.5 for this.
+- Add a `Transcribe` method to the `ai.Provider` interface and both implementations. Post to
+  `https://opencode.ai/inference/go/openai/v1/chat/completions` with model `mimo-v2.5` and a
+  transcription-only system prompt: transcribe verbatim, remove filler words, do not answer
+  questions, and output nothing when there is no speech. Set temperature 0.
+- Wire shape: content parts
+  `[{"type":"input_audio","input_audio":{"data":"<base64>","format":"mp3"}},{"type":"text","text":"<prompt>"}]`.
+- Test the raw OGG first. If the gateway accepts OGG/Opus, skip ffmpeg. If it rejects the format,
+  bundle ffmpeg in the backend image and convert to mono mp3, the same way OpenCode's voice code
+  does. ffmpeg adds size to the image, so add it only when the test shows it is needed.
+- Always echo `Heard: <transcript>` with the reply. A wrong transcript is the main failure mode and
+  the echo makes it obvious. Fall back to "could not transcribe, send text" on failure.
+
+### Provider configuration
+
+- `backend/internal/ai/openaicompat.go` hardcodes `https://opencode.ai/zen/v1`. OpenCode Go uses
+  `https://opencode.ai/inference/go/openai/v1`. Add a base URL setting, or an `opencode-go`
+  provider case, and set `AI_MODEL=mimo-v2.5` for transcription.
+- OpenCode Go is marketed for coding agents and monitors traffic for abuse. A personal task bot is
+  not coding traffic. Use it if it works, but treat this as a risk. If Go rejects the traffic, fall
+  back to Console pay-as-you-go or a dedicated Whisper API (Groq, OpenAI, or self-hosted
+  faster-whisper). Keep transcription behind the `Provider` interface so a swap is one config
+  change.
+
+### Task status edits
+
+- Status is the column. `POST /api/tasks/{id}/move` exists and `board_columns.is_done` already
+  marks done columns. No schema change is needed.
+- The chat prompt lists only task titles today, so the model cannot point at one task. Add the
+  stable reference (`@DEV-42`) to the context.
+- Add `find_task` and `move_task` actions. The model returns a task ID and a column name. The
+  server resolves both, rejects an unknown column, and asks which task when the match is missing or
+  ambiguous. Never let the model choose between near duplicates.
+- Do not add a separate `set_completed` action. `completed_at` is set only by Jira import today,
+  so stats ignore tasks finished in a done column. Fix the shared move path to set `completed_at`
+  on entry to a done column and clear it on exit, so the web UI and the bot agree.
+- One action per reply is enough. Drop the idea of a JSON array of actions.
+- Confirm before writes that are not creates. Hold `move_task` as pending and show Telegram inline
+  buttons (Confirm, Cancel) on `callback_query`. Expire pending actions after a few minutes. Always
+  confirm voice-originated edits because the transcript can be wrong. Creates stay immediate,
+  matching current behavior.
+
+### Outbound reminders
+
+- Add Telegram next to ntfy in `backend/internal/reminders/scheduler.go`, using a small client
+  modeled on `backend/internal/ntfy/client.go`.
+- Choose the channel with a setting instead of sending to every channel, so reminders do not
+  arrive twice.
+
+### Milestones
+
+1. Text-only Telegram over long polling: allowlist, reuse the chat prompt and `applyChatAction`,
+   create task and create reminder only. Reply with what was created.
+2. Telegram reminder channel.
+3. Voice, after the OGG smoke test, with the transcript echo.
+4. Find, move, and complete, with confirmation buttons. Fix `completed_at` in the shared move path.
+5. WhatsApp Cloud API behind the same transport interface, if it is still needed.
+
+### Risks
+
+- Transcription quality on short voice notes with names and references. The echo and the confirm
+  step bound the damage.
+- Prompt injection from task titles in the chat context. Keep the action set small and validate
+  every field server side.
+- Telegram updates are at least once. Persist the `getUpdates` offset after each processed update
+  so a restart does not create a task twice (moves are close to idempotent, creates are not).
+- Two LLM calls per voice message. Latency is acceptable for chat.
