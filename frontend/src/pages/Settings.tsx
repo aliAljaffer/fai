@@ -178,7 +178,7 @@ function WorkspacesCard() {
   }
 
   return (
-    <Card className="max-w-xl">
+    <Card>
       <CardHeader>
         <CardTitle>Workspaces</CardTitle>
       </CardHeader>
@@ -303,7 +303,7 @@ function WorkspaceDataCard() {
   }
 
   return (
-    <Card className="max-w-xl">
+    <Card>
       <CardHeader>
         <CardTitle>Workspace data</CardTitle>
       </CardHeader>
@@ -442,7 +442,7 @@ function BackupCard() {
   }
 
   return (
-    <Card className="max-w-xl">
+    <Card>
       <CardHeader>
         <CardTitle>Backup &amp; restore</CardTitle>
       </CardHeader>
@@ -591,7 +591,7 @@ function AppearanceCard() {
 
   if (!appearance) {
     return (
-      <Card className="max-w-xl">
+      <Card>
         <CardHeader>
           <CardTitle>Appearance</CardTitle>
         </CardHeader>
@@ -610,7 +610,7 @@ function AppearanceCard() {
   }
 
   return (
-    <Card className="max-w-xl">
+    <Card>
       <CardHeader>
         <CardTitle>Appearance</CardTitle>
       </CardHeader>
@@ -812,7 +812,7 @@ function AICard() {
       : 'Choose the provider and model used for chat, task breakdown, note plans, and meeting extraction.'
 
   return (
-    <Card className="max-w-xl">
+    <Card>
       <CardHeader>
         <CardTitle>AI provider</CardTitle>
       </CardHeader>
@@ -946,7 +946,7 @@ function AboutCard() {
                 : 'fai checks for a new version every six hours and tells you when one is available.'
 
   return (
-    <Card className="max-w-xl">
+    <Card>
       <CardHeader>
         <CardTitle>About</CardTitle>
       </CardHeader>
@@ -1034,8 +1034,8 @@ export function Settings() {
   const [forceUpdate, setForceUpdate] = useState(false)
 
   return (
-    <div className="flex flex-col gap-6">
-      <h1 className="text-lg font-semibold">Settings</h1>
+    <div className="grid items-start gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      <h1 className="text-lg font-semibold sm:col-span-2 xl:col-span-3">Settings</h1>
       <WorkspacesCard />
 
       <WorkspaceDataCard />
@@ -1046,7 +1046,7 @@ export function Settings() {
 
       <AICard />
 
-      <Card className="max-w-xl">
+      <Card>
         <CardHeader>
           <CardTitle>Jira import</CardTitle>
         </CardHeader>
@@ -1122,7 +1122,7 @@ export function Settings() {
         </CardContent>
       </Card>
 
-      <Card className="max-w-xl">
+      <Card>
         <CardHeader>
           <CardTitle>Status colors</CardTitle>
         </CardHeader>
@@ -1151,7 +1151,7 @@ export function Settings() {
         </CardContent>
       </Card>
 
-      <Card className="max-w-xl">
+      <Card>
         <CardHeader>
           <CardTitle>Calendar subscription</CardTitle>
         </CardHeader>
