@@ -228,6 +228,8 @@ export function useCreateTask(boardId: number | undefined) {
       column_id: number
       title: string
       due_date?: string
+      parent_task_id?: number
+      kind?: 'arc' | 'task' | 'step'
     }) => api.post<Task>('/tasks', body),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['tasks', boardId] }),
   })
@@ -584,6 +586,19 @@ export function useAIStatus() {
   return useQuery({ queryKey: ['ai', 'status'], queryFn: () => api.get<{ configured: boolean }>('/ai/status') })
 }
 
+export function useSetTaskType(taskId: number, boardId: number | undefined) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { kind: 'arc' | 'task' | 'step'; parent_task_id?: number | null }) =>
+      api.patch<Task>(`/tasks/${taskId}/type`, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['tasks', boardId] })
+      qc.invalidateQueries({ queryKey: ['task', taskId] })
+      qc.invalidateQueries({ queryKey: ['tasks', taskId, 'subtasks'] })
+    },
+  })
+}
+
 export function useSubtasks(taskId: number) {
   return useQuery({ queryKey: ['tasks', taskId, 'subtasks'], queryFn: () => api.get<Task[]>(`/tasks/${taskId}/subtasks`) })
 }
@@ -591,7 +606,7 @@ export function useSubtasks(taskId: number) {
 export function useCreateSubtask(taskId: number) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (body: { board_id: number; column_id: number; title: string }) =>
+    mutationFn: (body: { board_id: number; column_id: number; title: string; kind?: 'arc' | 'task' | 'step' }) =>
       api.post<Task>('/tasks', { ...body, parent_task_id: taskId }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['tasks', taskId, 'subtasks'] }),
   })

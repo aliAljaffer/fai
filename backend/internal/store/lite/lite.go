@@ -70,10 +70,21 @@ func New(path string) (*Store, error) {
 		{"meeting_outcomes", "workspace_id", "INTEGER REFERENCES workspaces(id)"},
 		{"tasks", "workspace_id", "INTEGER REFERENCES workspaces(id)"},
 		{"tasks", "ref_num", "INTEGER"},
+		{"tasks", "kind", "TEXT NOT NULL DEFAULT 'task'"},
 	}
+	kindAdded := false
 	for _, c := range columns {
-		if err := addColumnIfMissing(ctx, db, c.table, c.column, c.definition); err != nil {
+		added, err := addColumnIfMissing(ctx, db, c.table, c.column, c.definition)
+		if err != nil {
 			return nil, fmt.Errorf("adding %s.%s: %w", c.table, c.column, err)
+		}
+		if added && c.table == "tasks" && c.column == "kind" {
+			kindAdded = true
+		}
+	}
+	if kindAdded {
+		if _, err := db.ExecContext(ctx, `UPDATE tasks SET kind = 'step' WHERE parent_task_id IS NOT NULL`); err != nil {
+			return nil, fmt.Errorf("backfilling task kinds: %w", err)
 		}
 	}
 	if _, err := db.ExecContext(ctx, migrationssqlite.Workspaces); err != nil {
@@ -86,18 +97,18 @@ func New(path string) (*Store, error) {
 	return &Store{q: sqlitedb.New(db), db: db}, nil
 }
 
-func addColumnIfMissing(ctx context.Context, db *sql.DB, table, column, definition string) error {
+func addColumnIfMissing(ctx context.Context, db *sql.DB, table, column, definition string) (bool, error) {
 	var exists int
 	err := db.QueryRowContext(ctx,
 		`SELECT count(*) FROM pragma_table_info(?) WHERE name = ?`, table, column).Scan(&exists)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if exists > 0 {
-		return nil
+		return false, nil
 	}
 	_, err = db.ExecContext(ctx, "ALTER TABLE "+table+" ADD COLUMN "+column+" "+definition)
-	return err
+	return err == nil, err
 }
 
 func (s *Store) Close() {

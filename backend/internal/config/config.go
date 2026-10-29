@@ -18,7 +18,9 @@ type Config struct {
 	JiraDefaultProject   string
 	JiraStatusColumnMap  string
 	JiraEpicIssueType    string
+	JiraTaskIssueType    string
 	JiraSubtaskIssueType string
+	JiraEpicLinkField    string
 	NtfyURL              string
 	NtfyTopic            string
 	NtfyUsername         string
@@ -68,7 +70,9 @@ func Load() Config {
 		JiraDefaultProject:   os.Getenv("JIRA_DEFAULT_PROJECT_KEY"),
 		JiraStatusColumnMap:  os.Getenv("JIRA_STATUS_COLUMN_MAP"),
 		JiraEpicIssueType:    envOr("JIRA_EPIC_ISSUE_TYPE", "Epic"),
+		JiraTaskIssueType:    envOr("JIRA_TASK_ISSUE_TYPE", "Task"),
 		JiraSubtaskIssueType: envOr("JIRA_SUBTASK_ISSUE_TYPE", "Sub-task"),
+		JiraEpicLinkField:    envOr("JIRA_EPIC_LINK_FIELD", "parent"),
 		NtfyURL:              os.Getenv("NTFY_URL"),
 		NtfyTopic:            os.Getenv("NTFY_TOPIC"),
 		NtfyUsername:         os.Getenv("NTFY_USERNAME"),

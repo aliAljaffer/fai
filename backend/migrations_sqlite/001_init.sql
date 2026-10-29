@@ -59,6 +59,7 @@ CREATE TABLE tasks (
   board_id INTEGER NOT NULL REFERENCES boards(id) ON DELETE CASCADE,
   column_id INTEGER NOT NULL REFERENCES board_columns(id) ON DELETE RESTRICT,
   parent_task_id INTEGER REFERENCES tasks(id) ON DELETE SET NULL,
+  kind TEXT NOT NULL DEFAULT 'task' CHECK (kind IN ('arc', 'task', 'step')),
   meeting_outcome_id INTEGER REFERENCES meeting_outcomes(id) ON DELETE SET NULL,
   workspace_id INTEGER NOT NULL REFERENCES workspaces(id),
   ref_num INTEGER NOT NULL,

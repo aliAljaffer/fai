@@ -25,12 +25,12 @@ export function AIPanel({ task }: { task: Task }) {
           disabled={breakdown.isPending}
           onClick={() =>
             breakdown.mutate(undefined, {
-              onSuccess: (created) => toast.success(`Created ${created.length} subtasks`),
+              onSuccess: (created) => toast.success(`Created ${created.length} steps`),
               onError: (err) => toast.error(err.message),
             })
           }
         >
-          {breakdown.isPending ? 'Generating…' : 'Generate subtasks'}
+          {breakdown.isPending ? 'Generating…' : 'Generate steps'}
         </Button>
       </div>
       <div className="flex flex-col gap-2">

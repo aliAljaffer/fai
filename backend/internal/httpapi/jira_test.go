@@ -17,16 +17,16 @@ import (
 )
 
 const jiraSearchBody = `{"issues":[
-  {"key":"DEV-2","fields":{"summary":"Child","status":{"name":"To Do"},"parent":{"key":"DEV-1"}}},
-  {"key":"DEV-1","fields":{"summary":"Parent","status":{"name":"To Do"}}},
-  {"key":"DEV-3","fields":{"summary":"Orphan","status":{"name":"To Do"},"parent":{"key":"DEV-9"}}}
+  {"key":"DEV-2","fields":{"summary":"Child","status":{"name":"To Do"},"issuetype":{"name":"Sub-task"},"parent":{"key":"DEV-1"}}},
+  {"key":"DEV-1","fields":{"summary":"Parent","status":{"name":"To Do"},"issuetype":{"name":"Task"}}},
+  {"key":"DEV-3","fields":{"summary":"Orphan","status":{"name":"To Do"},"issuetype":{"name":"Sub-task"},"parent":{"key":"DEV-9"}}}
 ],"isLast":true}`
 
 const jiraMovedBody = `{"issues":[
-  {"key":"DEV-2","fields":{"summary":"Child","status":{"name":"To Do"},"parent":{"key":"DEV-4"}}},
-  {"key":"DEV-1","fields":{"summary":"Parent","status":{"name":"To Do"}}},
-  {"key":"DEV-4","fields":{"summary":"Other parent","status":{"name":"To Do"}}},
-  {"key":"DEV-3","fields":{"summary":"Orphan","status":{"name":"To Do"},"parent":{"key":"DEV-9"}}}
+  {"key":"DEV-2","fields":{"summary":"Child","status":{"name":"To Do"},"issuetype":{"name":"Sub-task"},"parent":{"key":"DEV-4"}}},
+  {"key":"DEV-1","fields":{"summary":"Parent","status":{"name":"To Do"},"issuetype":{"name":"Task"}}},
+  {"key":"DEV-4","fields":{"summary":"Other parent","status":{"name":"To Do"},"issuetype":{"name":"Task"}}},
+  {"key":"DEV-3","fields":{"summary":"Orphan","status":{"name":"To Do"},"issuetype":{"name":"Sub-task"},"parent":{"key":"DEV-9"}}}
 ],"isLast":true}`
 
 func TestJiraImportNestsSubtasks(t *testing.T) {
@@ -424,15 +424,16 @@ func TestJiraExportTree(t *testing.T) {
 		Jira:                 jira.New(jiraServer.URL, "me@example.com", "token"),
 		JiraDefaultProject:   "DEV",
 		JiraEpicIssueType:    "Epic",
+		JiraTaskIssueType:    "Task",
 		JiraSubtaskIssueType: "Sub-task",
 	}))
 	defer server.Close()
 
 	ctx := context.Background()
-	newTask := func(title string, parent *int64) store.Task {
+	newTask := func(title string, parent *int64, kind string) store.Task {
 		t.Helper()
 		task, err := st.CreateTask(ctx, store.CreateTaskParams{
-			BoardID: 1, ColumnID: 1, Title: title, Priority: "medium", Position: 1, ParentTaskID: parent,
+			BoardID: 1, ColumnID: 1, Title: title, Priority: "medium", Position: 1, ParentTaskID: parent, Kind: kind,
 		})
 		if err != nil {
 			t.Fatal(err)
@@ -440,18 +441,18 @@ func TestJiraExportTree(t *testing.T) {
 		return task
 	}
 
-	big := newTask("Big parent", nil)
+	big := newTask("Big parent", nil, "arc")
 	for i := 1; i <= 4; i++ {
-		newTask(fmt.Sprintf("Big child %d", i), &big.ID)
+		newTask(fmt.Sprintf("Big child %d", i), &big.ID, "task")
 	}
-	small := newTask("Small parent", nil)
+	small := newTask("Small parent", nil, "task")
 	for i := 1; i <= 3; i++ {
-		newTask(fmt.Sprintf("Small child %d", i), &small.ID)
+		newTask(fmt.Sprintf("Small child %d", i), &small.ID, "step")
 	}
-	solo := newTask("Solo", nil)
-	broken := newTask("Broken parent", nil)
-	newTask("Broken child 1", &broken.ID)
-	newTask("Broken child 2", &broken.ID)
+	solo := newTask("Solo", nil, "task")
+	broken := newTask("Broken parent", nil, "task")
+	newTask("Broken child 1", &broken.ID, "step")
+	newTask("Broken child 2", &broken.ID, "step")
 
 	runExport := func(body string) jiraExportResponse {
 		t.Helper()
@@ -496,17 +497,21 @@ func TestJiraExportTree(t *testing.T) {
 	}
 
 	if got := createdBySummary("Big parent").IssueType; got != "Epic" {
-		t.Errorf("parent with 4 subtasks type = %q, want Epic", got)
+		t.Errorf("arc type = %q, want Epic", got)
 	}
 	if got := createdBySummary("Small parent").IssueType; got != "Task" {
-		t.Errorf("parent with 3 subtasks type = %q, want Task", got)
+		t.Errorf("task type = %q, want Task", got)
 	}
 	if got := createdBySummary("Solo").IssueType; got != "Task" {
-		t.Errorf("task without subtasks type = %q, want Task", got)
+		t.Errorf("solo task type = %q, want Task", got)
 	}
 	bigChild := createdBySummary("Big child 1")
-	if bigChild.IssueType != "Sub-task" || bigChild.ParentKey != "DEV-1" {
-		t.Errorf("big child = %#v", bigChild)
+	if bigChild.IssueType != "Task" || bigChild.ParentKey != "DEV-1" {
+		t.Errorf("arc child = %#v", bigChild)
+	}
+	smallChild := createdBySummary("Small child 1")
+	if smallChild.IssueType != "Sub-task" || smallChild.ParentKey == "" {
+		t.Errorf("task step = %#v", smallChild)
 	}
 	if res := resultFor(first, broken.ID); res.Status != "failed" {
 		t.Errorf("broken parent result = %#v", res)
@@ -526,8 +531,8 @@ func TestJiraExportTree(t *testing.T) {
 		t.Fatalf("second export created %d new issues", after-before)
 	}
 
-	loneParent := newTask("Lone parent", nil)
-	loneChild := newTask("Lone child", &loneParent.ID)
+	loneParent := newTask("Lone parent", nil, "task")
+	loneChild := newTask("Lone child", &loneParent.ID, "step")
 	third := runExport(fmt.Sprintf(`{"task_id":%d}`, loneChild.ID))
 	if third.Created != 2 || third.Failed != 0 {
 		t.Fatalf("child-only export = %#v", third)
@@ -536,5 +541,18 @@ func TestJiraExportTree(t *testing.T) {
 	childIssue := createdBySummary("Lone child")
 	if parentIssue.IssueType != "Task" || childIssue.IssueType != "Sub-task" || childIssue.ParentKey != parentIssue.Key {
 		t.Errorf("child-only export parent = %#v child = %#v", parentIssue, childIssue)
+	}
+}
+
+func TestJiraKindMapping(t *testing.T) {
+	cases := map[string]string{
+		"Epic": "arc", "epic": "arc",
+		"Sub-task": "step", "Subtask": "step", "sub task": "step",
+		"Task": "task", "Story": "task", "Bug": "task", "Spike": "task", "": "task",
+	}
+	for name, want := range cases {
+		if got := jiraKind(name); got != want {
+			t.Errorf("jiraKind(%q) = %q, want %q", name, got, want)
+		}
 	}
 }

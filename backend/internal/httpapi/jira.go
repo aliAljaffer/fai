@@ -19,6 +19,19 @@ import (
 // jiraKeyMention matches Jira keys such as ABC-1 inside imported description text.
 var jiraKeyMention = regexp.MustCompile(`\b[A-Z][A-Z0-9]+-[0-9]{1,18}\b`)
 
+// jiraKind maps a Jira issue type onto the Fai type. Epics become arcs,
+// sub-tasks become steps, and every other issue type is a task.
+func jiraKind(issueType string) string {
+	switch strings.ToLower(strings.TrimSpace(issueType)) {
+	case "epic":
+		return "arc"
+	case "sub-task", "subtask", "sub task":
+		return "step"
+	default:
+		return "task"
+	}
+}
+
 type jiraImportBody struct {
 	BoardID     int64  `json:"board_id"`
 	JQL         string `json:"jql"`
@@ -177,33 +190,17 @@ func (s *Server) jiraImport(w http.ResponseWriter, r *http.Request) {
 	}
 	created := map[string]int64{}
 
-	// The list view nests one level, so a parent that is itself a subtask gets
-	// flattened to its topmost ancestor.
-	rootTask := func(taskID int64) (int64, bool) {
-		seen := map[int64]bool{}
-		for !seen[taskID] {
-			seen[taskID] = true
-			task, err := s.Store.GetTask(ctx, taskID)
-			if err != nil {
-				return 0, false
-			}
-			if task.ParentTaskID == nil {
-				return taskID, true
-			}
-			taskID = *task.ParentTaskID
-		}
-		return 0, false
-	}
-
-	resolveParent := func(key string) (int64, bool, error) {
+	lookupTask := func(key string) (store.Task, bool) {
 		if id, ok := created[key]; ok {
-			return id, true, nil
+			task, err := s.Store.GetTask(ctx, id)
+			return task, err == nil
 		}
 		link, err := s.Store.GetJiraLinkByKey(ctx, key)
 		if err != nil || link == nil {
-			return 0, false, err
+			return store.Task{}, false
 		}
-		return link.TaskID, true, nil
+		task, err := s.Store.GetTask(ctx, link.TaskID)
+		return task, err == nil
 	}
 
 	importComments := func(taskID int64, issue jira.Issue, comments []jira.Comment) error {
@@ -245,7 +242,7 @@ func (s *Server) jiraImport(w http.ResponseWriter, r *http.Request) {
 		return nil
 	}
 
-	handle := func(issue jira.Issue, parentTaskID *int64) error {
+	handle := func(issue jira.Issue, parentTaskID *int64, kind string) error {
 		existing, err := s.Store.GetJiraLinkByKey(ctx, issue.Key)
 		if err != nil {
 			return err
@@ -299,6 +296,9 @@ func (s *Server) jiraImport(w http.ResponseWriter, r *http.Request) {
 			if err := s.Store.SetTaskParent(ctx, existing.TaskID, parentTaskID); err != nil {
 				return err
 			}
+			if err := s.Store.SetTaskKind(ctx, existing.TaskID, kind); err != nil {
+				return err
+			}
 			if err := importComments(existing.TaskID, issue, comments); err != nil {
 				return err
 			}
@@ -313,7 +313,7 @@ func (s *Server) jiraImport(w http.ResponseWriter, r *http.Request) {
 		task, err := s.Store.CreateTask(ctx, store.CreateTaskParams{
 			BoardID: body.BoardID, ColumnID: columnID, Title: issue.Summary,
 			DescriptionMd: issue.Description,
-			Priority:      "medium", Position: position, ParentTaskID: parentTaskID,
+			Priority:      "medium", Position: position, ParentTaskID: parentTaskID, Kind: kind,
 		})
 		if err != nil {
 			return err
@@ -337,35 +337,61 @@ func (s *Server) jiraImport(w http.ResponseWriter, r *http.Request) {
 		return nil
 	}
 
+	// resolveParent returns the Fai parent for an issue. A step needs its parent,
+	// so an unresolvable parent skips it; a task under an arc is deferred until
+	// the arc exists and is imported at top level when the arc is not in the run.
+	resolveParent := func(issue jira.Issue, kind string) (parentID *int64, deferIssue, skipIssue bool, err error) {
+		if kind == "arc" || issue.ParentKey == "" {
+			return nil, false, false, nil
+		}
+		parent, ok := lookupTask(issue.ParentKey)
+		if !ok {
+			if inRun[issue.ParentKey] {
+				return nil, true, false, nil
+			}
+			if kind == "step" {
+				return nil, false, true, nil
+			}
+			return nil, false, false, nil
+		}
+		if kind == "task" {
+			if parent.Kind == "arc" {
+				return &parent.ID, false, false, nil
+			}
+			return nil, false, false, nil
+		}
+		// A step attaches to a task or an arc; a nested step is not valid in Jira,
+		// but climb out of one rather than dropping the issue.
+		for parent.Kind == "step" && parent.ParentTaskID != nil {
+			next, err := s.Store.GetTask(ctx, *parent.ParentTaskID)
+			if err != nil {
+				return nil, false, true, nil
+			}
+			parent = next
+		}
+		return &parent.ID, false, false, nil
+	}
+
 	pending := issues
 	for len(pending) > 0 {
 		var deferred []jira.Issue
 		progressed := false
 		for _, issue := range pending {
-			var parentTaskID *int64
-			if issue.ParentKey != "" {
-				parentID, ok, err := resolveParent(issue.ParentKey)
-				if err != nil {
-					writeError(w, http.StatusInternalServerError, err.Error())
-					return
-				}
-				if !ok {
-					if inRun[issue.ParentKey] {
-						deferred = append(deferred, issue)
-					} else {
-						skipped++
-					}
-					continue
-				}
-				rootID, ok := rootTask(parentID)
-				if !ok {
-					skipped++
-					continue
-				}
-				parentTaskID = &rootID
+			kind := jiraKind(issue.IssueType)
+			parentID, deferIssue, skipIssue, err := resolveParent(issue, kind)
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, err.Error())
+				return
 			}
-
-			if err := handle(issue, parentTaskID); err != nil {
+			if deferIssue {
+				deferred = append(deferred, issue)
+				continue
+			}
+			if skipIssue {
+				skipped++
+				continue
+			}
+			if err := handle(issue, parentID, kind); err != nil {
 				writeError(w, http.StatusInternalServerError, err.Error())
 				return
 			}
@@ -435,14 +461,16 @@ type jiraExportResponse struct {
 }
 
 type jiraExporter struct {
-	ctx         context.Context
-	s           *Server
-	projectKey  string
-	epicType    string
-	subtaskType string
-	includeSubs bool
-	resp        *jiraExportResponse
-	keys        map[int64]string
+	ctx           context.Context
+	s             *Server
+	projectKey    string
+	epicType      string
+	taskType      string
+	subtaskType   string
+	epicLinkField string
+	includeSubs   bool
+	resp          *jiraExportResponse
+	keys          map[int64]string
 }
 
 func (e *jiraExporter) record(res jiraExportResult) {
@@ -460,16 +488,16 @@ func (e *jiraExporter) record(res jiraExportResult) {
 	}
 }
 
-// issueType picks the Jira type from the subtask count; a task that is itself a
-// child always exports as the instance's subtask type.
-func (e *jiraExporter) issueType(task store.Task, subtaskCount int) string {
-	if task.ParentTaskID != nil {
-		return e.subtaskType
-	}
-	if subtaskCount > 3 {
+// issueType maps the Fai type onto the configured Jira issue type.
+func (e *jiraExporter) issueType(task store.Task) string {
+	switch task.Kind {
+	case "arc":
 		return e.epicType
+	case "step":
+		return e.subtaskType
+	default:
+		return e.taskType
 	}
-	return "Task"
 }
 
 // create links the task to a new Jira issue, or skips it when already linked.
@@ -483,7 +511,14 @@ func (e *jiraExporter) create(task store.Task, issueType, parentKey string) (str
 		return existing.JiraKey, nil
 	}
 
-	key, err := e.s.Jira.CreateIssue(e.projectKey, task.Title, issueType, parentKey)
+	parent := ""
+	epic := ""
+	if task.Kind == "step" {
+		parent = parentKey
+	} else if task.Kind == "task" && parentKey != "" {
+		epic = parentKey
+	}
+	key, err := e.s.Jira.CreateIssue(e.projectKey, task.Title, issueType, parent, epic, e.epicLinkField)
 	if err != nil {
 		e.record(jiraExportResult{TaskID: task.ID, Title: task.Title, Status: "failed", IssueType: issueType, Error: err.Error()})
 		return "", err
@@ -512,11 +547,7 @@ func (e *jiraExporter) ensureParent(task store.Task) (string, bool) {
 	if !ok {
 		return "", false
 	}
-	subtasks, err := e.s.Store.ListSubtasks(e.ctx, parent.ID)
-	if err != nil {
-		return "", false
-	}
-	key, err := e.create(parent, e.issueType(parent, len(subtasks)), parentKey)
+	key, err := e.create(parent, e.issueType(parent), parentKey)
 	if err != nil {
 		return "", false
 	}
@@ -537,16 +568,15 @@ func (e *jiraExporter) exportTree(taskID int64) {
 		e.record(jiraExportResult{TaskID: task.ID, Title: task.Title, Status: "failed", Error: "parent export failed"})
 		return
 	}
-	subtasks, err := e.s.Store.ListSubtasks(e.ctx, task.ID)
+	children, err := e.s.Store.ListSubtasks(e.ctx, task.ID)
 	if err != nil {
 		e.record(jiraExportResult{TaskID: task.ID, Title: task.Title, Status: "failed", Error: err.Error()})
 		return
 	}
 
-	key, err := e.create(task, e.issueType(task, len(subtasks)), parentKey)
-	if err != nil {
+	if _, err := e.create(task, e.issueType(task), parentKey); err != nil {
 		if e.includeSubs {
-			for _, child := range subtasks {
+			for _, child := range children {
 				if _, done := e.keys[child.ID]; done {
 					continue
 				}
@@ -558,13 +588,11 @@ func (e *jiraExporter) exportTree(taskID int64) {
 	if !e.includeSubs {
 		return
 	}
-	for _, child := range subtasks {
+	for _, child := range children {
 		if _, done := e.keys[child.ID]; done {
 			continue
 		}
-		if _, err := e.create(child, e.subtaskType, key); err != nil {
-			continue
-		}
+		e.exportTree(child.ID)
 	}
 }
 
@@ -609,10 +637,18 @@ func (s *Server) jiraExport(w http.ResponseWriter, r *http.Request) {
 	if subtaskType == "" {
 		subtaskType = "Sub-task"
 	}
+	taskType := s.JiraTaskIssueType
+	if taskType == "" {
+		taskType = "Task"
+	}
+	epicLinkField := s.JiraEpicLinkField
+	if epicLinkField == "" {
+		epicLinkField = "parent"
+	}
 	resp := &jiraExportResponse{Results: []jiraExportResult{}}
 	exporter := &jiraExporter{
 		ctx: r.Context(), s: s, projectKey: projectKey,
-		epicType: epicType, subtaskType: subtaskType,
+		epicType: epicType, taskType: taskType, subtaskType: subtaskType, epicLinkField: epicLinkField,
 		includeSubs: body.IncludeSubtasks == nil || *body.IncludeSubtasks,
 		resp:        resp, keys: map[int64]string{},
 	}

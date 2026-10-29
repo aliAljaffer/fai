@@ -17,6 +17,7 @@ import { TaskCard } from './TaskCard'
 
 export function BoardColumn({
   column,
+  columns,
   tasks,
   subtasksByParent,
   totalCount,
@@ -37,6 +38,7 @@ export function BoardColumn({
   onToggleSubtask,
 }: {
   column: BoardColumnType
+  columns: BoardColumnType[]
   tasks: Task[]
   subtasksByParent: Map<number, Task[]>
   totalCount: number
@@ -193,6 +195,7 @@ export function BoardColumn({
               task={task}
               runningTaskId={runningTaskId}
               isDone={column.is_done}
+              columns={columns}
               subtasks={subtasksByParent.get(task.id)}
               doneColumnIds={doneColumnIds}
               onToggleTimer={onToggleTimer}

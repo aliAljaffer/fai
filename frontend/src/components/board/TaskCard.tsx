@@ -7,10 +7,13 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { cn } from '@/lib/utils'
 import { formatDueDate, isPastDue } from '../../lib/format'
 import { TagChip } from '../TagChip'
-import type { Task } from '../../api/types'
+import { TaskTypeIcon } from '../TaskTypeIcon'
+import { taskStatus } from '../../lib/taskType'
+import type { BoardColumn, Task } from '../../api/types'
 
 interface TaskCardProps {
   task: Task
+  columns?: BoardColumn[]
   onClick?: () => void
   runningTaskId?: number | null
   onToggleTimer?: (task: Task) => void
@@ -23,10 +26,12 @@ interface TaskCardProps {
 
 function TaskCardBody({
   task,
+  status,
   isDone,
   overlay,
 }: {
   task: Task
+  status?: 'todo' | 'doing' | 'done'
   isDone?: boolean
   overlay?: boolean
 }) {
@@ -36,7 +41,10 @@ function TaskCardBody({
 
   return (
     <div className="flex flex-col gap-2">
-      <p className={cn('line-clamp-3 text-sm leading-snug', !overlay && 'pr-6')}>{task.title}</p>
+      <div className="flex items-start gap-1.5">
+        <TaskTypeIcon kind={task.kind} status={status} size={14} className="mt-0.5" />
+        <p className={cn('line-clamp-3 text-sm leading-snug', !overlay && 'pr-6')}>{task.title}</p>
+      </div>
       {!!task.tags?.length && (
         <div className="flex flex-wrap gap-1">
           {task.tags.map((tag) => (
@@ -74,6 +82,8 @@ function SortableTaskCard(props: TaskCardProps) {
   const running = props.runningTaskId === props.task.id
   const [expanded, setExpanded] = useState(false)
   const subtasks = props.subtasks ?? []
+  const isArc = props.task.kind === 'arc'
+  const status = taskStatus(props.task, props.columns)
   const doneCount = subtasks.filter(
     (subtask) => subtask.completed_at || props.doneColumnIds?.has(subtask.column_id),
   ).length
@@ -99,7 +109,7 @@ function SortableTaskCard(props: TaskCardProps) {
         onClick={props.onClick}
       />
       <div className="pointer-events-none relative z-0">
-        <TaskCardBody task={props.task} isDone={props.isDone} />
+        <TaskCardBody task={props.task} status={status} isDone={props.isDone} />
       </div>
       {subtasks.length > 0 && (
         <div className="pointer-events-none relative z-10 mt-2 flex flex-col gap-1">
@@ -116,12 +126,26 @@ function SortableTaskCard(props: TaskCardProps) {
             <ChevronRight
               className={cn('size-3 transition-transform', expanded && 'rotate-90')}
             />
-            {doneCount}/{subtasks.length} subtasks
+            {doneCount}/{subtasks.length} {isArc ? 'tasks' : 'steps'}
           </button>
           {expanded && (
             <ul className="flex flex-col gap-1 border-t pt-1.5">
               {subtasks.map((subtask) => {
                 const done = Boolean(subtask.completed_at) || props.doneColumnIds?.has(subtask.column_id)
+                if (isArc) {
+                  return (
+                    <li key={subtask.id} className="flex items-center gap-1.5 text-xs">
+                      <TaskTypeIcon
+                        kind={subtask.kind}
+                        status={taskStatus(subtask, props.columns)}
+                        size={12}
+                      />
+                      <span className={cn(done && 'text-muted-foreground line-through')}>
+                        {subtask.title}
+                      </span>
+                    </li>
+                  )
+                }
                 return (
                   <li key={subtask.id} className="flex items-center gap-1.5 text-xs">
                     <Checkbox
@@ -172,10 +196,10 @@ export function TaskCard(props: TaskCardProps) {
   if (props.overlay) {
     return (
       <div className="w-72 rounded-md border bg-card px-2.5 py-2 text-card-foreground shadow-md">
-        <TaskCardBody task={props.task} isDone={props.isDone} overlay />
+        <TaskCardBody task={props.task} status={taskStatus(props.task, props.columns)} isDone={props.isDone} overlay />
         {(props.subtasks?.length ?? 0) > 0 && (
           <p className="mt-2 text-xs text-muted-foreground">
-            {props.subtasks!.length} subtasks
+            {props.subtasks!.length} {props.task.kind === 'arc' ? 'tasks' : 'steps'}
           </p>
         )}
       </div>

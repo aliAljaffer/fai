@@ -670,6 +670,7 @@ export function Board() {
               <BoardColumn
                 key={column.id}
                 column={column}
+                columns={orderedColumns}
                 tasks={tasksByColumn.get(column.id) ?? []}
                 subtasksByParent={subtasksByParent}
                 totalCount={totalByColumn.get(column.id) ?? 0}
@@ -767,6 +768,7 @@ export function Board() {
         {activeTask ? (
           <TaskCard
             task={activeTask}
+            columns={orderedColumns}
             runningTaskId={running?.task_id ?? null}
             onToggleTimer={toggleTimer}
             subtasks={subtasksByParent.get(activeTask.id)}

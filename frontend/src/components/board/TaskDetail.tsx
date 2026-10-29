@@ -24,12 +24,16 @@ import { CommentsPanel } from './CommentsPanel'
 import { JiraPanel } from './JiraPanel'
 import { LabelEditor } from './LabelEditor'
 import { SubtasksPanel } from './SubtasksPanel'
+import { TaskTypeIcon } from '../TaskTypeIcon'
+import { TASK_KIND_LABELS, normalizeKind, taskStatus } from '../../lib/taskType'
 import { MarkdownRenderer } from '../MarkdownRenderer'
 import {
   useAddTaskTag,
   useAIStatus,
+  useColumns,
   useCreateTag,
   useRunningTime,
+  useSetTaskType,
   useStartTime,
   useStopTime,
   useSuggestLabels,
@@ -62,6 +66,10 @@ export function TaskDetail({
 
   const { data: running } = useRunningTime()
   const { data: entries } = useTaskTimeEntries(task.id)
+  const { data: columns } = useColumns(task.board_id)
+  const setType = useSetTaskType(task.id, task.board_id)
+  const kind = normalizeKind(task.kind)
+  const canBeStep = task.parent_task_id !== null || kind === 'step'
   const startTime = useStartTime()
   const stopTime = useStopTime()
   const isRunning = running?.task_id === task.id
@@ -81,6 +89,7 @@ export function TaskDetail({
               value={title}
               onChange={(e) => setTitle(e.target.value)}
             />
+            <TaskTypeIcon kind={task.kind} status={taskStatus(task, columns)} size={20} />
             {task.ref && (
               <Badge variant="outline" className="shrink-0 font-mono text-[0.65rem] text-muted-foreground">
                 {task.ref}
@@ -106,7 +115,7 @@ export function TaskDetail({
           <TabsList>
             <TabsTrigger value="details">Details</TabsTrigger>
             <TabsTrigger value="comments">Comments</TabsTrigger>
-            <TabsTrigger value="subtasks">Subtasks</TabsTrigger>
+            <TabsTrigger value="subtasks">{kind === 'arc' ? 'Tasks' : 'Steps'}</TabsTrigger>
             <TabsTrigger value="time">Time</TabsTrigger>
             <TabsTrigger value="files">Files</TabsTrigger>
             <TabsTrigger value="ai">AI</TabsTrigger>
@@ -139,16 +148,43 @@ export function TaskDetail({
               <LabelEditor task={task} />
               <LabelSuggestions task={task} />
             </div>
-            <Select value={priority} onValueChange={(value) => value && setPriority(value)}>
-              <SelectTrigger className="w-32">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="low">low</SelectItem>
-                <SelectItem value="medium">medium</SelectItem>
-                <SelectItem value="high">high</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="flex items-center gap-2">
+              <Select
+                value={kind}
+                onValueChange={(value) => {
+                  if (!value || value === kind) return
+                  const next = value as 'arc' | 'task' | 'step'
+                  setType.mutate(
+                    {
+                      kind: next,
+                      parent_task_id: next === 'step' ? task.parent_task_id : null,
+                    },
+                    { onError: (error) => toast.error(error.message) },
+                  )
+                }}
+              >
+                <SelectTrigger className="w-32" aria-label="Task type">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="arc">{TASK_KIND_LABELS.arc}</SelectItem>
+                  <SelectItem value="task">{TASK_KIND_LABELS.task}</SelectItem>
+                  <SelectItem value="step" disabled={!canBeStep}>
+                    {TASK_KIND_LABELS.step}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={priority} onValueChange={(value) => value && setPriority(value)}>
+                <SelectTrigger className="w-32">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="low">low</SelectItem>
+                  <SelectItem value="medium">medium</SelectItem>
+                  <SelectItem value="high">high</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <JiraPanel taskId={task.id} />
           </TabsContent>
 

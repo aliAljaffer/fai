@@ -14,7 +14,7 @@ import (
 // against *sql.DB directly rather than going through sqlc like everything else.
 
 const searchTasksSQL = `
-SELECT tasks.id, tasks.board_id, tasks.column_id, tasks.parent_task_id, tasks.meeting_outcome_id,
+SELECT tasks.id, tasks.board_id, tasks.column_id, tasks.parent_task_id, tasks.kind, tasks.meeting_outcome_id,
        tasks.workspace_id, tasks.ref_num,
        tasks.title, tasks.description_md, tasks.priority, tasks.due_date, tasks.position,
        tasks.completed_at, tasks.archived, tasks.created_at, tasks.updated_at
@@ -37,7 +37,7 @@ func (s *Store) SearchTasks(ctx context.Context, query string, workspaceID *int6
 	for rows.Next() {
 		var t sqlitedb.Task
 		if err := rows.Scan(
-			&t.ID, &t.BoardID, &t.ColumnID, &t.ParentTaskID, &t.MeetingOutcomeID,
+			&t.ID, &t.BoardID, &t.ColumnID, &t.ParentTaskID, &t.Kind, &t.MeetingOutcomeID,
 			&t.WorkspaceID, &t.RefNum,
 			&t.Title, &t.DescriptionMd, &t.Priority, &t.DueDate, &t.Position,
 			&t.CompletedAt, &t.Archived, &t.CreatedAt, &t.UpdatedAt,

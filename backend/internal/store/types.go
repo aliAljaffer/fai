@@ -70,6 +70,7 @@ type Task struct {
 	DueDate          *string    `json:"due_date"`
 	Position         float64    `json:"position"`
 	ParentTaskID     *int64     `json:"parent_task_id"`
+	Kind             string     `json:"kind"`
 	MeetingOutcomeID *int64     `json:"meeting_outcome_id"`
 	CompletedAt      *time.Time `json:"completed_at"`
 	Archived         bool       `json:"archived"`
@@ -175,4 +176,17 @@ type DayCount struct {
 type DaySeconds struct {
 	Date    string `json:"date"`
 	Seconds int64  `json:"seconds"`
+}
+
+// NormalizeKind fills an omitted kind from the parent link, so callers that do
+// not care about issue types still create valid rows.
+func NormalizeKind(kind string, hasParent bool) string {
+	switch kind {
+	case "arc", "task", "step":
+		return kind
+	}
+	if hasParent {
+		return "step"
+	}
+	return "task"
 }

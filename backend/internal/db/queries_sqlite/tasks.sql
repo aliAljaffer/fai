@@ -1,10 +1,10 @@
 -- name: CreateTask :one
-INSERT INTO tasks (board_id, column_id, workspace_id, ref_num, title, description_md, priority, due_date, position, parent_task_id, meeting_outcome_id, completed_at)
+INSERT INTO tasks (board_id, column_id, workspace_id, ref_num, title, description_md, priority, due_date, position, parent_task_id, kind, meeting_outcome_id, completed_at)
 VALUES (
   sqlc.arg(board_id), sqlc.arg(column_id), sqlc.arg(workspace_id), sqlc.arg(ref_num),
   sqlc.arg(title), sqlc.arg(description_md), sqlc.arg(priority),
   CAST(sqlc.narg('due_date') AS TEXT), sqlc.arg(position),
-  CAST(sqlc.narg('parent_task_id') AS INTEGER), CAST(sqlc.narg('meeting_outcome_id') AS INTEGER),
+  CAST(sqlc.narg('parent_task_id') AS INTEGER), sqlc.arg(kind), CAST(sqlc.narg('meeting_outcome_id') AS INTEGER),
   CASE WHEN (SELECT board_columns.is_done FROM board_columns WHERE board_columns.id = sqlc.arg(column_id))
     THEN strftime('%Y-%m-%dT%H:%M:%fZ', 'now') ELSE NULL END
 )
@@ -69,3 +69,6 @@ UPDATE tasks SET title = sqlc.arg(title), updated_at = strftime('%Y-%m-%dT%H:%M:
 
 -- name: SetTaskParent :exec
 UPDATE tasks SET parent_task_id = CAST(sqlc.narg('parent_task_id') AS INTEGER), updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = sqlc.arg(id);
+
+-- name: SetTaskKind :exec
+UPDATE tasks SET kind = sqlc.arg(kind), updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = sqlc.arg(id);

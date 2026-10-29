@@ -12,6 +12,7 @@ import (
 )
 
 func (s *Store) CreateTask(ctx context.Context, p store.CreateTaskParams) (store.Task, error) {
+	p.Kind = store.NormalizeKind(p.Kind, p.ParentTaskID != nil)
 	dueDate, err := ptrToDate(p.DueDate)
 	if err != nil {
 		return store.Task{}, err
@@ -32,7 +33,7 @@ func (s *Store) CreateTask(ctx context.Context, p store.CreateTaskParams) (store
 		BoardID: p.BoardID, ColumnID: p.ColumnID, WorkspaceID: workspaceID, RefNum: refNum,
 		Title:         p.Title,
 		DescriptionMd: p.DescriptionMd, Priority: p.Priority, DueDate: dueDate,
-		Position: p.Position, ParentTaskID: ptrToInt8(p.ParentTaskID), MeetingOutcomeID: ptrToInt8(p.MeetingOutcomeID),
+		Position: p.Position, ParentTaskID: ptrToInt8(p.ParentTaskID), Kind: p.Kind, MeetingOutcomeID: ptrToInt8(p.MeetingOutcomeID),
 	})
 	if err != nil {
 		return store.Task{}, err
@@ -47,7 +48,7 @@ func (s *Store) CreateTask(ctx context.Context, p store.CreateTaskParams) (store
 	tasks := []store.Task{{
 		ID: t.ID, BoardID: t.BoardID, ColumnID: t.ColumnID, WorkspaceID: t.WorkspaceID, RefNum: t.RefNum, Title: t.Title,
 		DescriptionMd: t.DescriptionMd, Priority: t.Priority, DueDate: dateToPtr(t.DueDate),
-		Position: t.Position, ParentTaskID: int8ToPtr(t.ParentTaskID), MeetingOutcomeID: int8ToPtr(t.MeetingOutcomeID),
+		Position: t.Position, ParentTaskID: int8ToPtr(t.ParentTaskID), Kind: t.Kind, MeetingOutcomeID: int8ToPtr(t.MeetingOutcomeID),
 		CompletedAt: tsToPtr(t.CompletedAt), Archived: t.Archived, Tags: []store.Tag{}, CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt,
 	}}
 	if err := s.attachTags(ctx, tasks); err != nil {
@@ -80,7 +81,7 @@ func (s *Store) GetTask(ctx context.Context, id int64) (store.Task, error) {
 	tasks := []store.Task{{
 		ID: t.ID, BoardID: t.BoardID, ColumnID: t.ColumnID, WorkspaceID: t.WorkspaceID, RefNum: t.RefNum, Title: t.Title,
 		DescriptionMd: t.DescriptionMd, Priority: t.Priority, DueDate: dateToPtr(t.DueDate),
-		Position: t.Position, ParentTaskID: int8ToPtr(t.ParentTaskID), MeetingOutcomeID: int8ToPtr(t.MeetingOutcomeID),
+		Position: t.Position, ParentTaskID: int8ToPtr(t.ParentTaskID), Kind: t.Kind, MeetingOutcomeID: int8ToPtr(t.MeetingOutcomeID),
 		CompletedAt: tsToPtr(t.CompletedAt), Archived: t.Archived, Tags: []store.Tag{}, CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt,
 	}}
 	if err := s.attachTags(ctx, tasks); err != nil {
@@ -101,7 +102,7 @@ func (s *Store) ListTasks(ctx context.Context, p store.ListTasksParams) ([]store
 		out[i] = store.Task{
 			ID: t.ID, BoardID: t.BoardID, ColumnID: t.ColumnID, WorkspaceID: t.WorkspaceID, RefNum: t.RefNum, Title: t.Title,
 			DescriptionMd: t.DescriptionMd, Priority: t.Priority, DueDate: dateToPtr(t.DueDate),
-			Position: t.Position, ParentTaskID: int8ToPtr(t.ParentTaskID), MeetingOutcomeID: int8ToPtr(t.MeetingOutcomeID),
+			Position: t.Position, ParentTaskID: int8ToPtr(t.ParentTaskID), Kind: t.Kind, MeetingOutcomeID: int8ToPtr(t.MeetingOutcomeID),
 			CompletedAt: tsToPtr(t.CompletedAt), Archived: t.Archived, Tags: []store.Tag{}, CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt,
 		}
 	}
@@ -121,7 +122,7 @@ func (s *Store) ListSubtasks(ctx context.Context, parentTaskID int64) ([]store.T
 		out[i] = store.Task{
 			ID: t.ID, BoardID: t.BoardID, ColumnID: t.ColumnID, WorkspaceID: t.WorkspaceID, RefNum: t.RefNum, Title: t.Title,
 			DescriptionMd: t.DescriptionMd, Priority: t.Priority, DueDate: dateToPtr(t.DueDate),
-			Position: t.Position, ParentTaskID: int8ToPtr(t.ParentTaskID), MeetingOutcomeID: int8ToPtr(t.MeetingOutcomeID),
+			Position: t.Position, ParentTaskID: int8ToPtr(t.ParentTaskID), Kind: t.Kind, MeetingOutcomeID: int8ToPtr(t.MeetingOutcomeID),
 			CompletedAt: tsToPtr(t.CompletedAt), Archived: t.Archived, Tags: []store.Tag{}, CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt,
 		}
 	}
@@ -148,7 +149,7 @@ func (s *Store) UpdateTask(ctx context.Context, id int64, title, descriptionMd, 
 	tasks := []store.Task{{
 		ID: t.ID, BoardID: t.BoardID, ColumnID: t.ColumnID, WorkspaceID: t.WorkspaceID, RefNum: t.RefNum, Title: t.Title,
 		DescriptionMd: t.DescriptionMd, Priority: t.Priority, DueDate: dateToPtr(t.DueDate),
-		Position: t.Position, ParentTaskID: int8ToPtr(t.ParentTaskID), MeetingOutcomeID: int8ToPtr(t.MeetingOutcomeID),
+		Position: t.Position, ParentTaskID: int8ToPtr(t.ParentTaskID), Kind: t.Kind, MeetingOutcomeID: int8ToPtr(t.MeetingOutcomeID),
 		CompletedAt: tsToPtr(t.CompletedAt), Archived: t.Archived, Tags: []store.Tag{}, CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt,
 	}}
 	if err := s.attachTags(ctx, tasks); err != nil {
@@ -165,6 +166,10 @@ func (s *Store) SetTaskParent(ctx context.Context, id int64, parentTaskID *int64
 	return s.q.SetTaskParent(ctx, sqlc.SetTaskParentParams{ID: id, ParentTaskID: ptrToInt8(parentTaskID)})
 }
 
+func (s *Store) SetTaskKind(ctx context.Context, id int64, kind string) error {
+	return s.q.SetTaskKind(ctx, sqlc.SetTaskKindParams{ID: id, Kind: kind})
+}
+
 func (s *Store) SetTaskCompletedAt(ctx context.Context, id int64, at time.Time) error {
 	_, err := s.pool.Exec(ctx, `UPDATE tasks SET completed_at = $2, updated_at = now() WHERE id = $1`, id, at)
 	return err
@@ -178,7 +183,7 @@ func (s *Store) MoveTask(ctx context.Context, id, columnID int64, position float
 	tasks := []store.Task{{
 		ID: t.ID, BoardID: t.BoardID, ColumnID: t.ColumnID, WorkspaceID: t.WorkspaceID, RefNum: t.RefNum, Title: t.Title,
 		DescriptionMd: t.DescriptionMd, Priority: t.Priority, DueDate: dateToPtr(t.DueDate),
-		Position: t.Position, ParentTaskID: int8ToPtr(t.ParentTaskID), MeetingOutcomeID: int8ToPtr(t.MeetingOutcomeID),
+		Position: t.Position, ParentTaskID: int8ToPtr(t.ParentTaskID), Kind: t.Kind, MeetingOutcomeID: int8ToPtr(t.MeetingOutcomeID),
 		CompletedAt: tsToPtr(t.CompletedAt), Archived: t.Archived, Tags: []store.Tag{}, CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt,
 	}}
 	if err := s.attachTags(ctx, tasks); err != nil {
@@ -197,7 +202,7 @@ func (s *Store) ListTasksByColumnOrdered(ctx context.Context, columnID int64) ([
 		out[i] = store.Task{
 			ID: t.ID, BoardID: t.BoardID, ColumnID: t.ColumnID, WorkspaceID: t.WorkspaceID, RefNum: t.RefNum, Title: t.Title,
 			DescriptionMd: t.DescriptionMd, Priority: t.Priority, DueDate: dateToPtr(t.DueDate),
-			Position: t.Position, ParentTaskID: int8ToPtr(t.ParentTaskID), MeetingOutcomeID: int8ToPtr(t.MeetingOutcomeID),
+			Position: t.Position, ParentTaskID: int8ToPtr(t.ParentTaskID), Kind: t.Kind, MeetingOutcomeID: int8ToPtr(t.MeetingOutcomeID),
 			CompletedAt: tsToPtr(t.CompletedAt), Archived: t.Archived, Tags: []store.Tag{}, CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt,
 		}
 	}

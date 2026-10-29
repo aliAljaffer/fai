@@ -5,6 +5,8 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { useColumns, useCreateSubtask, useMoveTask, useSubtasks } from '../../api/hooks'
 import { cn } from '@/lib/utils'
+import { TaskTypeIcon } from '../TaskTypeIcon'
+import { TASK_KIND_NAMES, normalizeKind, taskStatus } from '../../lib/taskType'
 import type { Task } from '../../api/types'
 
 export function SubtasksPanel({ task }: { task: Task }) {
@@ -14,6 +16,8 @@ export function SubtasksPanel({ task }: { task: Task }) {
   const moveTask = useMoveTask(task.board_id)
   const [title, setTitle] = useState('')
 
+  const kind = normalizeKind(task.kind)
+  const childKind = kind === 'arc' ? 'task' : 'step'
   const doneColumn = columns?.find((column) => column.is_done)
   const openColumn = columns?.find((column) => !column.is_done)
 
@@ -21,7 +25,7 @@ export function SubtasksPanel({ task }: { task: Task }) {
     const value = title.trim()
     if (!value) return
     createSubtask.mutate(
-      { board_id: task.board_id, column_id: task.column_id, title: value },
+      { board_id: task.board_id, column_id: task.column_id, title: value, kind: childKind },
       { onError: (error) => toast.error(error.message) },
     )
     setTitle('')
@@ -45,20 +49,30 @@ export function SubtasksPanel({ task }: { task: Task }) {
         const done = Boolean(subtask.completed_at) || Boolean(columns?.some((column) => column.is_done && column.id === subtask.column_id))
         return (
           <div key={subtask.id} className="flex items-center gap-2 text-sm">
-            <Checkbox
-              checked={done}
-              aria-label={`Mark ${subtask.title} done`}
-              onCheckedChange={(checked) => toggle(subtask, Boolean(checked))}
-            />
+            {childKind === 'step' ? (
+              <Checkbox
+                checked={done}
+                aria-label={`Mark ${subtask.title} done`}
+                onCheckedChange={(checked) => toggle(subtask, Boolean(checked))}
+              />
+            ) : (
+              <span className="inline-block size-4 shrink-0" />
+            )}
+            <TaskTypeIcon kind={subtask.kind} status={taskStatus(subtask, columns)} size={14} />
             <span className={cn(done && 'text-muted-foreground line-through')}>{subtask.title}</span>
           </div>
         )
       })}
-      {subtasks?.length === 0 && <p className="text-sm text-muted-foreground">No subtasks yet.</p>}
+      {subtasks?.length === 0 && (
+        <p className="text-sm text-muted-foreground">No {TASK_KIND_NAMES[childKind].toLowerCase()} yet.</p>
+      )}
+      {kind === 'step' ? (
+        <p className="text-xs text-muted-foreground">A step cannot contain other tasks.</p>
+      ) : (
       <div className="flex gap-2">
         <Input
-          placeholder="New subtask title"
-          aria-label="New subtask title"
+          placeholder={`New ${TASK_KIND_NAMES[childKind].slice(0, -1).toLowerCase()} title`}
+          aria-label={`New ${TASK_KIND_NAMES[childKind].slice(0, -1).toLowerCase()} title`}
           value={title}
           onChange={(event) => setTitle(event.target.value)}
           onKeyDown={(event) => {
@@ -73,6 +87,7 @@ export function SubtasksPanel({ task }: { task: Task }) {
           Add
         </Button>
       </div>
+      )}
     </div>
   )
 }

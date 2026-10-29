@@ -139,6 +139,7 @@ export interface Task {
   due_date: string | null
   position: number
   parent_task_id: number | null
+  kind: 'arc' | 'task' | 'step'
   meeting_outcome_id: number | null
   completed_at: string | null
   archived: boolean

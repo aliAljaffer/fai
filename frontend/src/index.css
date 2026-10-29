@@ -94,6 +94,9 @@
   --ring: oklch(0.55 0.04 250);
   --chart-1: oklch(0.42 0.05 250);
   --chart-2: oklch(0.52 0.04 250);
+  --status-todo: #5b84ae;
+  --status-doing: #0f9293;
+  --status-done: #519160;
   --radius: 0.625rem;
   --sidebar: oklch(0.975 0.004 250);
   --sidebar-foreground: oklch(0.19 0.01 250);
@@ -131,6 +134,9 @@
   --ring: oklch(0.7 0.04 250);
   --chart-1: oklch(0.82 0.05 250);
   --chart-2: oklch(0.72 0.04 250);
+  --status-todo: #8fb3d6;
+  --status-doing: #45b8b8;
+  --status-done: #78b98b;
   --sidebar: oklch(0.22 0.008 250);
   --sidebar-foreground: oklch(0.97 0.004 250);
   --sidebar-primary: oklch(0.82 0.05 250);

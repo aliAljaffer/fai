@@ -18,7 +18,9 @@ type Server struct {
 	JiraDefaultProject   string
 	JiraStatusColumnMap  map[string]string
 	JiraEpicIssueType    string
+	JiraTaskIssueType    string
 	JiraSubtaskIssueType string
+	JiraEpicLinkField    string
 	AI                   ai.Provider
 	ICSToken             string
 	PublicURL            string
@@ -96,6 +98,7 @@ func NewRouter(s *Server) http.Handler {
 			r.Delete("/tasks/{taskID}/comments/{commentID}", s.deleteTaskComment)
 			r.Get("/tasks/{taskID}/references", s.listTaskReferences)
 			r.Patch("/tasks/{taskID}", s.updateTask)
+			r.Patch("/tasks/{taskID}/type", s.setTaskType)
 			r.Delete("/tasks/{taskID}", s.deleteTask)
 			r.Post("/tasks/{taskID}/move", s.moveTask)
 			r.Put("/tasks/{taskID}/tags/{tagID}", s.addTaskTag)

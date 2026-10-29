@@ -120,6 +120,13 @@ list applied on import (unmapped statuses fall into the board's first column). J
 Cloud's `/rest/api/3/search/jql` endpoint is required — the older `/rest/api/3/search`
 returns `410 Gone`.
 
+Issue types map one way each: Jira Epic to Arc, Sub-task to Step, and every other
+type (including Story and Bug) to Task. On export, `JIRA_EPIC_ISSUE_TYPE` (default
+`Epic`), `JIRA_TASK_ISSUE_TYPE` (default `Task`), and `JIRA_SUBTASK_ISSUE_TYPE`
+(default `Sub-task`) name the target types. `JIRA_EPIC_LINK_FIELD` (default `parent`)
+is the field that attaches a task to its arc; set it to `customfield_10014` (or the
+field id your project uses) on company-managed projects.
+
 ## Docker Compose deployment
 
 A complete non-Kubernetes alternative: SQLite (no separate database container),

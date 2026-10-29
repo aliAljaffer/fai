@@ -229,7 +229,8 @@ export function Settings() {
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
           <p className="text-sm text-muted-foreground">
-            Imports only Jira issues assigned to you. Tasks go to the selected board and its
+            Imports only Jira issues assigned to you. Epics become arcs, sub-tasks become steps,
+            and every other issue type becomes a task. Items go to the selected board and its
             workspace. Leave the JQL field blank to use the server-configured default project.
             Already-imported issues are skipped unless "force update" is checked. Completion dates
             are taken from Jira.

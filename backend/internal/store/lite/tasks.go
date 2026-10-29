@@ -18,7 +18,7 @@ func toTask(t sqlitedb.Task) store.Task {
 		ID: t.ID, BoardID: t.BoardID, ColumnID: t.ColumnID, WorkspaceID: t.WorkspaceID, RefNum: t.RefNum,
 		Title:         t.Title,
 		DescriptionMd: t.DescriptionMd, Priority: t.Priority, DueDate: nullStringToPtr(t.DueDate),
-		Position: t.Position, ParentTaskID: nullInt64ToPtr(t.ParentTaskID), MeetingOutcomeID: nullInt64ToPtr(t.MeetingOutcomeID),
+		Position: t.Position, ParentTaskID: nullInt64ToPtr(t.ParentTaskID), Kind: t.Kind, MeetingOutcomeID: nullInt64ToPtr(t.MeetingOutcomeID),
 		CompletedAt: nullTimeToPtr(t.CompletedAt), Archived: t.Archived, Tags: []store.Tag{}, CreatedAt: createdAt, UpdatedAt: updatedAt,
 	}
 }
@@ -56,6 +56,7 @@ func (s *Store) decorateTasks(ctx context.Context, tasks []store.Task) error {
 }
 
 func (s *Store) CreateTask(ctx context.Context, p store.CreateTaskParams) (store.Task, error) {
+	p.Kind = store.NormalizeKind(p.Kind, p.ParentTaskID != nil)
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return store.Task{}, err
@@ -71,7 +72,7 @@ func (s *Store) CreateTask(ctx context.Context, p store.CreateTaskParams) (store
 		BoardID: p.BoardID, ColumnID: p.ColumnID, WorkspaceID: workspaceID, RefNum: refNum,
 		Title:         p.Title,
 		DescriptionMd: p.DescriptionMd, Priority: p.Priority, DueDate: ptrToNullString(p.DueDate),
-		Position: p.Position, ParentTaskID: ptrToNullInt64(p.ParentTaskID), MeetingOutcomeID: ptrToNullInt64(p.MeetingOutcomeID),
+		Position: p.Position, ParentTaskID: ptrToNullInt64(p.ParentTaskID), Kind: p.Kind, MeetingOutcomeID: ptrToNullInt64(p.MeetingOutcomeID),
 	})
 	if err != nil {
 		return store.Task{}, err
@@ -174,6 +175,10 @@ func (s *Store) UpdateTaskTitle(ctx context.Context, id int64, title string) err
 
 func (s *Store) SetTaskParent(ctx context.Context, id int64, parentTaskID *int64) error {
 	return s.q.SetTaskParent(ctx, sqlitedb.SetTaskParentParams{ID: id, ParentTaskID: ptrToNullInt64(parentTaskID)})
+}
+
+func (s *Store) SetTaskKind(ctx context.Context, id int64, kind string) error {
+	return s.q.SetTaskKind(ctx, sqlitedb.SetTaskKindParams{ID: id, Kind: kind})
 }
 
 func (s *Store) SetTaskCompletedAt(ctx context.Context, id int64, at time.Time) error {

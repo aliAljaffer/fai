@@ -60,7 +60,7 @@ export function NoteAIPanel({
         note_body: body,
       })
       setCreatedTaskId(result.task.id)
-      toast.success(`Created task with ${result.subtasks.length} subtasks`)
+      toast.success(`Created task with ${result.subtasks.length} steps`)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Could not create task')
     }
@@ -72,7 +72,7 @@ export function NoteAIPanel({
         <div>
           <h2 className="text-sm font-medium">AI task plan</h2>
           <p className="text-xs text-muted-foreground">
-            Turn this note into one task and a short list of subtasks.
+            Turn this note into one task and a short list of steps.
           </p>
         </div>
         <div className="flex items-center gap-2">

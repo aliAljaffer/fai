@@ -29,6 +29,7 @@ type Issue struct {
 	Summary        string
 	Description    string
 	Status         string
+	IssueType      string
 	ParentKey      string
 	ResolutionDate string
 	Updated        string
@@ -71,6 +72,9 @@ type searchResponse struct {
 			Status         struct {
 				Name string `json:"name"`
 			} `json:"status"`
+			IssueType struct {
+				Name string `json:"name"`
+			} `json:"issuetype"`
 			Parent *struct {
 				Key string `json:"key"`
 			} `json:"parent"`
@@ -121,7 +125,7 @@ func (c *Client) searchIssuesPage(jql string, maxResults int, pageToken string) 
 	params := url.Values{
 		"jql":        {jql},
 		"maxResults": {fmt.Sprint(maxResults)},
-		"fields":     {"summary,description,status,parent,subtasks,resolutiondate,updated,assignee"},
+		"fields":     {"summary,description,status,issuetype,parent,subtasks,resolutiondate,updated,assignee"},
 	}
 	if pageToken != "" {
 		params.Set("nextPageToken", pageToken)
@@ -153,6 +157,7 @@ func (c *Client) searchIssuesPage(jql string, maxResults int, pageToken string) 
 	for _, i := range parsed.Issues {
 		issue := Issue{
 			Key: i.Key, Summary: i.Fields.Summary, Status: i.Fields.Status.Name,
+			IssueType:      i.Fields.IssueType.Name,
 			Description:    rawToMarkdown(i.Fields.Description),
 			ResolutionDate: i.Fields.ResolutionDate, Updated: i.Fields.Updated,
 		}
@@ -219,7 +224,7 @@ func (c *Client) GetComments(key string) ([]Comment, error) {
 
 // GetIssue fetches a single issue by key, used to validate a manual link (phase 10).
 func (c *Client) GetIssue(key string) (*Issue, error) {
-	req, err := http.NewRequest(http.MethodGet, c.baseURL+"/rest/api/3/issue/"+url.PathEscape(key)+"?fields=summary,status", nil)
+	req, err := http.NewRequest(http.MethodGet, c.baseURL+"/rest/api/3/issue/"+url.PathEscape(key)+"?fields=summary,status,issuetype", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -241,8 +246,11 @@ func (c *Client) GetIssue(key string) (*Issue, error) {
 	var parsed struct {
 		Key    string `json:"key"`
 		Fields struct {
-			Summary string `json:"summary"`
-			Status  struct {
+			Summary   string `json:"summary"`
+			IssueType struct {
+				Name string `json:"name"`
+			} `json:"issuetype"`
+			Status struct {
 				Name string `json:"name"`
 			} `json:"status"`
 		} `json:"fields"`
@@ -250,7 +258,7 @@ func (c *Client) GetIssue(key string) (*Issue, error) {
 	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
 		return nil, err
 	}
-	return &Issue{Key: parsed.Key, Summary: parsed.Fields.Summary, Status: parsed.Fields.Status.Name}, nil
+	return &Issue{Key: parsed.Key, Summary: parsed.Fields.Summary, Status: parsed.Fields.Status.Name, IssueType: parsed.Fields.IssueType.Name}, nil
 }
 
 func (c *Client) IssueURL(key string) string {
@@ -269,9 +277,11 @@ func (c *Client) SearchByText(query, projectKey string, maxResults int) ([]Issue
 }
 
 // CreateIssue creates a new issue of the given type in the project and returns
-// its key. parentKey is only set for subtasks, which Jira links with
-// parent: {key: ...}.
-func (c *Client) CreateIssue(projectKey, summary, issueType, parentKey string) (string, error) {
+// its key. A subtask passes its parent issue through parentKey. A task that
+// belongs to an epic passes the epic key and the field Jira uses for that
+// hierarchy in epicLinkField, which is "parent" on team-managed projects and a
+// custom field such as customfield_10014 on company-managed ones.
+func (c *Client) CreateIssue(projectKey, summary, issueType, parentKey, epicKey, epicLinkField string) (string, error) {
 	fields := map[string]any{
 		"project":   map[string]string{"key": projectKey},
 		"summary":   summary,
@@ -279,6 +289,13 @@ func (c *Client) CreateIssue(projectKey, summary, issueType, parentKey string) (
 	}
 	if parentKey != "" {
 		fields["parent"] = map[string]string{"key": parentKey}
+	}
+	if epicKey != "" && epicLinkField != "" {
+		if epicLinkField == "parent" {
+			fields["parent"] = map[string]string{"key": epicKey}
+		} else {
+			fields[epicLinkField] = epicKey
+		}
 	}
 	body, err := json.Marshal(map[string]any{"fields": fields})
 	if err != nil {

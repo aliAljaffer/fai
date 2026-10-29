@@ -137,7 +137,7 @@ export function JiraPanel({ taskId }: { taskId: number }) {
             })
           }
         >
-          Export with subtasks
+          Export to Jira
         </Button>
       </div>
       <ExportResults results={results} />

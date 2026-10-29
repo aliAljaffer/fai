@@ -16,6 +16,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { formatTimestamp } from '../lib/format'
 import { useBoards, useColumns, useJiraLinks, useTags, useTasks } from '../api/hooks'
 import { BulkTaskBar } from '../components/board/BulkTaskBar'
+import { TaskTypeIcon } from '../components/TaskTypeIcon'
+import { taskStatus } from '../lib/taskType'
 import { TagChip } from '../components/TagChip'
 import { useDebounced } from '../lib/useDebounced'
 import { columnColor, useColumnColors } from '../store/columnColors'
@@ -147,9 +149,9 @@ export function List() {
 
   const taskIds = useMemo(() => new Set((tasks ?? []).map((task) => task.id)), [tasks])
 
-  // Group subtasks under their parent; a child whose parent was filtered out stays visible
-  // as a top-level row instead of disappearing.
-  const { roots, subtasksByParent } = useMemo(() => {
+  // Group tasks under their parent; a child whose parent was filtered out stays
+  // visible as a top-level row instead of disappearing.
+  const { roots, childrenByParent } = useMemo(() => {
     const byParent = new Map<number, Task[]>()
     for (const task of tasks ?? []) {
       if (!task.parent_task_id || !taskIds.has(task.parent_task_id)) continue
@@ -165,7 +167,7 @@ export function List() {
       (task) => !task.parent_task_id || !taskIds.has(task.parent_task_id),
     )
     topLevel.sort((a, b) => compare(a, b, sort.key, jiraLinkById) * sort.dir)
-    return { roots: topLevel, subtasksByParent: byParent }
+    return { roots: topLevel, childrenByParent: byParent }
   }, [tasks, taskIds, sort, jiraLinkById])
 
   // Rows currently on screen: roots plus expanded subtasks. Select-all and
@@ -177,14 +179,14 @@ export function List() {
         : roots,
     [roots, hideDone, doneColumnIds],
   )
-  const visibleTasks = useMemo(
-    () =>
-      visibleRoots.flatMap((task) => [
-        task,
-        ...(expanded.has(task.id) ? (subtasksByParent.get(task.id) ?? []) : []),
-      ]),
-    [visibleRoots, expanded, subtasksByParent],
-  )
+  const visibleTasks = useMemo(() => {
+    const walk = (task: Task, depth: number): Task[] => {
+      if (depth > 8) return [task]
+      const children = expanded.has(task.id) ? (childrenByParent.get(task.id) ?? []) : []
+      return [task, ...children.flatMap((child) => walk(child, depth + 1))]
+    }
+    return visibleRoots.flatMap((task) => walk(task, 0))
+  }, [visibleRoots, expanded, childrenByParent])
   const visibleIds = useMemo(() => visibleTasks.map((task) => task.id), [visibleTasks])
   const allSelected = visibleIds.length > 0 && visibleIds.every((id) => selected.has(id))
   const someSelected = !allSelected && visibleIds.some((id) => selected.has(id))
@@ -302,6 +304,12 @@ export function List() {
         <TableCell>
           <div className="flex items-center gap-1" style={{ paddingLeft: `${depth * 1.25}rem` }}>
             {leading ?? <span className="inline-block size-3.5 shrink-0" />}
+            <TaskTypeIcon
+              kind={task.kind}
+              status={taskStatus(task, columns)}
+              size={14}
+              label={task.kind === 'arc' ? 'Arc' : task.kind === 'step' ? 'Step' : 'Task'}
+            />
             <span className={cn('truncate', done && 'text-muted-foreground line-through')}>
               {task.title}
             </span>
@@ -311,6 +319,44 @@ export function List() {
           <TableCell key={column.key}>{cells[column.key](task)}</TableCell>
         ))}
       </TableRow>
+    )
+  }
+
+  const renderTree = (task: Task, depth: number): ReactNode => {
+    const children = childrenByParent.get(task.id) ?? []
+    const doneCount = children.filter(
+      (child) => child.completed_at || doneColumnIds.has(child.column_id),
+    ).length
+    const isExpanded = expanded.has(task.id)
+    return (
+      <Fragment key={task.id}>
+        {renderRow(
+          task,
+          depth,
+          children.length ? (
+            <>
+              <button
+                type="button"
+                aria-expanded={isExpanded}
+                aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${task.title}`}
+                className="flex size-3.5 shrink-0 items-center justify-center rounded hover:bg-muted"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  toggleExpanded(task.id)
+                }}
+              >
+                <ChevronRight
+                  className={cn('size-3.5 transition-transform', isExpanded && 'rotate-90')}
+                />
+              </button>
+              <span className="shrink-0 text-xs text-muted-foreground">
+                {doneCount}/{children.length}
+              </span>
+            </>
+          ) : undefined,
+        )}
+        {isExpanded && children.map((child) => renderTree(child, depth + 1))}
+      </Fragment>
     )
   }
 
@@ -420,46 +466,7 @@ export function List() {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {visibleRoots.map((task) => {
-            const subtasks = subtasksByParent.get(task.id) ?? []
-            const doneCount = subtasks.filter(
-              (subtask) => subtask.completed_at || doneColumnIds.has(subtask.column_id),
-            ).length
-            const isExpanded = expanded.has(task.id)
-            return (
-              <Fragment key={task.id}>
-                {renderRow(
-                  task,
-                  0,
-                  subtasks.length ? (
-                    <>
-                      <button
-                        type="button"
-                        aria-expanded={isExpanded}
-                        aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${task.title}`}
-                        className="flex size-3.5 shrink-0 items-center justify-center rounded hover:bg-muted"
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          toggleExpanded(task.id)
-                        }}
-                      >
-                        <ChevronRight
-                          className={cn(
-                            'size-3.5 transition-transform',
-                            isExpanded && 'rotate-90',
-                          )}
-                        />
-                      </button>
-                      <span className="shrink-0 text-xs text-muted-foreground">
-                        {doneCount}/{subtasks.length}
-                      </span>
-                    </>
-                  ) : undefined,
-                )}
-                {isExpanded && subtasks.map((subtask) => renderRow(subtask, 1))}
-              </Fragment>
-            )
-          })}
+          {visibleRoots.map((task) => renderTree(task, 0))}
           {!visibleRoots.length && (
             <TableRow>
               <TableCell colSpan={2 + visibleList.length} className="py-8 text-center text-muted-foreground">

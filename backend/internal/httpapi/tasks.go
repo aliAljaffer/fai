@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -60,6 +61,7 @@ type taskBody struct {
 	Priority      string  `json:"priority"`
 	DueDate       *string `json:"due_date"`
 	ParentTaskID  *int64  `json:"parent_task_id"`
+	Kind          string  `json:"kind"`
 }
 
 func (s *Server) createTask(w http.ResponseWriter, r *http.Request) {
@@ -70,6 +72,11 @@ func (s *Server) createTask(w http.ResponseWriter, r *http.Request) {
 	}
 	if body.Priority == "" {
 		body.Priority = "medium"
+	}
+	body.Kind = store.NormalizeKind(body.Kind, body.ParentTaskID != nil)
+	if err := s.validateTaskType(r.Context(), 0, body.Kind, body.ParentTaskID); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
 	}
 
 	position, err := s.appendPosition(r.Context(), body.ColumnID)
@@ -87,12 +94,98 @@ func (s *Server) createTask(w http.ResponseWriter, r *http.Request) {
 		DueDate:       body.DueDate,
 		Position:      position,
 		ParentTaskID:  body.ParentTaskID,
+		Kind:          body.Kind,
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	writeJSON(w, http.StatusCreated, task)
+}
+
+type taskTypeBody struct {
+	Kind         string `json:"kind"`
+	ParentTaskID *int64 `json:"parent_task_id"`
+}
+
+func (s *Server) setTaskType(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseID(r, "taskID")
+	if !ok {
+		writeError(w, http.StatusBadRequest, "invalid task id")
+		return
+	}
+	var body taskTypeBody
+	if err := decodeJSON(r, &body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid body")
+		return
+	}
+	if body.Kind != "arc" && body.Kind != "task" && body.Kind != "step" {
+		writeError(w, http.StatusBadRequest, "kind must be arc, task or step")
+		return
+	}
+	if err := s.validateTaskType(r.Context(), id, body.Kind, body.ParentTaskID); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	ctx := r.Context()
+	if body.Kind == "step" || body.Kind == "task" {
+		if err := s.Store.SetTaskParent(ctx, id, body.ParentTaskID); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	} else if err := s.Store.SetTaskParent(ctx, id, nil); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if err := s.Store.SetTaskKind(ctx, id, body.Kind); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	task, err := s.Store.GetTask(ctx, id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, task)
+}
+
+// validateTaskType keeps the three levels honest: an arc is always top level,
+// a step always has a parent, and a step never becomes a container.
+func (s *Server) validateTaskType(ctx context.Context, taskID int64, kind string, parentID *int64) error {
+	if kind == "arc" && parentID != nil {
+		return fmt.Errorf("an arc cannot have a parent")
+	}
+	if kind == "step" && parentID == nil {
+		return fmt.Errorf("a step needs a parent")
+	}
+	if parentID != nil {
+		if *parentID == taskID {
+			return fmt.Errorf("a task cannot be its own parent")
+		}
+		parent, err := s.Store.GetTask(ctx, *parentID)
+		if err != nil {
+			return fmt.Errorf("parent task not found")
+		}
+		if parent.Kind == "step" {
+			return fmt.Errorf("a step cannot contain tasks")
+		}
+		if kind == "task" && parent.Kind != "arc" {
+			return fmt.Errorf("a task under another task must be a step")
+		}
+		if kind == "step" && parent.Kind == "arc" {
+			return fmt.Errorf("a step belongs to a task, not an arc")
+		}
+	}
+	if kind == "step" && taskID != 0 {
+		children, err := s.Store.ListSubtasks(ctx, taskID)
+		if err != nil {
+			return err
+		}
+		if len(children) > 0 {
+			return fmt.Errorf("a task with children cannot become a step")
+		}
+	}
+	return nil
 }
 
 func (s *Server) listSubtasks(w http.ResponseWriter, r *http.Request) {
