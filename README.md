@@ -53,9 +53,13 @@ All screenshots use synthetic tasks, notes, and labels.
 |:---:|:---:|
 | ![Stats](screenshots/stats.png) | ![Calendar](screenshots/calendar.png) |
 
-## Local development
+## Requirements
 
-You need Docker, Go, and Node.js. Schema changes also use `goose` and `sqlc`.
+Go 1.27, Node 22, Docker, and either SQLite or PostgreSQL. Schema changes also
+need `goose` and `sqlc`. A Keycloak issuer is optional for local development and
+required for the OIDC mode.
+
+## Quick start
 
 ```sh
 make dev-db-up      # Postgres in Docker
@@ -67,96 +71,9 @@ make frontend-run   # Vite dev server, proxies /api to :8080
 
 Backend: Go with chi, pgx, sqlc, and goose. Frontend: Vite and a React SPA.
 
-## Auth
+## Deployment
 
-Set `AUTH_MODE` to choose how fai trusts a user:
-
-- `oidc` (the default) checks bearer JWTs against the `fai` client in the
-  `homelab` Keycloak realm. The frontend does a PKCE login.
-- `proxy-header` trusts an `X-Forwarded-User` header set by Caddy after Caddy
-  validates HTTP Basic auth. This is safe only when the backend cannot be
-  reached except through that proxy. The Docker Compose stack enforces this by
-  never publishing the backend port.
-
-`DISABLE_AUTH` and `VITE_DISABLE_AUTH` bypass auth for local development. Never
-set either one in a real deployment. If auth is enabled without the config for
-the selected mode, the backend refuses to start.
-
-## Database
-
-Set `DATABASE_URL` to pick the engine:
-
-- `postgres://...` uses Postgres. The backend applies pending goose migrations
-  itself on startup.
-- `sqlite://path/to/file.db` uses a single SQLite file. The backend creates the
-  schema on first run.
-
-Both engines sit behind the same `internal/store.Store` interface, so the API
-behaves the same either way. See `internal/store/pg` and `internal/store/lite`.
-
-## Attachments
-
-Tasks and notes accept files up to 25 MiB through
-`POST /api/tasks/{id}/attachments` and `POST /api/notes/{id}/attachments`.
-Metadata lives in the database and the bytes live under `ATTACHMENTS_DIR`.
-Uploads stop working when you leave `ATTACHMENTS_DIR` unset, or when storage
-reaches 10 GiB.
-
-## Calendar feed
-
-Subscribe to `GET /api/calendar.ics?token=<ICS_TOKEN>` from Apple Calendar
-(File, New Calendar Subscription) or any other ICS client. The feed is
-read-only and contains open tasks with a due date. It never includes calendars
-imported into the web app.
-
-Calendar clients cannot log in, so the token is the credential. Set `ICS_TOKEN`
-(for example with `openssl rand -hex 32`) and `PUBLIC_URL`, which is used for
-the task links inside events. Changing the token breaks existing subscriptions.
-In Docker Compose, Caddy routes this one path around Basic auth.
-
-## Notifications
-
-Reminders and meeting-outcome prompts go out over every configured channel.
-Both channels are optional. With neither configured, the scheduler does nothing.
-If one channel fails and the other delivers, fai marks the item sent so the
-working channel is not notified again every minute.
-
-- **ntfy:** `NTFY_URL`, `NTFY_TOPIC`, `NTFY_USERNAME`, and `NTFY_PASSWORD`.
-- **Email:** `SMTP_ADDR`, `SMTP_FROM`, and `SMTP_TO` (comma-separated
-  recipients).
-
-## AI
-
-Set `AI_API_KEY` to turn on task breakdown, note plans, meeting extraction, and
-chat. `AI_PROVIDER` accepts `anthropic`, `openai`, or `openai-compat` (also
-called `opencode-zen`). `AI_MODEL` names the model, and `AI_BASE_URL` points at
-any OpenAI-compatible endpoint.
-
-You can also set the provider, model, base URL, and key in Settings. Values
-saved there live in the database and override the environment. AI endpoints are
-rate-limited per user. With no key in either place, the UI hides every AI
-action.
-
-## Jira
-
-Set `JIRA_BASE_URL`, `JIRA_EMAIL`, and `JIRA_API_TOKEN` to enable the bridge.
-`JIRA_DEFAULT_PROJECT_KEY` is used when an import has no JQL and an export has
-no project key. `JIRA_STATUS_COLUMN_MAP` is a comma-separated
-`Jira Status:Board Column` list. Unmapped statuses land in the board's first
-column.
-
-Jira Cloud's `/rest/api/3/search/jql` endpoint is required. The older
-`/rest/api/3/search` endpoint returns `410 Gone`.
-
-Issue types map one way each: Jira Epic to Arc, Sub-task to Step, and every
-other type (including Story and Bug) to Task. On export, `JIRA_EPIC_ISSUE_TYPE`
-(default `Epic`), `JIRA_TASK_ISSUE_TYPE` (default `Task`), and
-`JIRA_SUBTASK_ISSUE_TYPE` (default `Sub-task`) name the target types.
-`JIRA_EPIC_LINK_FIELD` (default `parent`) attaches a task to its arc. On
-company-managed projects, set it to `customfield_10014` or the field id your
-project uses.
-
-## Docker Compose deployment
+### Docker Compose
 
 This is the full stack without Kubernetes: SQLite, a bundled ntfy container,
 and Caddy for Basic auth and TLS. You need Docker and Docker Compose only. There
@@ -185,7 +102,7 @@ every request. CI publishes `ghcr.io/alialjaffer/fai-frontend:compose` with the
 build arg omitted, and the Compose file uses it. Run `make build-frontend-compose`
 to rebuild it locally.
 
-## Desktop app
+### Desktop app
 
 The Electron build is one installable app for macOS, Windows, and Linux. It
 bundles the same backend and frontend, stores everything in a single SQLite
@@ -230,6 +147,123 @@ brew install --cask alialjaffer/tap/fai
 
 Linux users can install the `tar.gz` or `AppImage` from the release page.
 Homebrew casks are macOS-only.
+
+## Configuration
+
+### Auth
+
+Set `AUTH_MODE` to choose how fai trusts a user:
+
+- `oidc` (the default) checks bearer JWTs against the `fai` client in the
+  `homelab` Keycloak realm. The frontend does a PKCE login.
+- `proxy-header` trusts an `X-Forwarded-User` header set by Caddy after Caddy
+  validates HTTP Basic auth. This is safe only when the backend cannot be
+  reached except through that proxy. The Docker Compose stack enforces this by
+  never publishing the backend port.
+
+`DISABLE_AUTH` and `VITE_DISABLE_AUTH` bypass auth for local development. Never
+set either one in a real deployment. If auth is enabled without the config for
+the selected mode, the backend refuses to start.
+
+### Database
+
+Set `DATABASE_URL` to pick the engine:
+
+- `postgres://...` uses Postgres. The backend applies pending goose migrations
+  itself on startup.
+- `sqlite://path/to/file.db` uses a single SQLite file. The backend creates the
+  schema on first run.
+
+Both engines sit behind the same `internal/store.Store` interface, so the API
+behaves the same either way. See `internal/store/pg` and `internal/store/lite`.
+
+### Attachments
+
+Tasks and notes accept files up to 25 MiB through
+`POST /api/tasks/{id}/attachments` and `POST /api/notes/{id}/attachments`.
+Metadata lives in the database and the bytes live under `ATTACHMENTS_DIR`.
+Uploads stop working when you leave `ATTACHMENTS_DIR` unset, or when storage
+reaches 10 GiB.
+
+### Calendar feed
+
+Subscribe to `GET /api/calendar.ics?token=<ICS_TOKEN>` from Apple Calendar
+(File, New Calendar Subscription) or any other ICS client. The feed is
+read-only and contains open tasks with a due date. It never includes calendars
+imported into the web app.
+
+Calendar clients cannot log in, so the token is the credential. Set `ICS_TOKEN`
+(for example with `openssl rand -hex 32`) and `PUBLIC_URL`, which is used for
+the task links inside events. Changing the token breaks existing subscriptions.
+In Docker Compose, Caddy routes this one path around Basic auth.
+
+### Notifications
+
+Reminders and meeting-outcome prompts go out over every configured channel.
+Both channels are optional. With neither configured, the scheduler does nothing.
+If one channel fails and the other delivers, fai marks the item sent so the
+working channel is not notified again every minute.
+
+- **ntfy:** `NTFY_URL`, `NTFY_TOPIC`, `NTFY_USERNAME`, and `NTFY_PASSWORD`.
+- **Email:** `SMTP_ADDR`, `SMTP_FROM`, and `SMTP_TO` (comma-separated
+  recipients).
+
+### AI
+
+Set `AI_API_KEY` to turn on task breakdown, note plans, meeting extraction, and
+chat. `AI_PROVIDER` accepts `anthropic`, `openai`, or `openai-compat` (also
+called `opencode-zen`). `AI_MODEL` names the model, and `AI_BASE_URL` points at
+any OpenAI-compatible endpoint.
+
+You can also set the provider, model, base URL, and key in Settings. Values
+saved there live in the database and override the environment. AI endpoints are
+rate-limited per user. With no key in either place, the UI hides every AI
+action.
+
+### Jira
+
+Set `JIRA_BASE_URL`, `JIRA_EMAIL`, and `JIRA_API_TOKEN` to enable the bridge.
+`JIRA_DEFAULT_PROJECT_KEY` is used when an import has no JQL and an export has
+no project key. `JIRA_STATUS_COLUMN_MAP` is a comma-separated
+`Jira Status:Board Column` list. Unmapped statuses land in the board's first
+column.
+
+Jira Cloud's `/rest/api/3/search/jql` endpoint is required. The older
+`/rest/api/3/search` endpoint returns `410 Gone`.
+
+Issue types map one way each: Jira Epic to Arc, Sub-task to Step, and every
+other type (including Story and Bug) to Task. On export, `JIRA_EPIC_ISSUE_TYPE`
+(default `Epic`), `JIRA_TASK_ISSUE_TYPE` (default `Task`), and
+`JIRA_SUBTASK_ISSUE_TYPE` (default `Sub-task`) name the target types.
+`JIRA_EPIC_LINK_FIELD` (default `parent`) attaches a task to its arc. On
+company-managed projects, set it to `customfield_10014` or the field id your
+project uses.
+
+## Development
+
+Run the checks CI runs:
+
+```sh
+cd backend && go vet ./... && go test ./... && go build ./...
+cd frontend && npm run lint && npm run build
+```
+
+## Layout
+
+| Path | Contents |
+|---|---|
+| `backend/` | Go API, store, migrations, and integrations |
+| `frontend/` | Vite and React SPA |
+| `electron/` | Desktop shell and packaging |
+| `brand/` | README art and palette previews |
+| `.github/` | CI and release workflows |
+
+## Privacy
+
+fai stores everything in your database and attachments directory. It has no
+telemetry. Optional AI calls send the text you trigger to the provider you
+configure, with your key. Jira and calendar integrations talk only to the
+servers you name.
 
 ## License
 
