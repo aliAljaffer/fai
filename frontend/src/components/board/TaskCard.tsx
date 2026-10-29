@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils'
 import { formatDueDate, isPastDue } from '../../lib/format'
 import { TagChip } from '../TagChip'
 import { TaskTypeIcon } from '../TaskTypeIcon'
-import { taskStatus } from '../../lib/taskType'
+import { normalizeKind, taskStatus } from '../../lib/taskType'
 import type { BoardColumn, Task } from '../../api/types'
 
 interface TaskCardProps {
@@ -20,10 +20,25 @@ interface TaskCardProps {
   isDone?: boolean
   overlay?: boolean
   subtasks?: Task[]
+  subtasksByParent?: Map<number, Task[]>
   doneColumnIds?: Set<number>
   onToggleSubtask?: (subtask: Task) => void
   dragDisabled?: boolean
   expanded?: boolean
+}
+
+type SubtaskNode = { task: Task; depth: number }
+
+function flattenSubtasks(
+  map: Map<number, Task[]> | undefined,
+  parentId: number,
+  depth = 0,
+): SubtaskNode[] {
+  if (!map) return []
+  return (map.get(parentId) ?? []).flatMap((task) => [
+    { task, depth },
+    ...flattenSubtasks(map, task.id, depth + 1),
+  ])
 }
 
 function TaskCardBody({
@@ -84,10 +99,15 @@ function SortableTaskCard(props: TaskCardProps) {
   })
   const running = props.runningTaskId === props.task.id
   const [expanded, setExpanded] = useState(false)
-  const subtasks = props.subtasks ?? []
   const isArc = props.task.kind === 'arc'
+  const flattened = flattenSubtasks(props.subtasksByParent, props.task.id)
+  const nodes: SubtaskNode[] = flattened.length
+    ? flattened
+    : (props.subtasks ?? []).map((task) => ({ task, depth: 0 }))
+  const subtasks = nodes.map((node) => node.task)
+  const counted = isArc ? (props.subtasks ?? []) : subtasks
   const status = taskStatus(props.task, props.columns)
-  const doneCount = subtasks.filter(
+  const doneCount = counted.filter(
     (subtask) => subtask.completed_at || props.doneColumnIds?.has(subtask.column_id),
   ).length
 
@@ -125,7 +145,7 @@ function SortableTaskCard(props: TaskCardProps) {
       <div className="pointer-events-none relative z-0">
         <TaskCardBody task={props.task} status={status} isDone={props.isDone} />
       </div>
-      {subtasks.length > 0 && (
+      {nodes.length > 0 && (
         <div className="pointer-events-none relative z-10 mt-2 flex flex-col gap-1">
           <button
             type="button"
@@ -140,37 +160,36 @@ function SortableTaskCard(props: TaskCardProps) {
             <ChevronRight
               className={cn('size-3 transition-transform', expanded && 'rotate-90')}
             />
-            {doneCount}/{subtasks.length} {isArc ? 'tasks' : 'steps'}
+            {doneCount}/{counted.length} {isArc ? 'tasks' : 'steps'}
           </button>
           {expanded && (
             <ul className="flex flex-col gap-1 border-t pt-1.5">
-              {subtasks.map((subtask) => {
+              {nodes.map(({ task: subtask, depth }) => {
                 const done = Boolean(subtask.completed_at) || props.doneColumnIds?.has(subtask.column_id)
-                if (isArc) {
-                  return (
-                    <li key={subtask.id} className="flex items-center gap-1.5 text-xs">
+                const isStep = normalizeKind(subtask.kind) === 'step'
+                return (
+                  <li
+                    key={subtask.id}
+                    className="flex items-center gap-1.5 text-xs"
+                    style={depth ? { paddingLeft: depth * 12 } : undefined}
+                  >
+                    {isStep ? (
+                      <Checkbox
+                        checked={done}
+                        className="pointer-events-auto"
+                        aria-label={`Mark ${subtask.title} done`}
+                        disabled={!props.onToggleSubtask}
+                        onCheckedChange={() => props.onToggleSubtask?.(subtask)}
+                        onClick={(event) => event.stopPropagation()}
+                        onPointerDown={(event) => event.stopPropagation()}
+                      />
+                    ) : (
                       <TaskTypeIcon
                         kind={subtask.kind}
                         status={taskStatus(subtask, props.columns)}
                         size={12}
                       />
-                      <span className={cn(done && 'text-muted-foreground line-through')}>
-                        {subtask.title}
-                      </span>
-                    </li>
-                  )
-                }
-                return (
-                  <li key={subtask.id} className="flex items-center gap-1.5 text-xs">
-                    <Checkbox
-                      checked={done}
-                      className="pointer-events-auto"
-                      aria-label={`Mark ${subtask.title} done`}
-                      disabled={!props.onToggleSubtask}
-                      onCheckedChange={() => props.onToggleSubtask?.(subtask)}
-                      onClick={(event) => event.stopPropagation()}
-                      onPointerDown={(event) => event.stopPropagation()}
-                    />
+                    )}
                     <span className={cn(done && 'text-muted-foreground line-through')}>
                       {subtask.title}
                     </span>

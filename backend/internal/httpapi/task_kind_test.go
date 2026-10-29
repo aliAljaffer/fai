@@ -56,6 +56,15 @@ func TestTaskKindHierarchy(t *testing.T) {
 		t.Fatalf("step under task = %d %#v", code, step)
 	}
 
+	code, nested := create(map[string]any{"board_id": 1, "column_id": 1, "title": "Check links", "kind": "step", "parent_task_id": step.ID})
+	if code != http.StatusCreated || nested.Kind != "step" || nested.ParentTaskID == nil || *nested.ParentTaskID != step.ID {
+		t.Fatalf("step under step = %d %#v", code, nested)
+	}
+
+	if code, _ := create(map[string]any{"board_id": 1, "column_id": 1, "title": "Task in a step", "kind": "task", "parent_task_id": step.ID}); code != http.StatusBadRequest {
+		t.Errorf("task under a step = %d, want 400", code)
+	}
+
 	res := patchJSON(t, server.URL+"/api/tasks/"+strconv.FormatInt(task.ID, 10)+"/type", `{"kind":"step","parent_task_id":null}`)
 	res.Body.Close()
 	if res.StatusCode != http.StatusBadRequest {

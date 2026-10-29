@@ -234,6 +234,7 @@ export function BoardColumn({
               isDone={column.is_done}
               columns={columns}
               subtasks={subtasksByParent.get(task.id)}
+              subtasksByParent={subtasksByParent}
               doneColumnIds={doneColumnIds}
               onToggleTimer={onToggleTimer}
               onToggleSubtask={onToggleSubtask}

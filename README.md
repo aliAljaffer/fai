@@ -220,6 +220,25 @@ saved there live in the database and override the environment. AI endpoints are
 rate-limited per user. With no key in either place, the UI hides every AI
 action.
 
+### Telegram assistant
+
+The Telegram assistant reuses the web chat actions: create tasks and reminders,
+find tasks, and move a task to another column after a confirmation. It runs
+inside the API binary and needs an AI key because the model chooses the action.
+
+It allows one owner. Set the allowlist or the assistant stays off. Only private
+chats are accepted. Voice notes are transcribed, echoed back as text, and then
+handled like a typed message. The last 10 messages per chat live in memory and
+are lost on restart. Message IDs are remembered for 10 minutes, so a transport
+retry does not create a task twice.
+
+Telegram uses `getUpdates` long polling, so it needs no public route:
+
+- `TELEGRAM_BOT_TOKEN`
+- `TELEGRAM_ALLOWED_USER_ID`
+- `TELEGRAM_ALLOWED_CHAT_ID`
+- `TELEGRAM_STATE_FILE` (optional, defaults to `fai-telegram-offset`)
+
 ### Jira
 
 Set `JIRA_BASE_URL`, `JIRA_EMAIL`, and `JIRA_API_TOKEN` to enable the bridge.

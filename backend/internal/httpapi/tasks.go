@@ -150,8 +150,8 @@ func (s *Server) setTaskType(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, task)
 }
 
-// validateTaskType keeps the three levels honest: an arc is always top level,
-// a step always has a parent, and a step never becomes a container.
+// validateTaskType keeps the hierarchy honest: an arc is always top level, a
+// step always has a parent, and a step can hold nested steps but never tasks.
 func (s *Server) validateTaskType(ctx context.Context, taskID int64, kind string, parentID *int64) error {
 	if kind == "arc" && parentID != nil {
 		return fmt.Errorf("an arc cannot have a parent")
@@ -166,9 +166,6 @@ func (s *Server) validateTaskType(ctx context.Context, taskID int64, kind string
 		parent, err := s.Store.GetTask(ctx, *parentID)
 		if err != nil {
 			return fmt.Errorf("parent task not found")
-		}
-		if parent.Kind == "step" {
-			return fmt.Errorf("a step cannot contain tasks")
 		}
 		if kind == "task" && parent.Kind != "arc" {
 			return fmt.Errorf("a task under another task must be a step")

@@ -4,7 +4,6 @@ import { addDays, format } from 'date-fns'
 import { useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Checkbox } from '@/components/ui/checkbox'
 import {
   Select,
   SelectContent,
@@ -15,8 +14,10 @@ import {
 import { useDebounced } from '@/lib/useDebounced'
 import { cn } from '@/lib/utils'
 import { formatDueDate } from '@/lib/format'
+import { normalizeKind } from '@/lib/taskType'
 import { MarkdownRenderer } from '../MarkdownRenderer'
 import { LabelEditor } from './LabelEditor'
+import { SubtaskTree } from './SubtaskTree'
 import { LabelSuggestions } from './TaskDetail'
 import {
   useAIBreakdown,
@@ -67,6 +68,7 @@ export function TaskInlineEditor({
   const [description, setDescription] = useState(task.description_md)
   const [editingDescription, setEditingDescription] = useState(false)
   const [newSubtask, setNewSubtask] = useState('')
+  const [indentParentId, setIndentParentId] = useState<number | null>(null)
   const createSubtask = useCreateSubtask(task.id)
   const debouncedDescription = useDebounced(description, 800)
   const lastSaved = useRef(task.description_md)
@@ -75,6 +77,9 @@ export function TaskInlineEditor({
   const doneColumn = columns.find((column) => column.is_done)
   const openColumn = columns.find((column) => !column.is_done)
   const isRunning = running?.task_id === task.id
+  const childKind = normalizeKind(task.kind) === 'arc' ? 'task' : 'step'
+  const lastSubtask = subtasks?.[subtasks.length - 1]
+  const indentParent = subtasks?.find((subtask) => subtask.id === indentParentId)
 
   useEffect(() => {
     if (!editingTitle) setTitle(task.title)
@@ -332,29 +337,38 @@ export function TaskInlineEditor({
       {(!!subtasks?.length || aiStatus?.configured) && (
         <div className="flex flex-col gap-1">
           <span className="text-xs font-medium text-muted-foreground">Subtasks</span>
-          {(subtasks ?? []).map((subtask) => {
-            const done = Boolean(subtask.completed_at) || subtask.column_id === doneColumn?.id
-            return (
-              <label key={subtask.id} className="flex items-center gap-2 text-sm">
-                <Checkbox
-                  checked={done}
-                  onCheckedChange={(checked) => toggleSubtask(subtask, Boolean(checked))}
-                />
-                <span className={cn(done && 'text-muted-foreground line-through')}>
-                  {subtask.title}
-                </span>
-              </label>
-            )
-          })}
+          <SubtaskTree
+            parentId={task.id}
+            boardId={task.board_id}
+            columns={columns}
+            onToggle={toggleSubtask}
+          />
           <Input
             value={newSubtask}
             aria-label="Add a subtask"
-            placeholder="Add a subtask, Enter saves"
-            className="h-7 text-xs"
+            placeholder={
+              indentParent
+                ? `Sub-step of ${indentParent.title}, Enter saves`
+                : 'Add a subtask, Enter saves, Tab indents'
+            }
+            className={cn('h-7 text-xs', indentParent && 'ml-4 w-[calc(100%-1rem)]')}
             disabled={createSubtask.isPending}
             onChange={(event) => setNewSubtask(event.target.value)}
             onKeyDown={(event) => {
               if (event.nativeEvent.isComposing) return
+              if (event.key === 'Tab') {
+                if (event.shiftKey) {
+                  if (indentParentId !== null) {
+                    event.preventDefault()
+                    setIndentParentId(null)
+                  }
+                  return
+                }
+                if (!lastSubtask) return
+                event.preventDefault()
+                setIndentParentId((current) => (current === null ? lastSubtask.id : null))
+                return
+              }
               if (event.key !== 'Enter') return
               event.preventDefault()
               const value = newSubtask.trim()
@@ -364,10 +378,14 @@ export function TaskInlineEditor({
                   board_id: task.board_id,
                   column_id: task.column_id,
                   title: value,
-                  kind: 'step',
+                  kind: indentParentId === null ? childKind : 'step',
+                  parent_task_id: indentParentId ?? undefined,
                 },
                 {
-                  onSuccess: () => setNewSubtask(''),
+                  onSuccess: () => {
+                    setNewSubtask('')
+                    setIndentParentId(null)
+                  },
                   onError: (error) => toast.error(error.message),
                 },
               )
