@@ -1108,19 +1108,33 @@ export function useCreateTaskFromOutcome(outcomeId: number) {
   })
 }
 
-export interface JiraImportResult {
+export interface JiraImportStatus {
+  running: boolean
+  total: number
   imported: number
   updated: number
   skipped: number
-  linked?: number
+  linked: number
+  error?: string
+  started_at?: string
+  finished_at?: string
 }
 
+// The run is detached from the request, so the mutation only starts it and the
+// status hook reports progress.
 export function useJiraImport() {
-  const qc = useQueryClient()
   return useMutation({
     mutationFn: (body: { board_id: number; jql?: string; force_update?: boolean }) =>
-      api.post<JiraImportResult>('/jira/import', body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['jira', 'links'] }),
+      api.post<{ running: boolean }>('/jira/import', body),
+  })
+}
+
+// Polls only while a run is in flight; the completion event arrives over SSE.
+export function useJiraImportStatus() {
+  return useQuery({
+    queryKey: ['jira', 'import'],
+    queryFn: () => api.get<JiraImportStatus>('/jira/import'),
+    refetchInterval: (query) => (query.state.data?.running ? 1500 : false),
   })
 }
 

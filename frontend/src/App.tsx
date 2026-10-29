@@ -27,6 +27,7 @@ import { AppIcon } from './components/Logo'
 import { ThemeController } from './components/ThemeController'
 import { ThemeToggle } from './components/ThemeToggle'
 import { PendingOutcomesBanner } from './components/calendar/PendingOutcomesBanner'
+import { JiraImportBar } from './components/JiraImportBar'
 import { TimerWidget } from './components/TimerWidget'
 import { UpdateIndicator } from './components/UpdateIndicator'
 import { TaskDetailSheet } from './components/board/TaskDetailSheet'
@@ -207,6 +208,7 @@ export function App() {
         </div>
       </nav>
       <PendingOutcomesBanner />
+      <JiraImportBar />
       <nav
         aria-label="Mobile"
         className="fixed inset-x-0 bottom-0 z-40 flex overflow-x-auto border-t bg-background/95 backdrop-blur lg:hidden"

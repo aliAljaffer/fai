@@ -2,12 +2,14 @@ package httpapi
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/sahilm/fuzzy"
@@ -36,6 +38,20 @@ type jiraImportBody struct {
 	BoardID     int64  `json:"board_id"`
 	JQL         string `json:"jql"`
 	ForceUpdate bool   `json:"force_update"`
+}
+
+// jiraImportState is the single import run this server tracks, so the UI can
+// show progress while the owner moves around the app.
+type jiraImportState struct {
+	Running    bool   `json:"running"`
+	Total      int    `json:"total"`
+	Imported   int    `json:"imported"`
+	Updated    int    `json:"updated"`
+	Skipped    int    `json:"skipped"`
+	Linked     int    `json:"linked"`
+	Error      string `json:"error,omitempty"`
+	StartedAt  string `json:"started_at,omitempty"`
+	FinishedAt string `json:"finished_at,omitempty"`
 }
 
 // onlyAssigned keeps every import scoped to the configured Jira account, so a
@@ -159,11 +175,59 @@ func (s *Server) jiraImport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.jiraMu.Lock()
+	if s.jiraRun != nil && s.jiraRun.Running {
+		s.jiraMu.Unlock()
+		writeError(w, http.StatusConflict, "an import is already running")
+		return
+	}
+	run := &jiraImportState{Running: true, StartedAt: time.Now().UTC().Format(time.RFC3339)}
+	s.jiraRun = run
+	s.jiraMu.Unlock()
+
+	// The run outlives the request so a proxy timeout cannot abort it, but a
+	// hung Jira call must not block every later import.
+	go func(ctx context.Context) {
+		ctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+		defer cancel()
+		s.finishJiraImport(run, s.runJiraImport(ctx, body, run))
+	}(context.WithoutCancel(r.Context()))
+
+	writeJSON(w, http.StatusAccepted, jiraImportState{Running: true})
+}
+
+func (s *Server) jiraImportStatus(w http.ResponseWriter, r *http.Request) {
+	s.jiraMu.Lock()
+	defer s.jiraMu.Unlock()
+	if s.jiraRun == nil {
+		writeJSON(w, http.StatusOK, jiraImportState{})
+		return
+	}
+	writeJSON(w, http.StatusOK, *s.jiraRun)
+}
+
+func (s *Server) finishJiraImport(run *jiraImportState, err error) {
+	s.jiraMu.Lock()
+	run.Running = false
+	run.FinishedAt = time.Now().UTC().Format(time.RFC3339)
+	if err != nil {
+		run.Error = err.Error()
+	}
+	s.jiraMu.Unlock()
+	s.broadcast("jira")
+}
+
+func (s *Server) reportJiraProgress(run *jiraImportState, imported, updated, skipped, total int) {
+	s.jiraMu.Lock()
+	run.Imported, run.Updated, run.Skipped, run.Total = imported, updated, skipped, total
+	s.jiraMu.Unlock()
+}
+
+func (s *Server) runJiraImport(ctx context.Context, body jiraImportBody, run *jiraImportState) error {
 	jql := body.JQL
 	if jql == "" {
 		if s.JiraDefaultProject == "" {
-			writeError(w, http.StatusBadRequest, "jql is required (no JIRA_DEFAULT_PROJECT_KEY configured)")
-			return
+			return errors.New("jql is required (no JIRA_DEFAULT_PROJECT_KEY configured)")
 		}
 		jql = fmt.Sprintf(`project = "%s"`, s.JiraDefaultProject)
 	}
@@ -172,17 +236,15 @@ func (s *Server) jiraImport(w http.ResponseWriter, r *http.Request) {
 		jql += " ORDER BY updated DESC"
 	}
 
-	ctx := r.Context()
 	issues, err := s.Jira.SearchIssues(jql, 100)
 	if err != nil {
-		writeError(w, http.StatusBadGateway, err.Error())
-		return
+		return err
 	}
+	s.reportJiraProgress(run, 0, 0, 0, len(issues))
 
 	columns, err := s.Store.ListColumnsByBoard(ctx, body.BoardID)
 	if err != nil || len(columns) == 0 {
-		writeError(w, http.StatusInternalServerError, "board has no columns")
-		return
+		return errors.New("board has no columns")
 	}
 	defaultColumnID := columns[0].ID
 	for _, c := range columns {
@@ -213,6 +275,7 @@ func (s *Server) jiraImport(w http.ResponseWriter, r *http.Request) {
 	for _, issue := range issues {
 		inRun[issue.Key] = true
 	}
+	commentsByKey, commentErrs := s.prefetchComments(ctx, issues, body.ForceUpdate)
 	created := map[string]int64{}
 
 	lookupTask := func(key string) (store.Task, bool) {
@@ -278,8 +341,8 @@ func (s *Server) jiraImport(w http.ResponseWriter, r *http.Request) {
 			return nil
 		}
 
-		comments, err := s.Jira.GetComments(issue.Key)
-		if err != nil {
+		comments := commentsByKey[issue.Key]
+		if err := commentErrs[issue.Key]; err != nil {
 			return err
 		}
 
@@ -416,8 +479,7 @@ func (s *Server) jiraImport(w http.ResponseWriter, r *http.Request) {
 			kind := jiraKind(issue.IssueType)
 			parentID, deferIssue, skipIssue, err := resolveParent(issue, kind)
 			if err != nil {
-				writeError(w, http.StatusInternalServerError, err.Error())
-				return
+				return err
 			}
 			if deferIssue {
 				deferred = append(deferred, issue)
@@ -425,13 +487,14 @@ func (s *Server) jiraImport(w http.ResponseWriter, r *http.Request) {
 			}
 			if skipIssue {
 				skipped++
+				s.reportJiraProgress(run, imported, updated, skipped, len(issues))
 				continue
 			}
 			if err := handle(issue, parentID, kind); err != nil {
-				writeError(w, http.StatusInternalServerError, err.Error())
-				return
+				return err
 			}
 			progressed = true
+			s.reportJiraProgress(run, imported, updated, skipped, len(issues))
 		}
 		if !progressed {
 			// Leftovers form a cycle, or their parent was skipped as an orphan.
@@ -464,19 +527,20 @@ func (s *Server) jiraImport(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		if _, err := s.Store.UpdateTask(ctx, item.taskID, item.title, description, item.priority, item.dueDate); err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
+			return err
 		}
 		if item.hasTimes {
 			if err := s.Store.SetTaskTimestamps(ctx, item.taskID, item.createdAt, item.updatedAt); err != nil {
-				writeError(w, http.StatusInternalServerError, err.Error())
-				return
+				return err
 			}
 		}
 		linked++
 	}
 
-	writeJSON(w, http.StatusOK, map[string]int{"imported": imported, "updated": updated, "skipped": skipped, "linked": linked})
+	s.jiraMu.Lock()
+	run.Linked = linked
+	s.jiraMu.Unlock()
+	return nil
 }
 
 type jiraExportBody struct {
@@ -840,4 +904,49 @@ func (s *Server) jiraSuggestions(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	writeJSON(w, http.StatusOK, suggestions)
+}
+
+// prefetchComments fetches comments concurrently. Sequentially this single step
+// exceeded the 100s proxy timeout on a 100 issue import.
+func (s *Server) prefetchComments(ctx context.Context, issues []jira.Issue, force bool) (map[string][]jira.Comment, map[string]error) {
+	const workers = 8
+	comments := make(map[string][]jira.Comment, len(issues))
+	failures := map[string]error{}
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	keys := make(chan string)
+
+	for range workers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for key := range keys {
+				got, err := s.Jira.GetComments(key)
+				mu.Lock()
+				if err != nil {
+					failures[key] = err
+				} else {
+					comments[key] = got
+				}
+				mu.Unlock()
+			}
+		}()
+	}
+
+	for _, issue := range issues {
+		if !force {
+			link, err := s.Store.GetJiraLinkByKey(ctx, issue.Key)
+			if err != nil {
+				failures[issue.Key] = err
+				continue
+			}
+			if link != nil {
+				continue
+			}
+		}
+		keys <- issue.Key
+	}
+	close(keys)
+	wg.Wait()
+	return comments, failures
 }

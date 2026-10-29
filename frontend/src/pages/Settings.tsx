@@ -26,6 +26,7 @@ import {
   useExportWorkspaceTasks,
   useImportWorkspaceTasks,
   useJiraImport,
+  useJiraImportStatus,
   useResetWorkspace,
   useRestoreBackup,
   useUpdateAISettings,
@@ -1094,6 +1095,7 @@ export function Settings() {
   const { data: boards } = useBoards(workspaceId)
   const { data: workspaces } = useWorkspaces()
   const jiraImport = useJiraImport()
+  const jiraImportStatus = useJiraImportStatus()
   const { data: feed } = useCalendarFeedURL(workspaceId)
   const selectedBoardId = useUIStore((state) => state.selectedBoardId)
   const board =
@@ -1182,24 +1184,19 @@ export function Settings() {
             Force update already-imported issues
           </label>
           <Button
-            disabled={!importBoard || jiraImport.isPending}
+            disabled={!importBoard || jiraImport.isPending || jiraImportStatus.data?.running}
             onClick={() => {
               if (!importBoard) return
               jiraImport.mutate(
                 { board_id: importBoard.id, jql: jql || undefined, force_update: forceUpdate },
                 {
-                  onSuccess: (result) =>
-                    toast.success(
-                      `Imported ${result.imported}, updated ${result.updated}, skipped ${result.skipped}${
-                        result.linked ? `, linked ${result.linked}` : ''
-                      }`,
-                    ),
+                  onSuccess: () => toast.success('Jira import started'),
                   onError: (err) => toast.error(err.message),
                 },
               )
             }}
           >
-            {jiraImport.isPending ? 'Importing…' : 'Import from Jira'}
+            {jiraImportStatus.data?.running ? 'Import running…' : 'Import from Jira'}
           </Button>
         </CardContent>
       </Card>

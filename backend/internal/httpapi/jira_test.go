@@ -10,11 +10,54 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/alialjaffer/fai/backend/internal/jira"
 	"github.com/alialjaffer/fai/backend/internal/store"
 	"github.com/alialjaffer/fai/backend/internal/store/lite"
 )
+
+// waitJiraImport starts an import and blocks until the background run ends.
+func waitJiraImport(t *testing.T, server *httptest.Server, body string) map[string]int {
+	t.Helper()
+	res := postJSON(t, server.URL+"/api/jira/import", body)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusAccepted {
+		t.Fatalf("import status = %d", res.StatusCode)
+	}
+	return waitJiraFinished(t, server)
+}
+
+// waitJiraFinished polls the status endpoint until the current run ends.
+func waitJiraFinished(t *testing.T, server *httptest.Server) map[string]int {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		statusRes, err := http.Get(server.URL + "/api/jira/import")
+		if err != nil {
+			t.Fatal(err)
+		}
+		var state jiraImportState
+		err = json.NewDecoder(statusRes.Body).Decode(&state)
+		statusRes.Body.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !state.Running {
+			if state.Error != "" {
+				t.Fatalf("import error = %s", state.Error)
+			}
+			return map[string]int{
+				"imported": state.Imported, "updated": state.Updated,
+				"skipped": state.Skipped, "linked": state.Linked,
+			}
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("import did not finish")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
 
 const jiraSearchBody = `{"issues":[
   {"key":"DEV-2","fields":{"summary":"Child","status":{"name":"To Do"},"issuetype":{"name":"Sub-task"},"parent":{"key":"DEV-1"}}},
@@ -61,16 +104,7 @@ func TestJiraImportNestsSubtasks(t *testing.T) {
 
 	runImport := func(body string) map[string]int {
 		t.Helper()
-		res := postJSON(t, server.URL+"/api/jira/import", body)
-		defer res.Body.Close()
-		if res.StatusCode != http.StatusOK {
-			t.Fatalf("import status = %d", res.StatusCode)
-		}
-		var counts map[string]int
-		if err := json.NewDecoder(res.Body).Decode(&counts); err != nil {
-			t.Fatal(err)
-		}
-		return counts
+		return waitJiraImport(t, server, body)
 	}
 	tasksByTitle := func() map[string]store.Task {
 		t.Helper()
@@ -156,11 +190,7 @@ func TestJiraImportOnlyAssignedAndBackfillsCompletion(t *testing.T) {
 	}))
 	defer server.Close()
 
-	res := postJSON(t, server.URL+"/api/jira/import", `{"board_id":1}`)
-	defer res.Body.Close()
-	if res.StatusCode != http.StatusOK {
-		t.Fatalf("import status = %d", res.StatusCode)
-	}
+	waitJiraImport(t, server, `{"board_id":1}`)
 
 	if !strings.Contains(gotJQL, "assignee = currentUser()") {
 		t.Errorf("import JQL = %q, want current-user filter", gotJQL)
@@ -233,11 +263,7 @@ func TestJiraImportDescribesAndComments(t *testing.T) {
 
 	runImport := func(body string) {
 		t.Helper()
-		res := postJSON(t, server.URL+"/api/jira/import", body)
-		defer res.Body.Close()
-		if res.StatusCode != http.StatusOK {
-			t.Fatalf("import status = %d", res.StatusCode)
-		}
+		waitJiraImport(t, server, body)
 	}
 
 	runImport(`{"board_id":1}`)
@@ -326,15 +352,7 @@ func TestJiraImportLinksMentionedIssues(t *testing.T) {
 	}))
 	defer server.Close()
 
-	res := postJSON(t, server.URL+"/api/jira/import", `{"board_id":1}`)
-	defer res.Body.Close()
-	if res.StatusCode != http.StatusOK {
-		t.Fatalf("import status = %d", res.StatusCode)
-	}
-	var counts map[string]int
-	if err := json.NewDecoder(res.Body).Decode(&counts); err != nil {
-		t.Fatal(err)
-	}
+	counts := waitJiraImport(t, server, `{"board_id":1}`)
 	if counts["linked"] != 1 {
 		t.Fatalf("counts = %#v, want linked = 1", counts)
 	}
@@ -560,4 +578,49 @@ func TestJiraKindMapping(t *testing.T) {
 			t.Errorf("jiraKind(%q) = %q, want %q", name, got, want)
 		}
 	}
+}
+
+func TestJiraImportRejectsConcurrentRun(t *testing.T) {
+	st, err := lite.New(filepath.Join(t.TempDir(), "fai.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	release := make(chan struct{})
+	jiraServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.URL.Path == "/rest/api/3/search/jql":
+			<-release
+			w.Write([]byte(jiraSearchBody))
+		case strings.HasSuffix(r.URL.Path, "/comment"):
+			w.Write([]byte(`{"comments":[],"total":0}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer jiraServer.Close()
+
+	server := httptest.NewServer(NewRouter(&Server{
+		Store:              st,
+		Jira:               jira.New(jiraServer.URL, "me@example.com", "token"),
+		JiraDefaultProject: "DEV",
+	}))
+	defer server.Close()
+
+	first := postJSON(t, server.URL+"/api/jira/import", `{"board_id":1}`)
+	first.Body.Close()
+	if first.StatusCode != http.StatusAccepted {
+		t.Fatalf("first status = %d", first.StatusCode)
+	}
+
+	second := postJSON(t, server.URL+"/api/jira/import", `{"board_id":1}`)
+	second.Body.Close()
+	if second.StatusCode != http.StatusConflict {
+		t.Fatalf("second status = %d, want 409", second.StatusCode)
+	}
+
+	close(release)
+	waitJiraFinished(t, server)
 }

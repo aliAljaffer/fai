@@ -49,6 +49,11 @@ type Server struct {
 
 	hubOnce  sync.Once
 	hubValue *eventHub
+
+	// The current or last Jira import, guarded by jiraMu, so progress survives
+	// navigation and request timeouts.
+	jiraMu  sync.Mutex
+	jiraRun *jiraImportState
 }
 
 type Transcriber interface {
@@ -164,6 +169,7 @@ func NewRouter(s *Server) http.Handler {
 			r.Delete("/reminders/{reminderID}", s.deleteReminder)
 
 			r.Get("/jira/links", s.jiraLinks)
+			r.Get("/jira/import", s.jiraImportStatus)
 			r.Post("/jira/import", s.jiraImport)
 			r.Post("/jira/export", s.jiraExport)
 			r.Get("/tasks/{taskID}/jira/link", s.jiraGetLink)
