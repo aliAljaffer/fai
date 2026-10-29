@@ -107,7 +107,7 @@ func (e *ElevenLabs) Transcribe(ctx context.Context, audio []byte, format string
 }
 
 func normalizeFormat(format string) string {
-	switch strings.ToLower(strings.TrimSpace(format)) {
+	switch format = strings.ToLower(strings.TrimSpace(format)); format {
 	case "mp3", "wav", "m4a":
 		return format
 	default:

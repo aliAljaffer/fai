@@ -73,6 +73,21 @@ func TestTranscribeReportsAPIError(t *testing.T) {
 	}
 }
 
+func TestNormalizeFormat(t *testing.T) {
+	cases := map[string]string{
+		"MP3":  "mp3",
+		"wav":  "wav",
+		" m4a": "m4a",
+		"opus": "ogg",
+		"":     "ogg",
+	}
+	for input, want := range cases {
+		if got := normalizeFormat(input); got != want {
+			t.Errorf("normalizeFormat(%q) = %q, want %q", input, got, want)
+		}
+	}
+}
+
 func TestTranscribeRequiresKeyAndAudio(t *testing.T) {
 	if _, err := newElevenLabs("", "", "http://example.test").Transcribe(context.Background(), []byte("audio"), "ogg"); err == nil {
 		t.Fatal("expected a missing key error")
