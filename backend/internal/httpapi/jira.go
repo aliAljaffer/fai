@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -14,6 +15,9 @@ import (
 	"github.com/alialjaffer/fai/backend/internal/jira"
 	"github.com/alialjaffer/fai/backend/internal/store"
 )
+
+// jiraKeyMention matches Jira keys such as ABC-1 inside imported description text.
+var jiraKeyMention = regexp.MustCompile(`\b[A-Z][A-Z0-9]+-[0-9]{1,18}\b`)
 
 type jiraImportBody struct {
 	BoardID     int64  `json:"board_id"`
@@ -46,6 +50,59 @@ func completionTime(issue jira.Issue) *time.Time {
 		}
 	}
 	return nil
+}
+
+// Jira descriptions mention sibling issues by key (ABC-123). Rewriting those
+// keys into @TAG-<num> mentions turns them into the app's task refs, so the
+// referenced task gets a backlink and the text stays clickable.
+func rewriteJiraMentions(description string, resolve func(key string) (string, bool)) string {
+	matches := jiraKeyMention.FindAllStringSubmatchIndex(description, -1)
+	if len(matches) == 0 {
+		return description
+	}
+	var out strings.Builder
+	last := 0
+	for _, m := range matches {
+		start, end := m[0], m[1]
+		// Leave URLs (/browse/ABC-123), existing @refs, and spans like
+		// ABC-123-2 alone; replacing them would corrupt the markup.
+		if start > 0 && (description[start-1] == '@' || description[start-1] == '/') {
+			continue
+		}
+		if end+1 < len(description) && description[end] == '-' && description[end+1] >= '0' && description[end+1] <= '9' {
+			continue
+		}
+		ref, ok := resolve(description[start:end])
+		if !ok {
+			continue
+		}
+		out.WriteString(description[last:start])
+		out.WriteByte('@')
+		out.WriteString(ref)
+		last = end
+	}
+	if last == 0 {
+		return description
+	}
+	out.WriteString(description[last:])
+	return out.String()
+}
+
+type importedDescription struct {
+	taskID      int64
+	title       string
+	description string
+	priority    string
+	dueDate     *string
+}
+
+func (s *Server) jiraLinks(w http.ResponseWriter, r *http.Request) {
+	links, err := s.Store.ListJiraLinksByWorkspace(r.Context(), optionalInt64Param(r, "workspace_id"))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, links)
 }
 
 func (s *Server) jiraImport(w http.ResponseWriter, r *http.Request) {
@@ -112,6 +169,7 @@ func (s *Server) jiraImport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	imported, updated, skipped := 0, 0, 0
+	var changed []importedDescription
 
 	inRun := make(map[string]bool, len(issues))
 	for _, issue := range issues {
@@ -229,6 +287,9 @@ func (s *Server) jiraImport(w http.ResponseWriter, r *http.Request) {
 			if issue.Description != "" {
 				description = issue.Description
 			}
+			if issue.Description != "" {
+				changed = append(changed, importedDescription{taskID: existing.TaskID, title: issue.Summary, description: issue.Description, priority: task.Priority, dueDate: task.DueDate})
+			}
 			if _, err := s.Store.UpdateTask(ctx, existing.TaskID, issue.Summary, description, task.Priority, task.DueDate); err != nil {
 				return err
 			}
@@ -261,6 +322,9 @@ func (s *Server) jiraImport(w http.ResponseWriter, r *http.Request) {
 			if err := s.Store.SetTaskCompletedAt(ctx, task.ID, *resolvedAt); err != nil {
 				return err
 			}
+		}
+		if issue.Description != "" {
+			changed = append(changed, importedDescription{taskID: task.ID, title: issue.Summary, description: issue.Description, priority: "medium"})
 		}
 		if _, err := s.Store.CreateJiraLinkImported(ctx, task.ID, issue.Key, s.Jira.IssueURL(issue.Key), s.JiraDefaultProject, issue.Status); err != nil {
 			return err
@@ -315,7 +379,36 @@ func (s *Server) jiraImport(w http.ResponseWriter, r *http.Request) {
 		pending = deferred
 	}
 
-	writeJSON(w, http.StatusOK, map[string]int{"imported": imported, "updated": updated, "skipped": skipped})
+	// All links exist by now, so descriptions can reference issues imported
+	// in the same run.
+	var selfID int64
+	refByKey := map[string]string{}
+	resolveMention := func(key string) (string, bool) {
+		if ref, seen := refByKey[key]; seen {
+			return ref, true
+		}
+		target, err := s.Store.GetJiraTaskRef(ctx, key)
+		if err != nil || target == nil || target.ID == selfID {
+			return "", false
+		}
+		refByKey[key] = target.Ref
+		return target.Ref, true
+	}
+	linked := 0
+	for _, item := range changed {
+		selfID = item.taskID
+		description := rewriteJiraMentions(item.description, resolveMention)
+		if description == item.description {
+			continue
+		}
+		if _, err := s.Store.UpdateTask(ctx, item.taskID, item.title, description, item.priority, item.dueDate); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		linked++
+	}
+
+	writeJSON(w, http.StatusOK, map[string]int{"imported": imported, "updated": updated, "skipped": skipped, "linked": linked})
 }
 
 type jiraExportBody struct {

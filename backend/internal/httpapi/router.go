@@ -133,6 +133,7 @@ func NewRouter(s *Server) http.Handler {
 			r.Patch("/reminders/{reminderID}", s.updateReminder)
 			r.Delete("/reminders/{reminderID}", s.deleteReminder)
 
+			r.Get("/jira/links", s.jiraLinks)
 			r.Post("/jira/import", s.jiraImport)
 			r.Post("/jira/export", s.jiraExport)
 			r.Get("/tasks/{taskID}/jira/link", s.jiraGetLink)

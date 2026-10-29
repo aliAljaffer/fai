@@ -126,6 +126,10 @@ type Store interface {
 	// Jira links
 	GetJiraLinkByKey(ctx context.Context, jiraKey string) (*JiraLink, error)
 	GetJiraLinkByTask(ctx context.Context, taskID int64) (*JiraLink, error)
+	ListJiraLinksByWorkspace(ctx context.Context, workspaceID *int64) ([]JiraLink, error)
+	// GetJiraTaskRef resolves the Fai task standing behind a Jira key, so imported
+	// descriptions that mention the key can be rewritten into an @TAG-<num> ref.
+	GetJiraTaskRef(ctx context.Context, jiraKey string) (*TaskRef, error)
 	CreateJiraLinkImported(ctx context.Context, taskID int64, jiraKey, jiraURL, projectKey, rawStatus string) (JiraLink, error)
 	CreateJiraLinkManual(ctx context.Context, taskID int64, jiraKey, jiraURL, projectKey, rawStatus string) (JiraLink, error)
 	CreateJiraLinkExported(ctx context.Context, taskID int64, jiraKey, jiraURL, projectKey string) (JiraLink, error)

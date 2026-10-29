@@ -40,6 +40,11 @@ export function formatDueIn(value: string, now = new Date()): string {
   return `due in ${Math.floor(minutes / 1440)}d`
 }
 
+export function formatTimestamp(value: string): string {
+  const date = parseISO(value)
+  return Number.isNaN(date.getTime()) ? value : format(date, 'MMM d, HH:mm')
+}
+
 export function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
   const units = ['KB', 'MB', 'GB']

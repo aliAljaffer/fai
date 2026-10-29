@@ -3,6 +3,7 @@ package pg
 import (
 	"context"
 	"errors"
+	"strconv"
 
 	"github.com/jackc/pgx/v5"
 
@@ -40,6 +41,31 @@ func (s *Store) GetJiraLinkByTask(ctx context.Context, taskID int64) (*store.Jir
 	}
 	l := toJiraLink(j)
 	return &l, nil
+}
+
+func (s *Store) ListJiraLinksByWorkspace(ctx context.Context, workspaceID *int64) ([]store.JiraLink, error) {
+	rows, err := s.q.ListJiraLinksByWorkspace(ctx, ptrToInt8(workspaceID))
+	if err != nil {
+		return nil, err
+	}
+	out := make([]store.JiraLink, len(rows))
+	for i, j := range rows {
+		out[i] = toJiraLink(j)
+	}
+	return out, nil
+}
+
+func (s *Store) GetJiraTaskRef(ctx context.Context, jiraKey string) (*store.TaskRef, error) {
+	row, err := s.q.GetJiraTaskRef(ctx, jiraKey)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	ref := store.TaskRef{Kind: "task", ID: row.ID, Title: row.Title, RefNum: row.RefNum, WorkspaceTag: row.Tag, WorkspaceName: row.Name}
+	ref.Ref = ref.WorkspaceTag + "-" + strconv.FormatInt(ref.RefNum, 10)
+	return &ref, nil
 }
 
 func (s *Store) CreateJiraLinkImported(ctx context.Context, taskID int64, jiraKey, jiraURL, projectKey, rawStatus string) (store.JiraLink, error) {

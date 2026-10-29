@@ -263,6 +263,98 @@ func TestJiraImportDescribesAndComments(t *testing.T) {
 	}
 }
 
+func TestRewriteJiraMentions(t *testing.T) {
+	refs := map[string]string{"DEV-1": "FAI-4"}
+	resolve := func(key string) (string, bool) {
+		ref, ok := refs[key]
+		return ref, ok
+	}
+	cases := []struct{ in, want string }{
+		{"Blocks DEV-1", "Blocks @FAI-4"},
+		{"DEV-1 and DEV-1 again", "@FAI-4 and @FAI-4 again"},
+		{"See https://x.atlassian.net/browse/DEV-1 plus DEV-1", "See https://x.atlassian.net/browse/DEV-1 plus @FAI-4"},
+		{"Mentioned @DEV-1 already", "Mentioned @DEV-1 already"},
+		{"Range DEV-1-2 stays", "Range DEV-1-2 stays"},
+		{"Unknown UNK-9 and lowercase dev-1", "Unknown UNK-9 and lowercase dev-1"},
+	}
+	for _, test := range cases {
+		if got := rewriteJiraMentions(test.in, resolve); got != test.want {
+			t.Errorf("rewrite(%q) = %q, want %q", test.in, got, test.want)
+		}
+	}
+	if got := rewriteJiraMentions("plain", resolve); got != "plain" {
+		t.Errorf("no-match rewrite = %q", got)
+	}
+}
+
+func TestJiraImportLinksMentionedIssues(t *testing.T) {
+	st, err := lite.New(filepath.Join(t.TempDir(), "fai.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	searchBody := `{"issues":[
+	  {"key":"DEV-1","fields":{"summary":"First","status":{"name":"To Do"}}},
+	  {"key":"DEV-2","fields":{"summary":"Second","status":{"name":"To Do"},
+	    "description":"Blocks DEV-1 and mentions UNK-9"}}
+	],"isLast":true}`
+	jiraServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.URL.Path == "/rest/api/3/search/jql":
+			w.Write([]byte(searchBody))
+		case strings.HasSuffix(r.URL.Path, "/comment"):
+			w.Write([]byte(`{"comments":[],"total":0}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer jiraServer.Close()
+
+	server := httptest.NewServer(NewRouter(&Server{
+		Store:              st,
+		Jira:               jira.New(jiraServer.URL, "me@example.com", "token"),
+		JiraDefaultProject: "DEV",
+	}))
+	defer server.Close()
+
+	res := postJSON(t, server.URL+"/api/jira/import", `{"board_id":1}`)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("import status = %d", res.StatusCode)
+	}
+	var counts map[string]int
+	if err := json.NewDecoder(res.Body).Decode(&counts); err != nil {
+		t.Fatal(err)
+	}
+	if counts["linked"] != 1 {
+		t.Fatalf("counts = %#v, want linked = 1", counts)
+	}
+
+	tasks, err := st.ListTasks(context.Background(), store.ListTasksParams{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, task := range tasks {
+		if task.Title != "Second" {
+			continue
+		}
+		// The @FAI-N ref is the auto-assigned ref of the DEV-1 task.
+		var firstRef string
+		for _, other := range tasks {
+			if other.Title == "First" {
+				firstRef = other.Ref
+			}
+		}
+		if want := "Blocks @" + firstRef + " and mentions UNK-9"; task.DescriptionMd != want {
+			t.Errorf("description = %q, want %q", task.DescriptionMd, want)
+		}
+		return
+	}
+	t.Fatal("Second task not imported")
+}
+
 type jiraCreatedIssue struct {
 	Key       string
 	Summary   string

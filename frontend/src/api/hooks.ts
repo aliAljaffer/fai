@@ -554,7 +554,10 @@ export function useLinkJira(taskId: number) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (jiraKey: string) => api.post<JiraLink>(`/tasks/${taskId}/jira/link`, { jira_key: jiraKey }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['jira', 'link', taskId] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['jira', 'link', taskId] })
+      qc.invalidateQueries({ queryKey: ['jira', 'links'] })
+    },
   })
 }
 
@@ -562,7 +565,10 @@ export function useUnlinkJira(taskId: number) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: () => api.delete<void>(`/tasks/${taskId}/jira/link`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['jira', 'link', taskId] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['jira', 'link', taskId] })
+      qc.invalidateQueries({ queryKey: ['jira', 'links'] })
+    },
   })
 }
 
@@ -776,12 +782,23 @@ export interface JiraImportResult {
   imported: number
   updated: number
   skipped: number
+  linked?: number
 }
 
 export function useJiraImport() {
+  const qc = useQueryClient()
   return useMutation({
     mutationFn: (body: { board_id: number; jql?: string; force_update?: boolean }) =>
       api.post<JiraImportResult>('/jira/import', body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['jira', 'links'] }),
+  })
+}
+
+export function useJiraLinks(workspaceId?: number) {
+  return useQuery({
+    queryKey: ['jira', 'links', workspaceId],
+    queryFn: () => api.get<JiraLink[]>(`/jira/links?workspace_id=${workspaceId}`),
+    enabled: workspaceId != null,
   })
 }
 

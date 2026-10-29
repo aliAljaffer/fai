@@ -178,6 +178,76 @@ func (q *Queries) GetJiraLinkByTask(ctx context.Context, taskID int64) (JiraLink
 	return i, err
 }
 
+const getJiraTaskRef = `-- name: GetJiraTaskRef :one
+SELECT t.id, t.title, t.ref_num, w.tag, w.name
+FROM jira_links j
+JOIN tasks t ON t.id = j.task_id
+JOIN workspaces w ON w.id = t.workspace_id
+WHERE j.jira_key = ?
+`
+
+type GetJiraTaskRefRow struct {
+	ID     int64  `json:"id"`
+	Title  string `json:"title"`
+	RefNum int64  `json:"ref_num"`
+	Tag    string `json:"tag"`
+	Name   string `json:"name"`
+}
+
+func (q *Queries) GetJiraTaskRef(ctx context.Context, jiraKey string) (GetJiraTaskRefRow, error) {
+	row := q.db.QueryRowContext(ctx, getJiraTaskRef, jiraKey)
+	var i GetJiraTaskRefRow
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.RefNum,
+		&i.Tag,
+		&i.Name,
+	)
+	return i, err
+}
+
+const listJiraLinksByWorkspace = `-- name: ListJiraLinksByWorkspace :many
+SELECT j.task_id, j.jira_key, j.jira_url, j.jira_project_key, j.link_origin, j.last_imported_at, j.last_exported_at, j.raw_status, j.created_at
+FROM jira_links j
+JOIN tasks t ON t.id = j.task_id
+WHERE CAST(?1 AS INTEGER) IS NULL OR t.workspace_id = ?1
+ORDER BY j.jira_key
+`
+
+func (q *Queries) ListJiraLinksByWorkspace(ctx context.Context, workspaceID sql.NullInt64) ([]JiraLink, error) {
+	rows, err := q.db.QueryContext(ctx, listJiraLinksByWorkspace, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []JiraLink
+	for rows.Next() {
+		var i JiraLink
+		if err := rows.Scan(
+			&i.TaskID,
+			&i.JiraKey,
+			&i.JiraUrl,
+			&i.JiraProjectKey,
+			&i.LinkOrigin,
+			&i.LastImportedAt,
+			&i.LastExportedAt,
+			&i.RawStatus,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateJiraLinkImported = `-- name: UpdateJiraLinkImported :exec
 UPDATE jira_links SET last_imported_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), raw_status = ?1 WHERE task_id = ?2
 `

@@ -283,7 +283,9 @@ export function Settings() {
                 {
                   onSuccess: (result) =>
                     toast.success(
-                      `Imported ${result.imported}, updated ${result.updated}, skipped ${result.skipped}`,
+                      `Imported ${result.imported}, updated ${result.updated}, skipped ${result.skipped}${
+                        result.linked ? `, linked ${result.linked}` : ''
+                      }`,
                     ),
                   onError: (err) => toast.error(err.message),
                 },
