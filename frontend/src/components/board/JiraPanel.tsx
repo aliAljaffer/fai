@@ -81,6 +81,7 @@ export function JiraPanel({ taskId }: { taskId: number }) {
             </DialogHeader>
             <div className="flex flex-col gap-2">
               <Input
+                aria-label="Search Jira issues"
                 placeholder="Search by key or text (min 2 characters)"
                 value={key}
                 onChange={(event) => {

@@ -24,6 +24,7 @@ export function CommentsPanel({ taskId }: { taskId: number }) {
   return (
     <div className="flex flex-col gap-3">
       <Textarea
+        aria-label="New comment"
         placeholder="Add a comment (Markdown)"
         value={body}
         onChange={(event) => setBody(event.target.value)}

@@ -42,7 +42,7 @@ export function UpdateIndicator() {
       ) : (
         <ArrowDownToLine className="size-3.5" />
       )}
-      {label}
+      <span className="hidden sm:inline">{label}</span>
       {ready && <span className="update-indicator-dot size-1.5 animate-pulse rounded-full" />}
     </Button>
   )

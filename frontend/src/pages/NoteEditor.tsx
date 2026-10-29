@@ -60,9 +60,11 @@ export function NoteEditor() {
 
   return (
     <div className="flex flex-col gap-4">
+      <h1 className="sr-only">Edit note</h1>
       <div className="flex items-center justify-between">
         <input
-          className="border-b bg-transparent text-xl font-medium outline-none"
+          aria-label="Note title"
+          className="border-b bg-transparent text-xl font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
         />
@@ -88,6 +90,7 @@ export function NoteEditor() {
             refs.handleChange(value ?? '', event?.target ?? null)
           }}
           textareaProps={{
+            'aria-label': 'Note body',
             onKeyDown: refs.handleKeyDown,
             onBlur: refs.handleBlur,
             onSelect: refs.sync,
@@ -108,7 +111,7 @@ export function NoteEditor() {
 
       {data.backlinks.length > 0 && (
         <div>
-          <h3 className="mb-2 text-sm font-medium text-muted-foreground">Linked from</h3>
+          <h2 className="mb-2 text-sm font-medium text-muted-foreground">Linked from</h2>
           <ul className="flex flex-col gap-1">
             {data.backlinks.map((b) => (
               <li key={b.id}>

@@ -554,6 +554,7 @@ export function Board() {
       }}
     >
       <div className="flex min-w-0 flex-col gap-4">
+        <h1 className="sr-only">{board?.name ?? 'Board'}</h1>
         <header className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex min-w-0 flex-col gap-1">
             <div className="flex min-w-0 items-center gap-1">

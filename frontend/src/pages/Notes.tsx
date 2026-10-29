@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -30,12 +30,14 @@ export function Notes() {
 
   return (
     <div className="flex flex-col gap-3">
+      <h1 className="text-lg font-semibold">Notes</h1>
       <div className="flex justify-end">
         {adding ? (
           <div className="flex items-center gap-2">
             <Input
               autoFocus
               value={title}
+              aria-label="New note title"
               placeholder="Note title"
               className="w-64"
               onChange={(event) => setTitle(event.target.value)}
@@ -67,12 +69,20 @@ export function Notes() {
       </div>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
         {notes?.map((note) => (
-          <Card key={note.id} className="cursor-pointer" onClick={() => navigate(`/notes/${note.id}`)}>
-            <CardContent>
-              <div className="font-medium">{note.title}</div>
-              <div className="mt-1 line-clamp-2 text-sm text-muted-foreground">{note.body_md}</div>
-            </CardContent>
-          </Card>
+          <Link
+            key={note.id}
+            to={`/notes/${note.id}`}
+            className="block rounded-xl outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+          >
+            <Card className="h-full transition-colors hover:bg-muted/40">
+              <CardContent>
+                <div className="font-medium">{note.title}</div>
+                <div className="mt-1 line-clamp-2 text-sm text-muted-foreground">
+                  {note.body_md}
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
         ))}
       </div>
     </div>

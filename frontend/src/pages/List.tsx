@@ -56,6 +56,15 @@ const optionalColumns: { key: ColumnKey; label: string }[] = [
 
 const byKey = new Map(optionalColumns.map((column) => [column.key, column]))
 
+function isSortColumn(key: ColumnKey): key is Exclude<SortKey, 'title'> {
+  return (
+    key === 'priority' ||
+    key === 'due_date' ||
+    key === 'created_at' ||
+    key === 'updated_at'
+  )
+}
+
 const defaultVisible: ColumnKey[] = ['column', 'tags', 'priority', 'due_date', 'updated_at']
 
 function loadVisibleColumns(): Set<ColumnKey> {
@@ -295,14 +304,19 @@ export function List() {
               size={14}
               label={task.kind === 'arc' ? 'Arc' : task.kind === 'step' ? 'Step' : 'Task'}
             />
-            <span
+            <button
+              type="button"
               className={cn(
-                'min-w-0 flex-1 truncate',
+                'min-w-0 flex-1 truncate rounded-sm text-left outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring/50',
                 done && 'text-muted-foreground line-through',
               )}
+              onClick={(event) => {
+                event.stopPropagation()
+                setSearchParams({ task: String(task.id) })
+              }}
             >
               {task.title}
-            </span>
+            </button>
             <JiraChip link={jiraLinkById.get(task.id)} />
           </div>
         </TableCell>
@@ -353,15 +367,17 @@ export function List() {
 
   return (
     <div className="flex flex-col gap-4">
+      <h1 className="text-lg font-semibold">List</h1>
       <div className="flex flex-wrap items-center gap-2">
         <Input
+          aria-label="Filter tasks"
           placeholder="Filter tasks…"
           value={q}
           onChange={(e) => setQ(e.target.value)}
           className="max-w-xs"
         />
         <Select value={columnId} onValueChange={(value) => value && setColumnId(value)}>
-          <SelectTrigger className="w-40">
+          <SelectTrigger className="w-40" aria-label="Filter by column">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -374,7 +390,7 @@ export function List() {
           </SelectContent>
         </Select>
         <Select value={tag} onValueChange={(value) => value && setTag(value)}>
-          <SelectTrigger className="w-40">
+          <SelectTrigger className="w-40" aria-label="Filter by tag">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -441,16 +457,44 @@ export function List() {
                 onCheckedChange={() => toggleAllSelected()}
               />
             </TableHead>
-            <TableHead className="cursor-pointer" onClick={() => toggleSort('title')}>
-              Title{arrow('title')}
+            <TableHead
+              aria-sort={
+                sort.key === 'title' ? (sort.dir === 1 ? 'ascending' : 'descending') : 'none'
+              }
+            >
+              <button
+                type="button"
+                className="flex items-center gap-1 rounded-sm font-medium outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
+                onClick={() => toggleSort('title')}
+              >
+                Title{arrow('title')}
+              </button>
             </TableHead>
             {visibleList.map(({ key, label }) => (
               <TableHead
                 key={key}
-                onClick={key !== 'column' && key !== 'tags' ? () => toggleSort(key) : undefined}
+                aria-sort={
+                  isSortColumn(key)
+                    ? sort.key === key
+                      ? sort.dir === 1
+                        ? 'ascending'
+                        : 'descending'
+                      : 'none'
+                    : undefined
+                }
               >
-                {label}
-                {key !== 'column' && key !== 'tags' ? arrow(key) : ''}
+                {isSortColumn(key) ? (
+                  <button
+                    type="button"
+                    className="flex items-center gap-1 rounded-sm font-medium outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
+                    onClick={() => toggleSort(key)}
+                  >
+                    {label}
+                    {arrow(key)}
+                  </button>
+                ) : (
+                  label
+                )}
               </TableHead>
             ))}
           </TableRow>

@@ -117,6 +117,7 @@ function WorkspaceRow({ workspace }: { workspace: Workspace }) {
           autoFocus
           value={name}
           aria-label={`Name for ${workspace.name}`}
+          aria-invalid={Boolean(error)}
           placeholder="Workspace name"
           className="h-7 max-w-48"
           onChange={(event) => setName(event.target.value)}
@@ -124,6 +125,7 @@ function WorkspaceRow({ workspace }: { workspace: Workspace }) {
         <Input
           value={tag}
           aria-label={`Tag for ${workspace.name}`}
+          aria-invalid={Boolean(error)}
           placeholder="TAG"
           className="h-7 w-20 font-mono uppercase"
           onChange={(event) => setTag(event.target.value)}
@@ -135,7 +137,11 @@ function WorkspaceRow({ workspace }: { workspace: Workspace }) {
           Cancel
         </Button>
       </div>
-      {error && <p className="text-xs text-destructive">{error}</p>}
+      {error && (
+        <p role="alert" className="text-xs text-destructive">
+          {error}
+        </p>
+      )}
     </div>
   )
 }
@@ -194,6 +200,7 @@ function WorkspacesCard() {
             <Input
               value={name}
               aria-label="New workspace name"
+              aria-invalid={Boolean(error)}
               placeholder="Workspace name"
               className="max-w-48"
               onChange={(event) => setName(event.target.value)}
@@ -201,6 +208,7 @@ function WorkspacesCard() {
             <Input
               value={tag}
               aria-label="New workspace tag"
+              aria-invalid={Boolean(error)}
               placeholder="TAG"
               className="w-20 font-mono uppercase"
               onChange={(event) => setTag(event.target.value)}
@@ -212,7 +220,11 @@ function WorkspacesCard() {
               Create workspace
             </Button>
           </div>
-          {error && <p className="text-xs text-destructive">{error}</p>}
+          {error && (
+        <p role="alert" className="text-xs text-destructive">
+          {error}
+        </p>
+      )}
         </div>
       </CardContent>
     </Card>
@@ -356,7 +368,11 @@ function WorkspaceDataCard() {
             {importTasks.isPending ? 'Importing…' : 'Import JSON'}
           </Button>
         </div>
-        {importError && <p className="text-xs text-destructive">{importError}</p>}
+        {importError && (
+          <p role="alert" className="text-xs text-destructive">
+            {importError}
+          </p>
+        )}
 
         <div className="flex flex-col gap-2 rounded-md border border-destructive/40 bg-destructive/5 p-3">
           <div className="flex items-center gap-2 text-sm font-medium text-destructive">
@@ -496,7 +512,11 @@ function BackupCard() {
           >
             {restoreBackup.isPending ? 'Restoring…' : 'Replace instance'}
           </Button>
-          {error && <p className="text-xs text-destructive">{error}</p>}
+          {error && (
+        <p role="alert" className="text-xs text-destructive">
+          {error}
+        </p>
+      )}
         </div>
       </CardContent>
     </Card>
@@ -866,7 +886,11 @@ function AICard() {
           />
         </div>
 
-        {error && <p className="text-xs text-destructive">{error}</p>}
+        {error && (
+        <p role="alert" className="text-xs text-destructive">
+          {error}
+        </p>
+      )}
         <div className="flex items-center gap-2">
           <Button size="sm" disabled={updateSettings.isPending} onClick={save}>
             {updateSettings.isPending ? 'Saving…' : 'Save AI settings'}
@@ -1011,6 +1035,7 @@ export function Settings() {
 
   return (
     <div className="flex flex-col gap-6">
+      <h1 className="text-lg font-semibold">Settings</h1>
       <WorkspacesCard />
 
       <WorkspaceDataCard />
@@ -1059,6 +1084,7 @@ export function Settings() {
             </Select>
           </div>
           <Textarea
+            aria-label="Jira JQL"
             placeholder='Optional JQL, e.g. project = "DEV" AND status != Done'
             value={jql}
             onChange={(e) => setJql(e.target.value)}
@@ -1139,6 +1165,7 @@ export function Settings() {
           <div className="flex gap-2">
             <Input
               readOnly
+              aria-label="Calendar subscription URL"
               value={feed?.url ?? ''}
               placeholder={feed ? '' : 'Calendar feed is not configured'}
               onFocus={(e) => e.currentTarget.select()}

@@ -32,6 +32,7 @@ import {
   useAIStatus,
   useColumns,
   useCreateTag,
+  useMoveTask,
   useRunningTime,
   useSetTaskType,
   useStartTime,
@@ -68,6 +69,7 @@ export function TaskDetail({
   const { data: entries } = useTaskTimeEntries(task.id)
   const { data: columns } = useColumns(task.board_id)
   const setType = useSetTaskType(task.id, task.board_id)
+  const moveTask = useMoveTask(task.board_id)
   const kind = normalizeKind(task.kind)
   const canBeStep = task.parent_task_id !== null || kind === 'step'
   const startTime = useStartTime()
@@ -85,7 +87,8 @@ export function TaskDetail({
           <div className="flex items-center gap-2">
             <input
               ref={titleRef}
-              className="flex-1 border-b bg-transparent pb-2 text-lg font-medium outline-none"
+              aria-label="Task title"
+              className="flex-1 border-b bg-transparent pb-2 text-lg font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
             />
@@ -129,6 +132,7 @@ export function TaskDetail({
                 refs.handleChange(value ?? '', event?.target ?? null)
               }}
               textareaProps={{
+                'aria-label': 'Task description',
                 onKeyDown: refs.handleKeyDown,
                 onBlur: refs.handleBlur,
                 onSelect: refs.sync,
@@ -175,13 +179,35 @@ export function TaskDetail({
                 </SelectContent>
               </Select>
               <Select value={priority} onValueChange={(value) => value && setPriority(value)}>
-                <SelectTrigger className="w-32">
+                <SelectTrigger className="w-32" aria-label="Priority">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="low">low</SelectItem>
                   <SelectItem value="medium">medium</SelectItem>
                   <SelectItem value="high">high</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select
+                value={String(task.column_id)}
+                onValueChange={(value) => {
+                  if (!value || Number(value) === task.column_id) return
+                  moveTask.mutate(
+                    { id: task.id, column_id: Number(value) },
+                    { onError: (error) => toast.error(error.message) },
+                  )
+                }}
+                disabled={moveTask.isPending}
+              >
+                <SelectTrigger className="w-36" aria-label="Status column">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {columns?.map((column) => (
+                    <SelectItem key={column.id} value={String(column.id)}>
+                      {column.name}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>

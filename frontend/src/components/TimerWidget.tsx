@@ -37,7 +37,7 @@ export function TimerWidget() {
     const elapsed = Math.floor((Date.now() - new Date(running.started_at).getTime()) / 1000)
 
     return (
-      <div className="ml-4 flex items-center gap-2 rounded-full border border-destructive/40 bg-destructive/10 px-3 py-1 text-sm">
+      <div className="flex min-w-0 items-center gap-2 rounded-full border border-destructive/40 bg-destructive/10 px-3 py-1 text-sm">
         <span className="h-2 w-2 animate-pulse rounded-full bg-destructive" />
         <span className="max-w-40 truncate">{task?.title ?? `Task #${running.task_id}`}</span>
         <span className="font-mono text-xs text-muted-foreground">{formatDuration(elapsed)}</span>
@@ -59,11 +59,12 @@ export function TimerWidget() {
       <Button
         variant="outline"
         size="sm"
-        className="ml-4 text-muted-foreground"
+        className="text-muted-foreground"
+        aria-label="Start a timer"
         onClick={() => setOpen(true)}
       >
         <Clock className="size-3.5" />
-        Timer
+        <span className="hidden sm:inline">Timer</span>
       </Button>
       <Dialog
         open={open}
@@ -78,6 +79,7 @@ export function TimerWidget() {
           </DialogHeader>
           <Input
             autoFocus
+            aria-label="Find a task"
             placeholder="Find a task…"
             value={query}
             onChange={(event) => setQuery(event.target.value)}

@@ -21,11 +21,19 @@ const timeConfig = {
   hours: { label: 'Hours tracked', color: 'var(--chart-2)' },
 } satisfies ChartConfig
 
+const HEAT_LEGEND = [
+  'var(--muted)',
+  'color-mix(in oklch, var(--primary) 35%, var(--muted))',
+  'color-mix(in oklch, var(--primary) 65%, var(--muted))',
+  'var(--primary)',
+]
+
 export function Stats() {
   const { data } = useCompletions(isoDate(yearAgo), isoDate(today))
   const { data: timeData } = useTimeStats(isoDate(thirtyDaysAgo), isoDate(today))
   const byDate = new Map((data ?? []).map((p) => [p.date, p.count]))
   const secondsByDate = new Map((timeData ?? []).map((p) => [p.date, p.seconds]))
+  const totalCompleted = (data ?? []).reduce((sum, point) => sum + point.count, 0)
 
   const last30 = Array.from({ length: 30 }, (_, i) => {
     const d = new Date(thirtyDaysAgo)
@@ -40,9 +48,14 @@ export function Stats() {
 
   return (
     <div className="flex flex-col gap-8">
+      <h1 className="text-lg font-semibold">Stats</h1>
       <div>
-        <h3 className="mb-3 text-sm font-medium text-muted-foreground">Completions, past year</h3>
-        <div className="heatmap-wrap rounded-lg border p-4">
+        <h2 className="mb-3 text-sm font-medium text-muted-foreground">Completions, past year</h2>
+        <div
+          role="img"
+          aria-label={`Completion heatmap for the past year. ${totalCompleted} tasks completed.`}
+          className="heatmap-wrap rounded-lg border p-4"
+        >
           <CalendarHeatmap
             startDate={yearAgo}
             endDate={today}
@@ -56,10 +69,24 @@ export function Stats() {
             }}
           />
         </div>
+        <div
+          aria-hidden="true"
+          className="mt-2 flex items-center justify-end gap-1.5 text-xs text-muted-foreground"
+        >
+          <span>Less</span>
+          {HEAT_LEGEND.map((color) => (
+            <span
+              key={color}
+              className="size-3 rounded-sm"
+              style={{ backgroundColor: color }}
+            />
+          ))}
+          <span>More</span>
+        </div>
       </div>
 
       <div>
-        <h3 className="mb-3 text-sm font-medium text-muted-foreground">Completions, last 30 days</h3>
+        <h2 className="mb-3 text-sm font-medium text-muted-foreground">Completions, last 30 days</h2>
         <ChartContainer config={completionsConfig} className="h-64 w-full">
           <BarChart data={last30}>
             <CartesianGrid vertical={false} />
@@ -71,7 +98,7 @@ export function Stats() {
       </div>
 
       <div>
-        <h3 className="mb-3 text-sm font-medium text-muted-foreground">Time tracked, last 30 days</h3>
+        <h2 className="mb-3 text-sm font-medium text-muted-foreground">Time tracked, last 30 days</h2>
         <ChartContainer config={timeConfig} className="h-64 w-full">
           <BarChart data={last30}>
             <CartesianGrid vertical={false} />

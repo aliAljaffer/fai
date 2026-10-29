@@ -380,6 +380,7 @@ export function useMoveTask(boardId: number | undefined) {
           t.id === task.id ? { ...task, tags: task.tags?.length ? task.tags : t.tags } : t,
         ),
       )
+      qc.invalidateQueries({ queryKey: ['task', task.id] })
       qc.invalidateQueries({ queryKey: ['tasks'] })
     },
   })

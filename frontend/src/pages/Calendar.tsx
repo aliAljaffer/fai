@@ -292,7 +292,7 @@ export function Calendar() {
         ref={calendarRef}
         className="fai-calendar flex min-h-0 flex-1 flex-col overflow-x-auto rounded-lg border p-3"
       >
-        <div className="flex min-h-0 min-w-[56rem] flex-1 flex-col">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <FullCalendar
             plugins={[dayGridPlugin, interactionPlugin]}
             initialView="dayGridMonth"

@@ -35,6 +35,7 @@ export function AIPanel({ task }: { task: Task }) {
       </div>
       <div className="flex flex-col gap-2">
         <Textarea
+          aria-label="Ask about this task"
           placeholder="Ask about this task…"
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}

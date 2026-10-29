@@ -74,6 +74,7 @@ export function LabelEditor({ task }: { task: Task }) {
       <div className="relative">
         <Input
           value={query}
+          aria-label="Add label"
           placeholder="Add label…"
           className="h-7 text-xs"
           onChange={(event) => {

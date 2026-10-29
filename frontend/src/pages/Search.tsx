@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -15,9 +15,11 @@ export function Search() {
 
   return (
     <div className="flex flex-col gap-4">
+      <h1 className="text-lg font-semibold">Search</h1>
       <div className="flex flex-wrap items-center gap-3">
         <Input
           autoFocus
+          aria-label="Search tasks and notes"
           placeholder="Search tasks and notes…"
           value={q}
           onChange={(e) => setQ(e.target.value)}
@@ -36,26 +38,35 @@ export function Search() {
       {data && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
-            <h3 className="mb-2 text-sm font-medium text-muted-foreground">Tasks</h3>
+            <h2 className="mb-2 text-sm font-medium text-muted-foreground">Tasks</h2>
             <div className="flex flex-col gap-2">
               {data.tasks?.map((t) => (
-                <Card
+                <button
                   key={t.id}
-                  className="cursor-pointer"
+                  type="button"
+                  className="rounded-xl text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
                   onClick={() => navigate({ search: `?task=${t.id}` })}
                 >
-                  <CardContent>{t.title}</CardContent>
-                </Card>
+                  <Card className="transition-colors hover:bg-muted/40">
+                    <CardContent>{t.title}</CardContent>
+                  </Card>
+                </button>
               ))}
             </div>
           </div>
           <div>
-            <h3 className="mb-2 text-sm font-medium text-muted-foreground">Notes</h3>
+            <h2 className="mb-2 text-sm font-medium text-muted-foreground">Notes</h2>
             <div className="flex flex-col gap-2">
               {data.notes?.map((n) => (
-                <Card key={n.id} className="cursor-pointer" onClick={() => navigate(`/notes/${n.id}`)}>
-                  <CardContent>{n.title}</CardContent>
-                </Card>
+                <Link
+                  key={n.id}
+                  to={`/notes/${n.id}`}
+                  className="rounded-xl outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                >
+                  <Card className="transition-colors hover:bg-muted/40">
+                    <CardContent>{n.title}</CardContent>
+                  </Card>
+                </Link>
               ))}
             </div>
           </div>
