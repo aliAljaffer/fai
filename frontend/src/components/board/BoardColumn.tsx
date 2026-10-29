@@ -1,6 +1,6 @@
-import { useDroppable } from '@dnd-kit/core'
-import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
-import { ArrowLeft, ArrowRight, MoreHorizontal, Pencil, Plus } from 'lucide-react'
+import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import { ArrowLeft, ArrowRight, GripVertical, MoreHorizontal, Pencil, Plus } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -25,6 +25,7 @@ export function BoardColumn({
   doneColumnIds,
   highlighted,
   adding,
+  dragging,
   runningTaskId,
   canMoveLeft,
   canMoveRight,
@@ -46,6 +47,7 @@ export function BoardColumn({
   doneColumnIds: Set<number>
   highlighted: boolean
   adding: boolean
+  dragging: boolean
   runningTaskId: number | null
   canMoveLeft: boolean
   canMoveRight: boolean
@@ -58,7 +60,15 @@ export function BoardColumn({
   onToggleTimer: (task: Task) => void
   onToggleSubtask: (subtask: Task) => void
 }) {
-  const { setNodeRef, isOver } = useDroppable({
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+    isOver,
+  } = useSortable({
     id: `column-${column.id}`,
     data: { type: 'column' },
   })
@@ -115,7 +125,11 @@ export function BoardColumn({
   }
 
   return (
-    <section className="flex w-72 shrink-0 flex-col">
+    <section
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={cn('flex w-72 shrink-0 flex-col', isDragging && 'relative z-10')}
+    >
       <div className="flex h-8 items-center justify-between gap-2 border-b pb-2">
         {renaming ? (
           <Input
@@ -139,7 +153,19 @@ export function BoardColumn({
             }}
           />
         ) : (
-          <h2 className="min-w-0 truncate text-sm font-medium">{column.name}</h2>
+          <div
+            {...attributes}
+            {...listeners}
+            className="flex min-w-0 flex-1 cursor-grab touch-none items-center gap-1 rounded-sm outline-none select-none focus-visible:ring-2 focus-visible:ring-ring/50 active:cursor-grabbing"
+            aria-label={`Reorder ${column.name}`}
+            title="Drag to reorder"
+          >
+            <GripVertical
+              className="size-3.5 shrink-0 text-muted-foreground/60"
+              aria-hidden
+            />
+            <h2 className="min-w-0 truncate text-sm font-medium">{column.name}</h2>
+          </div>
         )}
         <div className="flex shrink-0 items-center gap-1">
           <span className="text-xs tabular-nums text-muted-foreground">
@@ -182,7 +208,6 @@ export function BoardColumn({
         </div>
       </div>
       <div
-        ref={setNodeRef}
         className={cn(
           'flex max-h-[calc(100dvh-14rem)] min-h-24 flex-1 flex-col gap-2 overflow-y-auto rounded-md pt-2 pr-0.5 transition-[background-color,box-shadow] duration-150 motion-reduce:transition-none',
           (isOver || highlighted) && 'bg-muted/40 ring-1 ring-primary/25',
@@ -204,7 +229,7 @@ export function BoardColumn({
             />
           ))}
         </SortableContext>
-        {!tasks.length && !adding && (
+        {!tasks.length && !adding && !dragging && (
           hasFilters ? (
             <p className="flex h-16 items-center justify-center text-xs text-muted-foreground">
               No matching tasks.

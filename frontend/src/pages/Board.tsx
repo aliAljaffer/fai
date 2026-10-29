@@ -11,6 +11,10 @@ import {
   type DragOverEvent,
   type DragStartEvent,
 } from '@dnd-kit/core'
+import {
+  SortableContext,
+  horizontalListSortingStrategy,
+} from '@dnd-kit/sortable'
 import { Pencil, Plus, Search } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
@@ -57,6 +61,22 @@ import type { Board as BoardType, Task } from '../api/types'
 
 const collisionDetection: CollisionDetection = (args) => {
   const hits = pointerWithin(args)
+  if (args.active.data.current?.type === 'column') {
+    const columnHits = hits.filter((hit) => hit.data?.type === 'column')
+    const ids = new Set(
+      (columnHits.length
+        ? columnHits
+        : args.droppableContainers.filter(
+            (container) => container.data.current?.type === 'column',
+          )
+      ).map((hit) => hit.id),
+    )
+    if (!ids.size) return []
+    return closestCenter({
+      ...args,
+      droppableContainers: args.droppableContainers.filter((container) => ids.has(container.id)),
+    })
+  }
   const taskHits = hits.filter((hit) => hit.data?.type === 'task')
   const candidates = taskHits.length ? taskHits : hits
   if (!candidates.length) return closestCenter(args)
@@ -65,6 +85,92 @@ const collisionDetection: CollisionDetection = (args) => {
     ...args,
     droppableContainers: args.droppableContainers.filter((container) => ids.has(container.id)),
   })
+}
+
+function tasksInColumn(tasks: Task[], columnId: number) {
+  return tasks
+    .filter((task) => task.column_id === columnId)
+    .sort((a, b) => a.position - b.position)
+}
+
+function withPositions(tasks: Task[], ordered: Task[]) {
+  const positions = new Map(ordered.map((task, index) => [task.id, (index + 1) * 1024]))
+  return tasks.map((task) =>
+    positions.has(task.id) ? { ...task, position: positions.get(task.id)! } : task,
+  )
+}
+
+function previewTaskAtEnd(tasks: Task[], activeId: number, columnId: number) {
+  const active = tasks.find((task) => task.id === activeId)
+  if (!active) return tasks
+  const full = tasksInColumn(tasks, columnId)
+  if (full[full.length - 1]?.id === activeId) return tasks
+
+  const rest = tasks.filter((task) => task.id !== activeId)
+  const target = tasksInColumn(rest, columnId)
+  const moving = { ...active, column_id: columnId }
+  const ordered = [...target, moving]
+  return withPositions([...rest, moving], ordered)
+}
+
+function previewTaskMove(
+  tasks: Task[],
+  activeId: number,
+  targetColumnId: number,
+  overTaskId: number | null,
+  below: boolean,
+) {
+  const active = tasks.find((task) => task.id === activeId)
+  if (!active || active.column_id === targetColumnId) return tasks
+
+  const rest = tasks.filter((task) => task.id !== activeId)
+  const target = tasksInColumn(rest, targetColumnId)
+  let index = target.length
+  if (overTaskId !== null) {
+    const overIndex = target.findIndex((task) => task.id === overTaskId)
+    if (overIndex >= 0) index = overIndex + (below ? 1 : 0)
+  }
+
+  const moving = { ...active, column_id: targetColumnId }
+  const ordered = [...target.slice(0, index), moving, ...target.slice(index)]
+  return withPositions([...rest, moving], ordered)
+}
+
+function computeTaskDrop(tasks: Task[], activeId: number, overId: string) {
+  const active = tasks.find((task) => task.id === activeId)
+  if (!active) return null
+
+  let targetColumnId: number
+  let overTaskId: number | null = null
+  if (overId.startsWith('column-')) {
+    targetColumnId = Number(overId.slice('column-'.length))
+  } else {
+    const overTask = tasks.find((task) => task.id === Number(overId))
+    if (!overTask) return null
+    targetColumnId = overTask.column_id
+    overTaskId = overTask.id
+  }
+
+  const withActive = tasksInColumn(tasks, targetColumnId)
+  const activeIndex = withActive.findIndex((task) => task.id === activeId)
+  const withoutActive = withActive.filter((task) => task.id !== activeId)
+
+  let insertAt: number
+  if (overTaskId === null) {
+    insertAt = withoutActive.length
+  } else {
+    if (overTaskId === activeId) return null
+    insertAt = withActive.findIndex((task) => task.id === overTaskId)
+    if (insertAt < 0) return null
+  }
+
+  return {
+    id: activeId,
+    columnId: targetColumnId,
+    beforeTaskId: withoutActive[insertAt]?.id,
+    afterTaskId: withoutActive[insertAt - 1]?.id,
+    changed: active.column_id !== targetColumnId || activeIndex !== insertAt,
+  }
 }
 
 function BoardDialog({
@@ -293,6 +399,7 @@ export function Board() {
   const [priority, setPriority] = useState('all')
   const [activeTaskId, setActiveTaskId] = useState<number | null>(null)
   const [overColumnId, setOverColumnId] = useState<number | null>(null)
+  const [dragTasks, setDragTasks] = useState<Task[] | null>(null)
   const [composerColumnId, setComposerColumnId] = useState<number | null>(null)
   const [newTaskOpen, setNewTaskOpen] = useState(false)
   const [newBoardOpen, setNewBoardOpen] = useState(false)
@@ -361,22 +468,25 @@ export function Board() {
 
   const tasksByColumn = useMemo(() => {
     const map = new Map<number, Task[]>()
-    for (const task of filteredTasks) {
+    for (const task of dragTasks ?? filteredTasks) {
       const list = map.get(task.column_id) ?? []
       list.push(task)
       map.set(task.column_id, list)
     }
     for (const list of map.values()) list.sort((a, b) => a.position - b.position)
     return map
-  }, [filteredTasks])
+  }, [dragTasks, filteredTasks])
 
   const totalByColumn = useMemo(() => {
     const map = new Map<number, number>()
+    const previewActive = dragTasks?.find((task) => task.id === activeTaskId)
     for (const task of tasks ?? []) {
-      map.set(task.column_id, (map.get(task.column_id) ?? 0) + 1)
+      const columnId =
+        previewActive && task.id === previewActive.id ? previewActive.column_id : task.column_id
+      map.set(columnId, (map.get(columnId) ?? 0) + 1)
     }
     return map
-  }, [tasks])
+  }, [tasks, dragTasks, activeTaskId])
 
   const openCount = topLevelTasks.filter(
     (task) => !task.completed_at && !doneColumnIds.has(task.column_id),
@@ -391,46 +501,106 @@ export function Board() {
   const activeTask = tasks?.find((task) => task.id === activeTaskId)
 
   function handleDragStart(event: DragStartEvent) {
-    setActiveTaskId(Number(event.active.id))
     setOverColumnId(null)
+    if (event.active.data.current?.type === 'column') {
+      setActiveTaskId(null)
+      setDragTasks(null)
+      return
+    }
+    setActiveTaskId(Number(event.active.id))
+    setDragTasks(filteredTasks.map((task) => ({ ...task })))
   }
 
   function handleDragOver(event: DragOverEvent) {
+    if (event.active.data.current?.type === 'column') return
     const overId = event.over ? String(event.over.id) : ''
-    if (overId.startsWith('column-')) {
-      setOverColumnId(Number(overId.replace('column-', '')))
+    const overTask = overId.startsWith('column-')
+      ? undefined
+      : dragTasks?.find((task) => task.id === Number(overId))
+    const targetColumnId = overId.startsWith('column-')
+      ? Number(overId.slice('column-'.length))
+      : overTask?.column_id ?? null
+    setOverColumnId(targetColumnId)
+    if (!dragTasks || !event.over) return
+
+    const activeId = Number(event.active.id)
+    const activeTask = dragTasks.find((task) => task.id === activeId)
+    if (!activeTask || targetColumnId === null) return
+    if (activeTask.column_id === targetColumnId) {
+      if (!overId.startsWith('column-')) return
+      setDragTasks((current) =>
+        current ? previewTaskAtEnd(current, activeId, targetColumnId) : current,
+      )
       return
     }
-    const overTask = tasks?.find((task) => task.id === Number(overId))
-    setOverColumnId(overTask?.column_id ?? null)
+
+    const translated = event.active.rect.current.translated
+    const below = Boolean(
+      translated && translated.top > event.over.rect.top + event.over.rect.height,
+    )
+    setDragTasks((current) =>
+      current
+        ? previewTaskMove(current, activeId, targetColumnId, overTask?.id ?? null, below)
+        : current,
+    )
   }
 
   function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event
     setActiveTaskId(null)
     setOverColumnId(null)
-    const { active, over } = event
-    if (!over) return
-
-    const taskId = Number(active.id)
+    if (!over) {
+      setDragTasks(null)
+      return
+    }
     const overId = String(over.id)
 
-    let targetColumnId: number
-    let beforeTaskId: number | undefined
-
-    if (overId.startsWith('column-')) {
-      targetColumnId = Number(overId.replace('column-', ''))
-    } else {
-      const overTask = tasks?.find((task) => task.id === Number(overId))
-      if (!overTask) return
-      targetColumnId = overTask.column_id
-      beforeTaskId = overTask.id
+    if (active.data.current?.type === 'column') {
+      setDragTasks(null)
+      if (!overId.startsWith('column-')) return
+      const activeColumnId = Number(String(active.id).slice('column-'.length))
+      const overColumnId = Number(overId.slice('column-'.length))
+      if (activeColumnId === overColumnId) return
+      const ids = orderedColumns.map((column) => column.id)
+      const from = ids.indexOf(activeColumnId)
+      const to = ids.indexOf(overColumnId)
+      if (from < 0 || to < 0) return
+      const next = [...ids]
+      next.splice(from, 1)
+      next.splice(to, 0, activeColumnId)
+      reorderColumns.mutate(next, { onError: (error) => toast.error(error.message) })
+      return
     }
 
-    const moving = tasks?.find((task) => task.id === taskId)
-    if (moving && moving.column_id === targetColumnId && moving.id === beforeTaskId) return
-
+    const taskId = Number(active.id)
+    let result: ReturnType<typeof computeTaskDrop> = null
+    if (overId === String(active.id)) {
+      const original = tasks?.find((task) => task.id === taskId)
+      const preview = dragTasks?.find((task) => task.id === taskId)
+      if (dragTasks && original && preview && original.column_id !== preview.column_id) {
+        const columnTasks = tasksInColumn(dragTasks, preview.column_id)
+        const index = columnTasks.findIndex((task) => task.id === taskId)
+        const withoutActive = columnTasks.filter((task) => task.id !== taskId)
+        result = {
+          id: taskId,
+          columnId: preview.column_id,
+          beforeTaskId: withoutActive[index]?.id,
+          afterTaskId: withoutActive[index - 1]?.id,
+          changed: true,
+        }
+      }
+    } else {
+      result = dragTasks ? computeTaskDrop(dragTasks, taskId, overId) : null
+    }
+    setDragTasks(null)
+    if (!result || !result.changed) return
     moveTask.mutate(
-      { id: taskId, column_id: targetColumnId, before_task_id: beforeTaskId },
+      {
+        id: result.id,
+        column_id: result.columnId,
+        before_task_id: result.beforeTaskId,
+        after_task_id: result.afterTaskId,
+      },
       { onError: (error) => toast.error(error.message) },
     )
   }
@@ -551,6 +721,7 @@ export function Board() {
       onDragCancel={() => {
         setActiveTaskId(null)
         setOverColumnId(null)
+        setDragTasks(null)
       }}
     >
       <div className="flex min-w-0 flex-col gap-4">
@@ -667,33 +838,39 @@ export function Board() {
               </div>
             )}
 
-            {orderedColumns.map((column, index) => (
-              <BoardColumn
-                key={column.id}
-                column={column}
-                columns={orderedColumns}
-                tasks={tasksByColumn.get(column.id) ?? []}
-                subtasksByParent={subtasksByParent}
-                totalCount={totalByColumn.get(column.id) ?? 0}
-                hasFilters={hasFilters}
-                doneColumnIds={doneColumnIds}
-                highlighted={overColumnId === column.id}
-                adding={composerColumnId === column.id}
-                runningTaskId={running?.task_id ?? null}
-                canMoveLeft={index > 0}
-                canMoveRight={index < orderedColumns.length - 1}
-                onStartAdding={() => setComposerColumnId(column.id)}
-                onCancelAdding={() => setComposerColumnId(null)}
-                onTaskClick={(task) => setSearchParams({ task: String(task.id) })}
-                onAddTask={async (title) => {
-                  await createTask.mutateAsync({ board_id: boardId, column_id: column.id, title })
-                }}
-                onRename={(name) => renameColumn(column.id, name)}
-                onMove={(direction) => moveColumn(column.id, direction)}
-                onToggleTimer={toggleTimer}
-                onToggleSubtask={toggleSubtask}
-              />
-            ))}
+            <SortableContext
+              items={orderedColumns.map((column) => `column-${column.id}`)}
+              strategy={horizontalListSortingStrategy}
+            >
+              {orderedColumns.map((column, index) => (
+                <BoardColumn
+                  key={column.id}
+                  column={column}
+                  columns={orderedColumns}
+                  tasks={tasksByColumn.get(column.id) ?? []}
+                  subtasksByParent={subtasksByParent}
+                  totalCount={totalByColumn.get(column.id) ?? 0}
+                  hasFilters={hasFilters}
+                  doneColumnIds={doneColumnIds}
+                  highlighted={overColumnId === column.id}
+                  adding={composerColumnId === column.id}
+                  dragging={dragTasks !== null}
+                  runningTaskId={running?.task_id ?? null}
+                  canMoveLeft={index > 0}
+                  canMoveRight={index < orderedColumns.length - 1}
+                  onStartAdding={() => setComposerColumnId(column.id)}
+                  onCancelAdding={() => setComposerColumnId(null)}
+                  onTaskClick={(task) => setSearchParams({ task: String(task.id) })}
+                  onAddTask={async (title) => {
+                    await createTask.mutateAsync({ board_id: boardId, column_id: column.id, title })
+                  }}
+                  onRename={(name) => renameColumn(column.id, name)}
+                  onMove={(direction) => moveColumn(column.id, direction)}
+                  onToggleTimer={toggleTimer}
+                  onToggleSubtask={toggleSubtask}
+                />
+              ))}
+            </SortableContext>
 
             {addingColumn ? (
               <section className="flex w-72 shrink-0 flex-col gap-2 rounded-md border border-dashed p-2">

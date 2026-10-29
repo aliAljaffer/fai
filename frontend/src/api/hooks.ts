@@ -175,9 +175,28 @@ export function useUpdateColumn(boardId: number | undefined) {
 
 export function useReorderColumns(boardId: number | undefined) {
   const qc = useQueryClient()
+  const key = ['columns', boardId] as const
   return useMutation({
     mutationFn: (ids: number[]) => api.patch<BoardColumn[]>(`/boards/${boardId}/columns`, { ids }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['columns', boardId] }),
+    onMutate: async (ids) => {
+      await qc.cancelQueries({ queryKey: key })
+      const previous = qc.getQueryData<BoardColumn[]>(key)
+      if (previous) {
+        const byId = new Map(previous.map((column) => [column.id, column]))
+        qc.setQueryData<BoardColumn[]>(
+          key,
+          ids.flatMap((id, index) => {
+            const column = byId.get(id)
+            return column ? [{ ...column, position: index + 1 }] : []
+          }),
+        )
+      }
+      return { previous }
+    },
+    onError: (_error, _ids, context) => {
+      if (context?.previous) qc.setQueryData(key, context.previous)
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: key }),
   })
 }
 
