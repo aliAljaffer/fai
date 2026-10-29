@@ -179,6 +179,35 @@ func (s *Store) UpdateTask(ctx context.Context, id int64, title, descriptionMd, 
 	return tasks[0], nil
 }
 
+func (s *Store) PatchTask(ctx context.Context, id int64, patch store.TaskPatch) (store.Task, error) {
+	dueDate := ptrToNullString(patch.DueDate)
+	t, err := s.q.PatchTask(ctx, sqlitedb.PatchTaskParams{
+		ID:            id,
+		Title:         ptrToNullString(patch.Title),
+		DescriptionMd: ptrToNullString(patch.DescriptionMd),
+		Priority:      ptrToNullString(patch.Priority),
+		DueDateSet:    patch.DueDateSet,
+		DueDate:       dueDate,
+	})
+	if err != nil {
+		return store.Task{}, err
+	}
+	if patch.DescriptionMd != nil {
+		if err := s.attachBodyLabels(ctx, id, t.DescriptionMd); err != nil {
+			return store.Task{}, err
+		}
+	}
+	tasks := []store.Task{toTask(t)}
+	if err := s.decorateTasks(ctx, tasks); err != nil {
+		return store.Task{}, err
+	}
+	return tasks[0], nil
+}
+
+func (s *Store) RestoreTask(ctx context.Context, id int64) error {
+	return s.q.RestoreTask(ctx, id)
+}
+
 func (s *Store) UpdateTaskTitle(ctx context.Context, id int64, title string) error {
 	return s.q.UpdateTaskTitle(ctx, sqlitedb.UpdateTaskTitleParams{ID: id, Title: title})
 }

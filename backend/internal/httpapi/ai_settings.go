@@ -88,7 +88,7 @@ type aiSettingsBody struct {
 
 func validAIProvider(provider string) bool {
 	switch strings.ToLower(strings.TrimSpace(provider)) {
-	case "", ai.ProviderAnthropic, ai.ProviderOpenAI, ai.ProviderOpenAICompat, "opencode-zen":
+	case "", ai.ProviderAnthropic, ai.ProviderOpenAI, ai.ProviderOpenAICompat, ai.ProviderOpenCodeGo, "opencode-zen":
 		return true
 	default:
 		return false

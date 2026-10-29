@@ -61,6 +61,17 @@ func (s *Store) UpdateBoard(ctx context.Context, id int64, name string) (store.B
 	return toBoard(b), err
 }
 
+func (s *Store) DeleteBoard(ctx context.Context, id int64) error {
+	tag, err := s.pool.Exec(ctx, `DELETE FROM boards WHERE id = $1`, id)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return store.ErrNotFound
+	}
+	return nil
+}
+
 func toColumn(c sqlc.BoardColumn) store.BoardColumn {
 	return store.BoardColumn{
 		ID: c.ID, BoardID: c.BoardID, Name: c.Name,

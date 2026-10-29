@@ -47,12 +47,14 @@ export function AIPanel({ task }: { task: Task }) {
           disabled={chat.isPending || !prompt}
           onClick={() =>
             chat.mutate(
-              [
-                {
-                  role: 'user',
-                  content: `Task: ${task.title}\n\n${task.description_md}\n\nQuestion: ${prompt}`,
-                },
-              ],
+              {
+                messages: [
+                  {
+                    role: 'user',
+                    content: `Task: ${task.title}\n\n${task.description_md}\n\nQuestion: ${prompt}`,
+                  },
+                ],
+              },
               {
                 onSuccess: (res) => setReply(res.reply),
                 onError: (err) => toast.error(err.message),

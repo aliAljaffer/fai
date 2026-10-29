@@ -11,14 +11,17 @@ import {
   SquareCheckBig,
 } from 'lucide-react'
 import { useHotkeys } from 'react-hotkeys-hook'
+import { useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
-import { useBoards, useTasks } from '../api/hooks'
+import { useAllTasks, useBoards, useColumns, useDeleteTask, useMoveTask, useRestoreTasks, useTask, useTasks } from '../api/hooks'
+import { showUndo } from '../lib/undo'
 import { useUIStore } from '../store/ui'
 import { useWorkspaceStore } from '../store/workspace'
 
 const pages = [
-  { label: 'Board', path: '/', icon: LayoutDashboard },
+  { label: 'Overview', path: '/', icon: LayoutDashboard },
+  { label: 'Board', path: '/board', icon: SquareCheckBig },
   { label: 'List', path: '/list', icon: List },
   { label: 'Calendar', path: '/calendar', icon: Calendar },
   { label: 'Notes', path: '/notes', icon: NotebookPen },
@@ -35,8 +38,18 @@ export function CommandPalette() {
   const { data: boards } = useBoards(workspaceId)
   const boardId =
     boards?.find((board) => board.id === selectedBoardId)?.id ?? boards?.[0]?.id
-  const { data: tasks } = useTasks(boardId)
+  const [allWorkspaces, setAllWorkspaces] = useState(false)
+  const { data: scopedTasks } = useTasks(boardId)
+  const { data: allTasks } = useAllTasks(allWorkspaces)
+  const tasks = allWorkspaces ? allTasks : scopedTasks
 
+  const focusedId = Number(new URLSearchParams(location.search).get('task'))
+  const focusedValid = Number.isFinite(focusedId) && focusedId > 0
+  const { data: focusedTask } = useTask(focusedValid ? focusedId : undefined)
+  const { data: focusedColumns } = useColumns(focusedTask?.board_id)
+  const moveTask = useMoveTask(focusedTask?.board_id)
+  const deleteTask = useDeleteTask(focusedTask?.board_id)
+  const restoreTasks = useRestoreTasks(focusedTask?.board_id)
   const taskOpen = new URLSearchParams(location.search).has('task')
 
   function close() {
@@ -57,7 +70,7 @@ export function CommandPalette() {
 
   function newTask() {
     close()
-    navigate('/')
+    navigate('/board')
     requestNewTask()
   }
 
@@ -85,6 +98,62 @@ export function CommandPalette() {
               No results.
             </Command.Empty>
 
+            {focusedTask && (
+              <>
+                <Command.Group
+                  heading={`This task: ${focusedTask.title}`}
+                  className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground"
+                >
+                  <Command.Item
+                    value="Open task details"
+                    onSelect={() => {
+                      close()
+                      const params = new URLSearchParams(location.search)
+                      params.set('task', String(focusedTask.id))
+                      params.set('panel', '1')
+                      navigate({ pathname: location.pathname, search: params.toString() })
+                    }}
+                    className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm data-[selected=true]:bg-muted"
+                  >
+                    <SquareCheckBig className="size-4 text-muted-foreground" />
+                    Open details
+                  </Command.Item>
+                  {(focusedColumns ?? []).map((column) => (
+                    <Command.Item
+                      key={column.id}
+                      value={`Move to ${column.name}`}
+                      onSelect={() => {
+                        close()
+                        moveTask.mutate({ id: focusedTask.id, column_id: column.id })
+                      }}
+                      className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm data-[selected=true]:bg-muted"
+                    >
+                      <SquareCheckBig className="size-4 text-muted-foreground" />
+                      Move to {column.name}
+                    </Command.Item>
+                  ))}
+                  <Command.Item
+                    value="Delete task"
+                    onSelect={() => {
+                      close()
+                      const title = focusedTask.title
+                      deleteTask.mutate(focusedTask.id, {
+                        onSuccess: () =>
+                          showUndo(`Deleted "${title}"`, () =>
+                            restoreTasks.mutateAsync([focusedTask.id]).then(() => undefined),
+                          ),
+                      })
+                    }}
+                    className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm data-[selected=true]:bg-muted"
+                  >
+                    <SquareCheckBig className="size-4 text-muted-foreground" />
+                    Delete task
+                  </Command.Item>
+                </Command.Group>
+                <Command.Separator className="my-1 h-px bg-border" />
+              </>
+            )}
+
             <Command.Group
               heading="Go to"
               className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground"
@@ -109,6 +178,14 @@ export function CommandPalette() {
               className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground"
             >
               <Command.Item
+                value="Toggle all workspaces"
+                onSelect={() => setAllWorkspaces((current) => !current)}
+                className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm data-[selected=true]:bg-muted"
+              >
+                <SquareCheckBig className="size-4 text-muted-foreground" />
+                {allWorkspaces ? 'Show active workspace only' : 'Show tasks from all workspaces'}
+              </Command.Item>
+              <Command.Item
                 value="New task"
                 onSelect={newTask}
                 className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm data-[selected=true]:bg-muted"
@@ -129,7 +206,7 @@ export function CommandPalette() {
                   {tasks.map((task) => (
                     <Command.Item
                       key={task.id}
-                      value={`${task.title} ${task.id}`}
+                      value={`${task.title} ${task.ref ?? ''} ${task.id}`}
                       onSelect={() => openTask(task.id)}
                       className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm data-[selected=true]:bg-muted"
                     >

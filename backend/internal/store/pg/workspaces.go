@@ -196,8 +196,7 @@ func (s *Store) ResolveRefs(ctx context.Context, query string, workspaceID *int6
 		JOIN workspaces w ON w.id = t.workspace_id
 		WHERE t.archived = false
 		  AND (t.title ILIKE $1 ESCAPE '\' OR t.description_md ILIKE $1 ESCAPE '\')
-		  AND ($2::bigint IS NULL OR t.workspace_id = $2)
-		ORDER BY t.updated_at DESC
+		ORDER BY (t.workspace_id = $2) DESC NULLS LAST, t.updated_at DESC
 		LIMIT 10`, pattern, workspaceID)
 	if err != nil {
 		return nil, err
@@ -349,14 +348,56 @@ func (s *Store) scanBacklinks(ctx context.Context, taskID int64, needle string) 
 	if err != nil {
 		return nil, err
 	}
-	defer reminderRows.Close()
 	for reminderRows.Next() {
 		var b store.Backlink
 		b.Kind = "reminder"
 		if err := reminderRows.Scan(&b.ID, &b.Title, &b.WorkspaceTag); err != nil {
+			reminderRows.Close()
 			return nil, err
 		}
 		out = append(out, b)
 	}
-	return out, reminderRows.Err()
+	if err := reminderRows.Err(); err != nil {
+		reminderRows.Close()
+		return nil, err
+	}
+	reminderRows.Close()
+
+	meetingRows, err := s.pool.Query(ctx, `
+		SELECT m.id, m.title, w.tag
+		FROM meeting_outcomes m JOIN workspaces w ON w.id = m.workspace_id
+		WHERE m.notes_md ILIKE $1 ESCAPE '\' OR m.title ILIKE $1 ESCAPE '\'`, needle)
+	if err != nil {
+		return nil, err
+	}
+	defer meetingRows.Close()
+	for meetingRows.Next() {
+		var b store.Backlink
+		b.Kind = "meeting"
+		if err := meetingRows.Scan(&b.ID, &b.Title, &b.WorkspaceTag); err != nil {
+			return nil, err
+		}
+		out = append(out, b)
+	}
+	if err := meetingRows.Err(); err != nil {
+		return nil, err
+	}
+
+	chatRows, err := s.pool.Query(ctx, `
+		SELECT c.id, LEFT(c.content, 80), w.tag
+		FROM chat_messages c JOIN workspaces w ON w.id = c.workspace_id
+		WHERE c.content ILIKE $1 ESCAPE '\'`, needle)
+	if err != nil {
+		return nil, err
+	}
+	defer chatRows.Close()
+	for chatRows.Next() {
+		var b store.Backlink
+		b.Kind = "chat"
+		if err := chatRows.Scan(&b.ID, &b.Title, &b.WorkspaceTag); err != nil {
+			return nil, err
+		}
+		out = append(out, b)
+	}
+	return out, chatRows.Err()
 }

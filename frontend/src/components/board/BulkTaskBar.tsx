@@ -1,15 +1,6 @@
 import { Trash2, X } from 'lucide-react'
-import { useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -26,7 +17,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { useBulkTaskActions, type BulkTaskAction } from '../../api/hooks'
+import { useBulkTaskActions, useRestoreTasks, type BulkTaskAction } from '../../api/hooks'
+import { showUndo } from '../../lib/undo'
 import type { BoardColumn, Tag, Task } from '../../api/types'
 
 export function BulkTaskBar({
@@ -41,8 +33,8 @@ export function BulkTaskBar({
   onClear: () => void
 }) {
   const bulk = useBulkTaskActions()
-  const [confirmDelete, setConfirmDelete] = useState(false)
-  const busy = bulk.isPending
+  const restore = useRestoreTasks(undefined)
+  const busy = bulk.isPending || restore.isPending
   const count = tasks.length
 
   const doneColumnIds = new Set(columns.filter((column) => column.is_done).map((column) => column.id))
@@ -60,10 +52,9 @@ export function BulkTaskBar({
   const commonPriority = common(tasks.map((task) => task.priority))
   const commonDue = common(tasks.map((task) => task.due_date ?? '')) ?? ''
 
-  async function run(action: BulkTaskAction, message: string) {
+  async function run(action: BulkTaskAction) {
     try {
       await bulk.mutateAsync({ tasks, action })
-      toast.success(message)
       return true
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Bulk action failed')
@@ -72,10 +63,12 @@ export function BulkTaskBar({
   }
 
   async function remove() {
-    if (await run({ type: 'delete' }, `Deleted ${count} ${count === 1 ? 'task' : 'tasks'}`)) {
-      setConfirmDelete(false)
-      onClear()
-    }
+    const ids = tasks.map((task) => task.id)
+    if (!(await run({ type: 'delete' }))) return
+    onClear()
+    showUndo(`Deleted ${count} ${count === 1 ? 'task' : 'tasks'}`, () =>
+      restore.mutateAsync(ids).then(() => undefined),
+    )
   }
 
   return (
@@ -86,7 +79,7 @@ export function BulkTaskBar({
           <Select
             value={commonColumn ?? null}
             onValueChange={(value) => {
-              if (value) void run({ type: 'move', columnId: Number(value) }, `Moved ${count}`)
+              if (value) void run({ type: 'move', columnId: Number(value) })
             }}
           >
             <SelectTrigger size="sm" className="w-36" aria-label="Move to column" disabled={busy}>
@@ -104,7 +97,7 @@ export function BulkTaskBar({
           <Select
             value={commonPriority ?? null}
             onValueChange={(value) => {
-              if (value) void run({ type: 'priority', priority: value }, `Set priority to ${value}`)
+              if (value) void run({ type: 'priority', priority: value })
             }}
           >
             <SelectTrigger size="sm" className="w-32" aria-label="Set priority" disabled={busy}>
@@ -141,7 +134,6 @@ export function BulkTaskBar({
                           checked
                             ? { type: 'addTag', tagId: tag.id }
                             : { type: 'removeTag', tagId: tag.id },
-                          checked ? `Added label ${tag.name}` : `Removed label ${tag.name}`,
                         )
                       }}
                     >
@@ -169,7 +161,7 @@ export function BulkTaskBar({
             disabled={busy}
             onChange={(event) => {
               const dueDate = event.target.value || null
-              void run({ type: 'dueDate', dueDate }, dueDate ? `Due date set to ${dueDate}` : 'Due date cleared')
+              void run({ type: 'dueDate', dueDate })
             }}
           />
           {tasks.some((task) => task.due_date) && (
@@ -177,7 +169,7 @@ export function BulkTaskBar({
               size="sm"
               variant="ghost"
               disabled={busy}
-              onClick={() => void run({ type: 'dueDate', dueDate: null }, 'Due date cleared')}
+              onClick={() => void run({ type: 'dueDate', dueDate: null })}
             >
               Clear due
             </Button>
@@ -190,7 +182,7 @@ export function BulkTaskBar({
               disabled={busy || !doneColumn}
               title={doneColumn ? undefined : 'Add a done column first'}
               onClick={() => {
-                if (doneColumn) void run({ type: 'move', columnId: doneColumn.id }, `Marked ${count} done`)
+                if (doneColumn) void run({ type: 'move', columnId: doneColumn.id })
               }}
             >
               Mark done
@@ -203,14 +195,14 @@ export function BulkTaskBar({
               disabled={busy || !openColumn}
               title={openColumn ? undefined : 'Add an open column first'}
               onClick={() => {
-                if (openColumn) void run({ type: 'move', columnId: openColumn.id }, `Reopened ${count}`)
+                if (openColumn) void run({ type: 'move', columnId: openColumn.id })
               }}
             >
               Reopen
             </Button>
           )}
 
-          <Button size="sm" variant="destructive" disabled={busy} onClick={() => setConfirmDelete(true)}>
+          <Button size="sm" variant="destructive" disabled={busy} onClick={() => void remove()}>
             <Trash2 />
             Delete
           </Button>
@@ -221,24 +213,6 @@ export function BulkTaskBar({
         </div>
       </div>
 
-      <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
-        <DialogContent className="rounded-lg">
-          <DialogHeader>
-            <DialogTitle>Delete {count === 1 ? 'task' : `${count} tasks`}?</DialogTitle>
-            <DialogDescription>
-              Deleted tasks are removed from the board and list. This cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setConfirmDelete(false)} disabled={busy}>
-              Cancel
-            </Button>
-            <Button variant="destructive" disabled={busy} onClick={() => void remove()}>
-              Delete
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </>
   )
 }

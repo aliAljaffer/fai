@@ -67,6 +67,23 @@ func (s *Server) updateBoard(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, board)
 }
 
+func (s *Server) deleteBoard(w http.ResponseWriter, r *http.Request) {
+	boardID, ok := parseID(r, "boardID")
+	if !ok {
+		writeError(w, http.StatusBadRequest, "invalid board id")
+		return
+	}
+	if err := s.Store.DeleteBoard(r.Context(), boardID); err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "board not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (s *Server) listColumns(w http.ResponseWriter, r *http.Request) {
 	boardID, err := strconv.ParseInt(chi.URLParam(r, "boardID"), 10, 64)
 	if err != nil {

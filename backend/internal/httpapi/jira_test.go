@@ -499,7 +499,7 @@ func TestJiraExportTree(t *testing.T) {
 
 	ids := fmt.Sprintf(`{"task_ids":[%d,%d,%d,%d]}`, big.ID, small.ID, solo.ID, broken.ID)
 	first := runExport(ids)
-	if first.Created != 10 || first.Skipped != 0 || first.Failed != 3 {
+	if first.Created != 10 || first.Skipped != 2 || first.Failed != 1 {
 		t.Fatalf("first export = %#v", first)
 	}
 
@@ -513,7 +513,7 @@ func TestJiraExportTree(t *testing.T) {
 		t.Errorf("solo task type = %q, want Task", got)
 	}
 	bigChild := createdBySummary("Big child 1")
-	if bigChild.IssueType != "Task" || bigChild.ParentKey != "DEV-1" {
+	if bigChild.IssueType != "Sub-task" || bigChild.ParentKey != "DEV-1" {
 		t.Errorf("arc child = %#v", bigChild)
 	}
 	smallChild := createdBySummary("Small child 1")
@@ -528,7 +528,7 @@ func TestJiraExportTree(t *testing.T) {
 	before := len(fake.created)
 	fake.mu.Unlock()
 	second := runExport(ids)
-	if second.Created != 0 || second.Skipped != 10 || second.Failed != 3 {
+	if second.Created != 0 || second.Skipped != 12 || second.Failed != 1 {
 		t.Fatalf("second export = %#v", second)
 	}
 	fake.mu.Lock()
@@ -541,13 +541,11 @@ func TestJiraExportTree(t *testing.T) {
 	loneParent := newTask("Lone parent", nil, "task")
 	loneChild := newTask("Lone child", &loneParent.ID, "step")
 	third := runExport(fmt.Sprintf(`{"task_id":%d}`, loneChild.ID))
-	if third.Created != 2 || third.Failed != 0 {
+	if third.Created != 0 || third.Skipped != 1 || third.Failed != 0 {
 		t.Fatalf("child-only export = %#v", third)
 	}
-	parentIssue := createdBySummary("Lone parent")
-	childIssue := createdBySummary("Lone child")
-	if parentIssue.IssueType != "Task" || childIssue.IssueType != "Sub-task" || childIssue.ParentKey != parentIssue.Key {
-		t.Errorf("child-only export parent = %#v child = %#v", parentIssue, childIssue)
+	if res := resultFor(third, loneChild.ID); res.Status != "skipped" {
+		t.Errorf("child-only result = %#v", res)
 	}
 }
 

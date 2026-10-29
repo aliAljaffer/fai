@@ -194,7 +194,7 @@ func TestRenameKeepsOldReferenceResolving(t *testing.T) {
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("scoped resolve status = %d", res.StatusCode)
 	}
-	if scoped := decodeInto[[]store.TaskRef](t, res); len(scoped) != 0 {
+	if scoped := decodeInto[[]store.TaskRef](t, res); len(scoped) != 1 || scoped[0].ID != task.ID {
 		t.Errorf("scoped resolve = %#v", scoped)
 	}
 }

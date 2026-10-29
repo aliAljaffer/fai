@@ -1,6 +1,7 @@
-import { NavLink, Route, Routes, useLocation } from 'react-router-dom'
-import { useEffect, useRef, useState } from 'react'
-import { Menu, Search } from 'lucide-react'
+import { NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
+import { useEffect, useRef } from 'react'
+import { useHotkeys } from 'react-hotkeys-hook'
+import { Search } from 'lucide-react'
 import { Toaster } from '@/components/ui/sonner'
 import { Button } from '@/components/ui/button'
 import {
@@ -10,7 +11,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { cn } from '@/lib/utils'
 import { AuthCallback } from './pages/AuthCallback'
 import { Board } from './pages/Board'
@@ -18,6 +18,7 @@ import { Calendar } from './pages/Calendar'
 import { Chat } from './pages/Chat'
 import { List } from './pages/List'
 import { Notes } from './pages/Notes'
+import { Overview } from './pages/Overview'
 import { NoteEditor } from './pages/NoteEditor'
 import { Search as SearchPage } from './pages/Search'
 import { Settings } from './pages/Settings'
@@ -30,12 +31,15 @@ import { PendingOutcomesBanner } from './components/calendar/PendingOutcomesBann
 import { TimerWidget } from './components/TimerWidget'
 import { UpdateIndicator } from './components/UpdateIndicator'
 import { TaskDetailSheet } from './components/board/TaskDetailSheet'
+import { TaskDetailPage } from './pages/TaskDetailPage'
 import { useUIStore } from './store/ui'
 import { useWorkspaceStore } from './store/workspace'
 import { useWorkspaces } from './api/hooks'
+import { undoLatest } from './lib/undo'
 
 const NAV_ITEMS = [
-  { to: '/', label: 'Board', end: true },
+  { to: '/', label: 'Overview', end: true },
+  { to: '/board', label: 'Board' },
   { to: '/list', label: 'List' },
   { to: '/calendar', label: 'Calendar' },
   { to: '/notes', label: 'Notes' },
@@ -46,7 +50,8 @@ const NAV_ITEMS = [
 ]
 
 const ROUTE_TITLES: Record<string, string> = {
-  '/': 'Board',
+  '/': 'Overview',
+  '/board': 'Board',
   '/list': 'List',
   '/calendar': 'Calendar',
   '/notes': 'Notes',
@@ -58,6 +63,7 @@ const ROUTE_TITLES: Record<string, string> = {
 
 function titleForPath(pathname: string) {
   if (pathname.startsWith('/notes/')) return 'Note'
+  if (pathname.startsWith('/tasks/')) return 'Task'
   return ROUTE_TITLES[pathname]
 }
 
@@ -71,22 +77,39 @@ const navLinkClass = ({ isActive }: { isActive: boolean }) =>
     isActive && 'font-semibold text-foreground',
   )
 
-const mobileNavLinkClass = ({ isActive }: { isActive: boolean }) =>
-  cn(
-    'rounded-md px-2 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground',
-    isActive && 'bg-muted font-semibold text-foreground',
-  )
-
 export function App() {
   const setCommandOpen = useUIStore((state) => state.setCommandOpen)
+  const requestNewTask = useUIStore((state) => state.requestNewTask)
   const setSelectedBoardId = useUIStore((state) => state.setSelectedBoardId)
   const { data: workspaces } = useWorkspaces()
   const { activeWorkspaceId, setActiveWorkspaceId } = useWorkspaceStore()
   const location = useLocation()
-  const [menuOpen, setMenuOpen] = useState(false)
+  const navigate = useNavigate()
   const announcementRef = useRef<HTMLDivElement>(null)
   const storedWorkspace = workspaces?.find((workspace) => workspace.id === activeWorkspaceId)
   const activeWorkspace = storedWorkspace ?? workspaces?.[0]
+
+  useHotkeys('mod+z', (event) => {
+    event.preventDefault()
+    undoLatest()
+  })
+
+  useEffect(() => {
+    const bridge = window.fai
+    if (!bridge?.onMenuCommand) return
+    return bridge.onMenuCommand((command) => {
+      if (command === 'new-task') {
+        navigate('/board')
+        requestNewTask()
+      } else if (command === 'command-palette') {
+        setCommandOpen(true)
+      } else if (command === 'settings') {
+        navigate('/settings')
+      } else if (command === 'undo') {
+        undoLatest()
+      }
+    })
+  }, [navigate, requestNewTask, setCommandOpen])
 
   useEffect(() => {
     if (!workspaces?.length || storedWorkspace) return
@@ -115,10 +138,15 @@ export function App() {
         aria-label="Primary"
         className="flex flex-wrap items-center gap-3 border-b px-4 py-3 sm:px-6"
       >
-        <span className="mr-1 flex items-center gap-2">
+        <NavLink
+          to="/"
+          end
+          aria-label="fai home"
+          className="mr-1 flex items-center gap-2 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+        >
           <AppIcon className="h-5 w-5" />
           <span className="font-bold">fai</span>
-        </span>
+        </NavLink>
         {!!workspaces?.length && (
           <Select
             items={workspaces.map((workspace) => ({
@@ -177,47 +205,39 @@ export function App() {
               {commandKey}
             </kbd>
           </Button>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            className="lg:hidden"
-            aria-label="Open menu"
-            aria-expanded={menuOpen}
-            onClick={() => setMenuOpen(true)}
-          >
-            <Menu />
-          </Button>
         </div>
       </nav>
-      <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
-        <SheetContent side="right" className="w-72">
-          <SheetHeader>
-            <SheetTitle>Menu</SheetTitle>
-          </SheetHeader>
-          <nav aria-label="Mobile" className="flex flex-col gap-1 px-4 pb-4">
-            {NAV_ITEMS.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                end={item.end}
-                className={mobileNavLinkClass}
-                onClick={() => setMenuOpen(false)}
-              >
-                {item.label}
-              </NavLink>
-            ))}
-          </nav>
-        </SheetContent>
-      </Sheet>
       <PendingOutcomesBanner />
-      <main id="main-content" tabIndex={-1} className="flex flex-1 flex-col p-4 outline-none sm:p-6">
+      <nav
+        aria-label="Mobile"
+        className="fixed inset-x-0 bottom-0 z-40 flex overflow-x-auto border-t bg-background/95 backdrop-blur lg:hidden"
+      >
+        {NAV_ITEMS.map((item) => (
+          <NavLink
+            key={item.to}
+            to={item.to}
+            end={item.end}
+            className={({ isActive }) =>
+              cn(
+                'flex min-w-16 flex-1 flex-col items-center justify-center px-2 py-2 text-[0.65rem] text-muted-foreground',
+                isActive && 'font-semibold text-foreground',
+              )
+            }
+          >
+            {item.label}
+          </NavLink>
+        ))}
+      </nav>
+      <main id="main-content" tabIndex={-1} className="flex flex-1 flex-col p-4 pb-20 outline-none sm:p-6 lg:pb-6">
         <Routes>
-          <Route path="/" element={<Board />} />
+          <Route path="/" element={<Overview />} />
+          <Route path="/board" element={<Board />} />
           <Route path="/list" element={<List />} />
           <Route path="/calendar" element={<Calendar />} />
           <Route path="/chat" element={<Chat />} />
           <Route path="/notes" element={<Notes />} />
           <Route path="/notes/:id" element={<NoteEditor />} />
+          <Route path="/tasks/:id" element={<TaskDetailPage />} />
           <Route path="/stats" element={<Stats />} />
           <Route path="/search" element={<SearchPage />} />
           <Route path="/settings" element={<Settings />} />

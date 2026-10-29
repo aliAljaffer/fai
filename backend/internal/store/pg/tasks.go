@@ -168,6 +168,43 @@ func (s *Store) UpdateTask(ctx context.Context, id int64, title, descriptionMd, 
 	return tasks[0], nil
 }
 
+func (s *Store) PatchTask(ctx context.Context, id int64, patch store.TaskPatch) (store.Task, error) {
+	dueDate, err := ptrToDate(patch.DueDate)
+	if err != nil {
+		return store.Task{}, err
+	}
+	t, err := s.q.PatchTask(ctx, sqlc.PatchTaskParams{
+		ID:            id,
+		Title:         ptrToText(patch.Title),
+		DescriptionMd: ptrToText(patch.DescriptionMd),
+		Priority:      ptrToText(patch.Priority),
+		DueDateSet:    patch.DueDateSet,
+		DueDate:       dueDate,
+	})
+	if err != nil {
+		return store.Task{}, err
+	}
+	if patch.DescriptionMd != nil {
+		if err := s.attachBodyLabels(ctx, id, t.DescriptionMd); err != nil {
+			return store.Task{}, err
+		}
+	}
+	tasks := []store.Task{{
+		ID: t.ID, BoardID: t.BoardID, ColumnID: t.ColumnID, WorkspaceID: t.WorkspaceID, RefNum: t.RefNum, Title: t.Title,
+		DescriptionMd: t.DescriptionMd, Priority: t.Priority, DueDate: dateToPtr(t.DueDate),
+		Position: t.Position, ParentTaskID: int8ToPtr(t.ParentTaskID), Kind: t.Kind, MeetingOutcomeID: int8ToPtr(t.MeetingOutcomeID),
+		CompletedAt: tsToPtr(t.CompletedAt), Archived: t.Archived, Tags: []store.Tag{}, CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt,
+	}}
+	if err := s.attachTags(ctx, tasks); err != nil {
+		return store.Task{}, err
+	}
+	return tasks[0], nil
+}
+
+func (s *Store) RestoreTask(ctx context.Context, id int64) error {
+	return s.q.RestoreTask(ctx, id)
+}
+
 func (s *Store) UpdateTaskTitle(ctx context.Context, id int64, title string) error {
 	return s.q.UpdateTaskTitle(ctx, sqlc.UpdateTaskTitleParams{ID: id, Title: title})
 }

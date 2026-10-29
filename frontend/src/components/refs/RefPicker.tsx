@@ -1,3 +1,4 @@
+import { Fragment } from 'react'
 import { createPortal } from 'react-dom'
 import { cn } from '@/lib/utils'
 import type { RefPickerState } from './useRefPicker'
@@ -27,8 +28,13 @@ export function RefPicker({ picker }: { picker: RefPickerState }) {
         <span className="px-2 py-1.5 text-xs text-muted-foreground">{empty}</span>
       )}
       {picker.options.map((option, index) => (
+        <Fragment key={option.key}>
+          {option.group && option.group !== picker.options[index - 1]?.group && (
+            <span className="px-2 pt-1.5 pb-0.5 text-[0.65rem] font-medium tracking-wide text-muted-foreground uppercase">
+              {option.group}
+            </span>
+          )}
         <button
-          key={option.key}
           type="button"
           role="option"
           aria-selected={index === picker.active}
@@ -44,6 +50,7 @@ export function RefPicker({ picker }: { picker: RefPickerState }) {
             <span className="truncate text-xs text-muted-foreground">{option.detail}</span>
           )}
         </button>
+        </Fragment>
       ))}
     </div>,
     document.body,

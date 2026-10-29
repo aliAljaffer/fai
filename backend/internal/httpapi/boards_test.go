@@ -1,11 +1,15 @@
 package httpapi
 
 import (
+	"encoding/json"
 	"net/http"
+	"net/http/httptest"
+	"path/filepath"
 	"strconv"
 	"testing"
 
 	"github.com/alialjaffer/fai/backend/internal/store"
+	"github.com/alialjaffer/fai/backend/internal/store/lite"
 )
 
 func TestBoardAndColumnEditing(t *testing.T) {
@@ -61,4 +65,44 @@ func TestBoardAndColumnEditing(t *testing.T) {
 		t.Fatalf("partial reorder status = %d", res.StatusCode)
 	}
 	res.Body.Close()
+}
+
+func TestDeleteBoardCascades(t *testing.T) {
+	st, err := lite.New(filepath.Join(t.TempDir(), "fai.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	server := httptest.NewServer(NewRouter(&Server{Store: st}))
+	defer server.Close()
+
+	res := postJSON(t, server.URL+"/api/boards", `{"name":"Temp","workspace_id":1}`)
+	if res.StatusCode != http.StatusCreated {
+		t.Fatalf("create board = %d", res.StatusCode)
+	}
+	var board store.Board
+	if err := json.NewDecoder(res.Body).Decode(&board); err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+
+	req, _ := http.NewRequest(http.MethodDelete, server.URL+"/api/boards/"+strconv.FormatInt(board.ID, 10), nil)
+	res, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("delete board = %d", res.StatusCode)
+	}
+	boards, err := st.ListBoards(t.Context(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range boards {
+		if item.ID == board.ID {
+			t.Error("deleted board still listed")
+		}
+	}
 }

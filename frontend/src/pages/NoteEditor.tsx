@@ -1,6 +1,6 @@
 import MDEditor from '@uiw/react-md-editor'
 import { useTheme } from 'next-themes'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { AttachmentsPanel } from '../components/AttachmentsPanel'
@@ -22,27 +22,49 @@ export function NoteEditor() {
 
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
-  const [saving, setSaving] = useState(false)
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [deleting, setDeleting] = useState(false)
+  const initialized = useRef<number | null>(null)
+  const lastSaved = useRef({ title: '', body: '' })
   const refs = useRefPicker({ value: body, onChange: setBody })
 
   useEffect(() => {
-    if (data?.note) {
-      setTitle(data.note.title)
-      setBody(data.note.body_md)
-    }
+    const note = data?.note
+    if (!note || initialized.current === note.id) return
+    initialized.current = note.id
+    setTitle(note.title)
+    setBody(note.body_md)
+    lastSaved.current = { title: note.title, body: note.body_md }
   }, [data?.note])
 
-  async function save() {
-    setSaving(true)
-    try {
-      await updateNote.mutateAsync({ id: noteId, title, body_md: body })
-      navigate('/notes')
-    } catch (error) {
-      toast.error((error as Error).message)
-      setSaving(false)
+  useEffect(() => {
+    if (initialized.current === null) return
+    if (title === lastSaved.current.title && body === lastSaved.current.body) return
+    setSaveState('saving')
+    const id = setTimeout(() => {
+      updateNote.mutate(
+        { id: noteId, title, body_md: body },
+        {
+          onSuccess: () => {
+            lastSaved.current = { title, body }
+            setSaveState('saved')
+          },
+          onError: () => setSaveState('error'),
+        },
+      )
+    }, 700)
+    return () => clearTimeout(id)
+  }, [title, body, noteId, updateNote])
+
+  useEffect(() => {
+    if (saveState !== 'saving') return
+    function warn(event: BeforeUnloadEvent) {
+      event.preventDefault()
+      event.returnValue = ''
     }
-  }
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [saveState])
 
   async function remove() {
     if (deleting) return
@@ -68,10 +90,16 @@ export function NoteEditor() {
           value={title}
           onChange={(e) => setTitle(e.target.value)}
         />
-        <div className="flex gap-2">
-          <Button disabled={saving} onClick={() => void save()}>
-            {saving ? 'Saving…' : 'Save'}
-          </Button>
+        <div className="flex items-center gap-2">
+          <span aria-live="polite" className="text-xs text-muted-foreground">
+            {saveState === 'saving'
+              ? 'Saving…'
+              : saveState === 'error'
+                ? 'Could not save'
+                : saveState === 'saved'
+                  ? 'Saved'
+                  : ''}
+          </span>
           <Button
             variant="destructive"
             disabled={deleting}

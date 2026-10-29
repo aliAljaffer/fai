@@ -27,6 +27,20 @@ ORDER BY t.column_id, t.position;
 SELECT id, board_id, column_id, title, description_md, priority, due_date, position, completed_at, archived, created_at, updated_at, parent_task_id, kind, meeting_outcome_id, workspace_id, ref_num
 FROM tasks WHERE parent_task_id = $1 AND archived = false ORDER BY created_at;
 
+
+-- name: PatchTask :one
+UPDATE tasks SET
+  title = COALESCE(sqlc.narg('title'), title),
+  description_md = COALESCE(sqlc.narg('description_md'), description_md),
+  priority = COALESCE(sqlc.narg('priority'), priority),
+  due_date = CASE WHEN sqlc.arg('due_date_set')::boolean THEN sqlc.narg('due_date') ELSE due_date END,
+  updated_at = now()
+WHERE id = sqlc.arg('id') AND archived = false
+RETURNING *;
+
+-- name: RestoreTask :exec
+UPDATE tasks SET archived = false, updated_at = now() WHERE id = $1;
+
 -- name: UpdateTask :one
 UPDATE tasks SET
   title = $2,

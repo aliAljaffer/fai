@@ -28,3 +28,6 @@ var AISettings string
 
 //go:embed 008_appearance.sql
 var Appearance string
+
+//go:embed 009_chat_messages.sql
+var ChatMessages string

@@ -1,7 +1,7 @@
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { useState } from 'react'
-import { ChevronRight, Play, Square } from 'lucide-react'
+import { ChevronRight, GripVertical, Play, Square } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { cn } from '@/lib/utils'
@@ -22,6 +22,8 @@ interface TaskCardProps {
   subtasks?: Task[]
   doneColumnIds?: Set<number>
   onToggleSubtask?: (subtask: Task) => void
+  dragDisabled?: boolean
+  expanded?: boolean
 }
 
 function TaskCardBody({
@@ -78,6 +80,7 @@ function SortableTaskCard(props: TaskCardProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: props.task.id,
     data: { type: 'task' },
+    disabled: props.dragDisabled,
   })
   const running = props.runningTaskId === props.task.id
   const [expanded, setExpanded] = useState(false)
@@ -91,23 +94,34 @@ function SortableTaskCard(props: TaskCardProps) {
   return (
     <div
       ref={setNodeRef}
+      id={`task-${props.task.id}`}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      {...attributes}
-      {...listeners}
-      role={undefined}
-      tabIndex={undefined}
-      aria-roledescription={undefined}
       className={cn(
-        'group/task relative cursor-grab touch-none rounded-md border bg-card px-2.5 py-2 text-card-foreground transition-colors select-none hover:border-foreground/20 active:cursor-grabbing',
+        'group/task relative rounded-md border bg-card px-2.5 py-2 text-card-foreground transition-colors select-none hover:border-foreground/20',
         isDragging && 'opacity-40',
       )}
     >
       <button
         type="button"
-        className="absolute inset-0 z-0 cursor-grab rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring/50 active:cursor-grabbing"
+        className="absolute inset-0 z-0 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
         aria-label={`Open task: ${props.task.title}`}
+        aria-expanded={props.expanded}
         onClick={props.onClick}
       />
+      <button
+        type="button"
+        {...attributes}
+        {...listeners}
+        aria-label={`Drag ${props.task.title}`}
+        disabled={props.dragDisabled}
+        className={cn(
+          'absolute top-1/2 right-0.5 z-10 flex size-5 -translate-y-1/2 touch-none items-center justify-center rounded text-muted-foreground opacity-0 outline-none hover:bg-muted focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring/50 group-hover/task:opacity-100',
+          props.dragDisabled && 'hidden',
+        )}
+        onPointerDown={(event) => event.stopPropagation()}
+      >
+        <GripVertical className="size-3.5" />
+      </button>
       <div className="pointer-events-none relative z-0">
         <TaskCardBody task={props.task} status={status} isDone={props.isDone} />
       </div>

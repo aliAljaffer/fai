@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -31,9 +32,22 @@ func (s *Server) calendarFeed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var workspaceID int64
+	if raw := r.URL.Query().Get("workspace_id"); raw != "" {
+		parsed, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid workspace id")
+			return
+		}
+		workspaceID = parsed
+	}
+
 	base := s.feedBaseURL(r)
 	events := make([]ics.Event, 0, len(tasks))
 	for _, t := range tasks {
+		if workspaceID != 0 && t.WorkspaceID != workspaceID {
+			continue
+		}
 		if t.DueDate == nil || t.CompletedAt != nil {
 			continue
 		}
@@ -65,6 +79,13 @@ func (s *Server) calendarFeedInfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	feed := s.feedBaseURL(r) + "/api/calendar.ics?token=" + url.QueryEscape(s.ICSToken)
+	if raw := r.URL.Query().Get("workspace_id"); raw != "" {
+		if _, err := strconv.ParseInt(raw, 10, 64); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid workspace id")
+			return
+		}
+		feed += "&workspace_id=" + url.QueryEscape(raw)
+	}
 	writeJSON(w, http.StatusOK, map[string]string{"url": feed})
 }
 

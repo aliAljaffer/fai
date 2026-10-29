@@ -58,6 +58,7 @@ type Store interface {
 	ListBoards(ctx context.Context, workspaceID *int64) ([]Board, error)
 	CreateBoard(ctx context.Context, name string, workspaceID int64) (Board, error)
 	UpdateBoard(ctx context.Context, id int64, name string) (Board, error)
+	DeleteBoard(ctx context.Context, id int64) error
 	ListColumnsByBoard(ctx context.Context, boardID int64) ([]BoardColumn, error)
 	CreateColumn(ctx context.Context, boardID int64, name string, position int32, isDone bool) (BoardColumn, error)
 	UpdateColumn(ctx context.Context, boardID, id int64, name string, isDone bool) (BoardColumn, error)
@@ -76,6 +77,7 @@ type Store interface {
 	ListTasks(ctx context.Context, p ListTasksParams) ([]Task, error)
 	ListSubtasks(ctx context.Context, parentTaskID int64) ([]Task, error)
 	UpdateTask(ctx context.Context, id int64, title, descriptionMd, priority string, dueDate *string) (Task, error)
+	PatchTask(ctx context.Context, id int64, patch TaskPatch) (Task, error)
 	UpdateTaskTitle(ctx context.Context, id int64, title string) error
 	SetTaskParent(ctx context.Context, id int64, parentTaskID *int64) error
 	SetTaskKind(ctx context.Context, id int64, kind string) error
@@ -85,6 +87,7 @@ type Store interface {
 	ListTasksByColumnOrdered(ctx context.Context, columnID int64) ([]Task, error)
 	SetTaskPosition(ctx context.Context, id int64, position float64) error
 	ArchiveTask(ctx context.Context, id int64) error
+	RestoreTask(ctx context.Context, id int64) error
 	DeleteTask(ctx context.Context, id int64) error
 
 	// Task comments
@@ -107,6 +110,10 @@ type Store interface {
 	UpdateNote(ctx context.Context, id int64, title, bodyMd string, taskID *int64) (Note, error)
 	DeleteNote(ctx context.Context, id int64) error
 	ListBacklinks(ctx context.Context, noteID int64, title string) ([]Note, error)
+
+	// Chat
+	CreateChatMessage(ctx context.Context, workspaceID int64, role, content string) (ChatMessage, error)
+	ListChatMessages(ctx context.Context, workspaceID int64, limit int32) ([]ChatMessage, error)
 
 	// Search
 	SearchTasks(ctx context.Context, query string, workspaceID *int64) ([]Task, error)

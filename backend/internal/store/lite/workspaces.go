@@ -215,9 +215,8 @@ func (s *Store) ResolveRefs(ctx context.Context, query string, workspaceID *int6
 		JOIN workspaces w ON w.id = t.workspace_id
 		WHERE t.archived = 0
 		  AND (lower(t.title) LIKE lower(?) ESCAPE '\' OR lower(t.description_md) LIKE lower(?) ESCAPE '\')
-		  AND (CAST(? AS INTEGER) IS NULL OR t.workspace_id = ?)
-		ORDER BY t.updated_at DESC
-		LIMIT 10`, pattern, pattern, scope, scope)
+		ORDER BY (t.workspace_id = ?) DESC, t.updated_at DESC
+		LIMIT 10`, pattern, pattern, scope)
 	if err != nil {
 		return nil, err
 	}
@@ -370,14 +369,58 @@ func (s *Store) scanBacklinks(ctx context.Context, taskID int64, needle string) 
 	if err != nil {
 		return nil, err
 	}
-	defer reminderRows.Close()
 	for reminderRows.Next() {
 		var b store.Backlink
 		b.Kind = "reminder"
 		if err := reminderRows.Scan(&b.ID, &b.Title, &b.WorkspaceTag); err != nil {
+			reminderRows.Close()
 			return nil, err
 		}
 		out = append(out, b)
 	}
-	return out, reminderRows.Err()
+	if err := reminderRows.Err(); err != nil {
+		reminderRows.Close()
+		return nil, err
+	}
+	reminderRows.Close()
+
+	meetingRows, err := s.db.QueryContext(ctx, `
+		SELECT m.id, m.title, w.tag
+		FROM meeting_outcomes m JOIN workspaces w ON w.id = m.workspace_id
+		WHERE m.notes_md LIKE ? ESCAPE '\' OR m.title LIKE ? ESCAPE '\'`, needle, needle)
+	if err != nil {
+		return nil, err
+	}
+	for meetingRows.Next() {
+		var b store.Backlink
+		b.Kind = "meeting"
+		if err := meetingRows.Scan(&b.ID, &b.Title, &b.WorkspaceTag); err != nil {
+			meetingRows.Close()
+			return nil, err
+		}
+		out = append(out, b)
+	}
+	if err := meetingRows.Err(); err != nil {
+		meetingRows.Close()
+		return nil, err
+	}
+	meetingRows.Close()
+
+	chatRows, err := s.db.QueryContext(ctx, `
+		SELECT c.id, substr(c.content, 1, 80), w.tag
+		FROM chat_messages c JOIN workspaces w ON w.id = c.workspace_id
+		WHERE c.content LIKE ? ESCAPE '\'`, needle)
+	if err != nil {
+		return nil, err
+	}
+	defer chatRows.Close()
+	for chatRows.Next() {
+		var b store.Backlink
+		b.Kind = "chat"
+		if err := chatRows.Scan(&b.ID, &b.Title, &b.WorkspaceTag); err != nil {
+			return nil, err
+		}
+		out = append(out, b)
+	}
+	return out, chatRows.Err()
 }

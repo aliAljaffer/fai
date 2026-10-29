@@ -3,7 +3,7 @@ import rehypeHighlight from 'rehype-highlight'
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { wikilinksToMarkdownLinks } from '../lib/wikilinks'
-import { taskRefsToMarkdownLinks } from '../lib/taskrefs'
+import { splitTaskRefs, taskRefsToMarkdownLinks } from '../lib/taskrefs'
 import { useNoteByTitle, useResolveRefs } from '../api/hooks'
 
 export function MarkdownRenderer({ source }: { source: string }) {
@@ -45,6 +45,30 @@ export function MarkdownRenderer({ source }: { source: string }) {
         {wikilinksToMarkdownLinks(taskRefsToMarkdownLinks(source))}
       </ReactMarkdown>
     </div>
+  )
+}
+
+export function TaskRefText({ text }: { text: string }) {
+  const [params, setParams] = useSearchParams()
+
+  function openTask(id: number) {
+    const next = new URLSearchParams(params)
+    next.set('task', String(id))
+    setParams(next, { replace: true })
+  }
+
+  return (
+    <>
+      {splitTaskRefs(text).map((part, index) =>
+        part.ref ? (
+          <TaskRefLink key={index} taskRef={part.ref} onOpen={openTask}>
+            {part.ref}
+          </TaskRefLink>
+        ) : (
+          <span key={index}>{part.text}</span>
+        ),
+      )}
+    </>
   )
 }
 

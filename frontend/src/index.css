@@ -94,6 +94,9 @@
   --ring: oklch(0.55 0.04 250);
   --chart-1: oklch(0.42 0.05 250);
   --chart-2: oklch(0.52 0.04 250);
+  --chart-3: oklch(0.55 0.1 65);
+  --chart-4: oklch(0.5 0.08 160);
+  --chart-5: oklch(0.55 0.13 25);
   --radius: 0.625rem;
   --sidebar: oklch(0.975 0.004 250);
   --sidebar-foreground: oklch(0.19 0.01 250);
@@ -131,6 +134,9 @@
   --ring: oklch(0.7 0.04 250);
   --chart-1: oklch(0.82 0.05 250);
   --chart-2: oklch(0.72 0.04 250);
+  --chart-3: oklch(0.78 0.1 65);
+  --chart-4: oklch(0.76 0.08 160);
+  --chart-5: oklch(0.72 0.13 25);
   --sidebar: oklch(0.22 0.008 250);
   --sidebar-foreground: oklch(0.97 0.004 250);
   --sidebar-primary: oklch(0.82 0.05 250);
@@ -152,6 +158,9 @@
   --color-sidebar-primary: var(--sidebar-primary);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
   --color-chart-2: var(--chart-2);
   --color-chart-1: var(--chart-1);
   --color-ring: var(--ring);
@@ -394,5 +403,22 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+.fai-expand {
+  display: grid;
+  grid-template-rows: 0fr;
+  animation: fai-expand 160ms ease forwards;
+}
+@keyframes fai-expand {
+  to {
+    grid-template-rows: 1fr;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fai-expand {
+    animation: none;
+    grid-template-rows: 1fr;
   }
 }

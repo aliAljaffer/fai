@@ -1,6 +1,7 @@
-import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { useSearchParams } from 'react-router-dom'
-import { ChevronRight, Plus, SlidersHorizontal } from 'lucide-react'
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useHotkeys } from 'react-hotkeys-hook'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { ChevronRight, SlidersHorizontal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
@@ -15,9 +16,11 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { formatTimestamp } from '../lib/format'
-import { useBoards, useColumns, useJiraLinks, useTags, useTasks } from '../api/hooks'
+import { useBoards, useColumns, useDeleteTask, useJiraLinks, useMoveTask, useRestoreTasks, useRunningTime, useStartTime, useStopTime, useTags, useTasks, useUpdateTask } from '../api/hooks'
+import { showUndo } from '../lib/undo'
 import { BulkTaskBar } from '../components/board/BulkTaskBar'
-import { NewTaskDialog } from '../components/board/NewTaskDialog'
+import { TaskComposer } from '../components/board/TaskComposer'
+import { TaskInlineEditor } from '../components/board/TaskInlineEditor'
 import { TaskTypeIcon } from '../components/TaskTypeIcon'
 import { taskStatus } from '../lib/taskType'
 import { StatusPill } from '../components/StatusPill'
@@ -149,14 +152,41 @@ export function List() {
     tag: tag === 'all' ? undefined : tag,
   })
 
-  const [, setSearchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [sort, setSort] = useState<Sort>(loadSort)
   const [visible, setVisible] = useState<Set<ColumnKey>>(loadVisibleColumns)
   const [expanded, setExpanded] = useState<Set<number>>(() => new Set())
   const [selected, setSelected] = useState<Set<number>>(() => new Set())
   const [lastSelected, setLastSelected] = useState<number | null>(null)
   const [hideDone, setHideDone] = useState(false)
-  const [newTaskOpen, setNewTaskOpen] = useState(false)
+  const [inlineTaskId, setInlineTaskId] = useState<number | null>(null)
+  const [focusTitle, setFocusTitle] = useState(false)
+  const [fieldFocus, setFieldFocus] = useState<{
+    field: 'due' | 'status' | 'labels'
+    nonce: number
+  } | null>(null)
+  const composerRef = useRef<HTMLInputElement>(null)
+  const filterRef = useRef<HTMLInputElement>(null)
+  const moveTask = useMoveTask(boardId)
+  const deleteTask = useDeleteTask(boardId)
+  const restoreTasks = useRestoreTasks(boardId)
+  const updateTask = useUpdateTask(boardId)
+  const { data: running } = useRunningTime()
+  const startTime = useStartTime()
+  const stopTime = useStopTime()
+  const navigate = useNavigate()
+  const [showShortcuts, setShowShortcuts] = useState(false)
+
+  useEffect(() => {
+    const raw = searchParams.get('task')
+    const id = raw ? Number(raw) : NaN
+    if (!Number.isFinite(id)) return
+    setInlineTaskId(id)
+    const frame = requestAnimationFrame(() => {
+      document.getElementById(`task-${id}`)?.scrollIntoView({ block: 'nearest' })
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [searchParams])
 
   useEffect(() => {
     localStorage.setItem('list-columns', JSON.stringify([...visible]))
@@ -189,6 +219,64 @@ export function List() {
     () => [...(columns ?? [])].sort((a, b) => a.position - b.position)[0]?.id,
     [columns],
   )
+
+  useHotkeys('c', () => composerRef.current?.focus(), {
+    enabled: Boolean(boardId && firstColumnId),
+    preventDefault: true,
+  })
+  useHotkeys('/', () => filterRef.current?.focus(), { preventDefault: true })
+  useHotkeys('j', () => moveFocus(1), { preventDefault: true })
+  useHotkeys('k', () => moveFocus(-1), { preventDefault: true })
+  useHotkeys(['enter', 'o'], () => toggleInline(inlineTaskId), {
+    enabled: inlineTaskId !== null,
+    preventDefault: true,
+    enableOnFormTags: false,
+  })
+  useHotkeys('e', () => {
+    const target = inlineTaskId ?? visibleRoots[0]?.id
+    if (!target) return
+    setInlineTaskId(target)
+    setFocusTitle(true)
+  }, { preventDefault: true })
+  useHotkeys('x', () => toggleDone(inlineTaskId), {
+    enabled: inlineTaskId !== null,
+    preventDefault: true,
+  })
+  useHotkeys('backspace', () => removeTask(inlineTaskId), {
+    enabled: inlineTaskId !== null,
+    preventDefault: true,
+  })
+  useHotkeys('escape', () => setInlineTaskId(null), {
+    enabled: inlineTaskId !== null,
+    preventDefault: true,
+  })
+  useHotkeys(['1', '2', '3', '4'], (event) => {
+    if (inlineTaskId === null) return
+    const priority = event.key === '1' ? 'low' : event.key === '2' ? 'medium' : 'high'
+    updateTask.mutate({ id: inlineTaskId, priority })
+  }, { enabled: inlineTaskId !== null, preventDefault: true })
+  useHotkeys('d', () => {
+    if (inlineTaskId === null) return
+    setInlineTaskId(inlineTaskId)
+    setFieldFocus({ field: 'due', nonce: Date.now() })
+  }, { enabled: inlineTaskId !== null, preventDefault: true })
+  useHotkeys('m', () => {
+    if (inlineTaskId === null) return
+    setFieldFocus({ field: 'status', nonce: Date.now() })
+  }, { enabled: inlineTaskId !== null, preventDefault: true })
+  useHotkeys('l', () => {
+    if (inlineTaskId === null) return
+    setFieldFocus({ field: 'labels', nonce: Date.now() })
+  }, { enabled: inlineTaskId !== null, preventDefault: true })
+  useHotkeys('t', () => {
+    if (inlineTaskId === null) return
+    if (running?.task_id === inlineTaskId) stopTime.mutate(inlineTaskId)
+    else startTime.mutate(inlineTaskId)
+  }, { enabled: inlineTaskId !== null, preventDefault: true })
+  useHotkeys('shift+enter', () => {
+    if (inlineTaskId !== null) navigate(`/tasks/${inlineTaskId}`)
+  }, { enabled: inlineTaskId !== null, preventDefault: true })
+  useHotkeys('shift+slash', () => setShowShortcuts((current) => !current), { preventDefault: true })
 
   const taskIds = useMemo(() => new Set((tasks ?? []).map((task) => task.id)), [tasks])
 
@@ -315,14 +403,54 @@ export function List() {
     updated_at: (task) => formatTimestamp(task.updated_at),
   }
 
+  function moveFocus(direction: 1 | -1) {
+    if (!visibleRoots.length) return
+    const index = visibleRoots.findIndex((task) => task.id === inlineTaskId)
+    const next = index < 0
+      ? (direction === 1 ? 0 : visibleRoots.length - 1)
+      : Math.min(visibleRoots.length - 1, Math.max(0, index + direction))
+    setInlineTaskId(visibleRoots[next].id)
+    setFocusTitle(false)
+  }
+
+  function toggleInline(id: number | null) {
+    if (id !== null) setInlineTaskId(id)
+  }
+
+  function toggleDone(id: number | null) {
+    if (id === null) return
+    const task = (tasks ?? []).find((item) => item.id === id)
+    if (!task) return
+    const done = Boolean(task.completed_at) || doneColumnIds.has(task.column_id)
+    const target = done
+      ? columns?.find((column) => !column.is_done)
+      : columns?.find((column) => column.is_done)
+    if (target) moveTask.mutate({ id, column_id: target.id })
+  }
+
+  function removeTask(id: number | null) {
+    if (id === null) return
+    const task = (tasks ?? []).find((item) => item.id === id)
+    if (!task) return
+    deleteTask.mutate(id, {
+      onSuccess: () => {
+        setInlineTaskId(null)
+        showUndo(`Deleted "${task.title}"`, () =>
+          restoreTasks.mutateAsync([task.id]).then(() => undefined),
+        )
+      },
+    })
+  }
+
   const renderRow = (task: Task, depth: number, leading?: ReactNode) => {
     const done = Boolean(task.completed_at) || doneColumnIds.has(task.column_id)
     return (
       <TableRow
         key={task.id}
+        id={`task-${task.id}`}
         className="cursor-pointer hover:bg-muted/50"
         data-state={selected.has(task.id) ? 'selected' : undefined}
-        onClick={() => setSearchParams({ task: String(task.id) })}
+        onClick={() => setInlineTaskId((current) => (current === task.id ? null : task.id))}
       >
         <TableCell onClick={(event) => event.stopPropagation()}>
           <Checkbox
@@ -352,9 +480,11 @@ export function List() {
                 'min-w-0 flex-1 truncate rounded-sm text-left outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring/50',
                 done && 'text-muted-foreground line-through',
               )}
+              aria-expanded={inlineTaskId === task.id}
+              aria-controls={`task-expansion-${task.id}`}
               onClick={(event) => {
                 event.stopPropagation()
-                setSearchParams({ task: String(task.id) })
+                setInlineTaskId((current) => (current === task.id ? null : task.id))
               }}
             >
               {task.title}
@@ -409,16 +539,48 @@ export function List() {
             </>
           ) : undefined,
         )}
+        {inlineTaskId === task.id && (
+          <TableRow>
+            <TableCell colSpan={2 + visibleList.length} className="p-2">
+              <div className="fai-expand">
+                <div>
+              <TaskInlineEditor
+                task={task}
+                columns={columns ?? []}
+                autoFocusTitle={focusTitle}
+                focusField={fieldFocus?.field}
+                focusNonce={fieldFocus?.nonce}
+                onClose={() => {
+                  setInlineTaskId(null)
+                  setFocusTitle(false)
+                }}
+                onOpenDetails={() => {
+                  if (window.matchMedia('(max-width: 767px)').matches) {
+                    navigate(`/tasks/${task.id}`)
+                    return
+                  }
+                  const next = new URLSearchParams(searchParams)
+                  next.set('task', String(task.id))
+                  next.set('panel', '1')
+                  setSearchParams(next)
+                }}
+              />
+                </div>
+              </div>
+            </TableCell>
+          </TableRow>
+        )}
         {isExpanded && children.map((child) => renderTree(child, depth + 1))}
       </Fragment>
     )
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4 pb-24">
       <h1 className="text-lg font-semibold">List</h1>
       <div className="flex flex-wrap items-center gap-2">
         <Input
+          ref={filterRef}
           aria-label="Filter tasks"
           placeholder="Filter tasks…"
           value={q}
@@ -483,11 +645,15 @@ export function List() {
             </DropdownMenuGroup>
           </DropdownMenuContent>
         </DropdownMenu>
-        <Button size="sm" disabled={!boardId || !firstColumnId} onClick={() => setNewTaskOpen(true)}>
-          <Plus />
-          New task
-        </Button>
       </div>
+
+      <TaskComposer
+        boardId={boardId}
+        columnId={firstColumnId}
+        inputRef={composerRef}
+        placeholder="Add a task"
+        className="max-w-xl"
+      />
 
       {selectedTasks.length > 0 && (
         <BulkTaskBar
@@ -566,12 +732,36 @@ export function List() {
         </TableBody>
       </Table>
 
-      <NewTaskDialog
-        open={newTaskOpen}
-        onOpenChange={setNewTaskOpen}
-        boardId={boardId}
-        columnId={firstColumnId}
-      />
+      {showShortcuts && (
+        <div className="fixed right-4 bottom-20 z-40 w-64 rounded-lg border bg-popover p-3 text-xs shadow-lg lg:bottom-4">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="font-medium">Shortcuts</span>
+            <Button size="xs" variant="ghost" onClick={() => setShowShortcuts(false)}>
+              Close
+            </Button>
+          </div>
+          <dl className="grid grid-cols-2 gap-1">
+            {[
+              ['j / k', 'Next / previous'],
+              ['Enter / o', 'Expand'],
+              ['e', 'Edit title'],
+              ['x', 'Toggle done'],
+              ['1 to 4', 'Priority'],
+              ['t', 'Timer'],
+              ['Backspace', 'Delete'],
+              ['c', 'Quick add'],
+              ['/', 'Filter'],
+              ['Shift+Enter', 'Details'],
+              ['Escape', 'Collapse'],
+            ].map(([key, label]) => (
+              <Fragment key={key}>
+                <dt className="font-mono text-muted-foreground">{key}</dt>
+                <dd>{label}</dd>
+              </Fragment>
+            ))}
+          </dl>
+        </div>
+      )}
     </div>
   )
 }

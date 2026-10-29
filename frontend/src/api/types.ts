@@ -232,7 +232,7 @@ export interface TaskRef {
 
 export interface TaskBacklink {
   id: number
-  kind: 'task' | 'note' | 'reminder'
+  kind: 'task' | 'note' | 'reminder' | 'meeting' | 'chat'
   title: string
   workspace_tag: string
 }

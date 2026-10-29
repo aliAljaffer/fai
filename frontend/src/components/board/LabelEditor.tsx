@@ -13,7 +13,7 @@ import { TagChip } from '../TagChip'
 import type { Tag, Task } from '../../api/types'
 import { labelColorFor as colorFor } from '../../lib/palette'
 
-export function LabelEditor({ task }: { task: Task }) {
+export function LabelEditor({ task, inputId }: { task: Task; inputId?: string }) {
   const { data: allTags } = useTags()
   const createTag = useCreateTag()
   const addTag = useAddTaskTag(task.id, task.board_id)
@@ -73,6 +73,7 @@ export function LabelEditor({ task }: { task: Task }) {
       </div>
       <div className="relative">
         <Input
+          id={inputId}
           value={query}
           aria-label="Add label"
           placeholder="Add label…"

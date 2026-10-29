@@ -2,13 +2,7 @@ import { Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import {
   useCalendarSources,
@@ -19,13 +13,7 @@ import {
 import { useWorkspaceStore } from '../../store/workspace'
 import { STATUS_COLORS } from '../../lib/palette'
 
-export function CalendarSourcesDialog({
-  open,
-  onOpenChange,
-}: {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-}) {
+export function CalendarSourcesSection() {
   const workspaceId = useWorkspaceStore((state) => state.activeWorkspaceId)
   const { data: sources, isError, refetch } = useCalendarSources(workspaceId)
   const createSource = useCreateCalendarSource(workspaceId)
@@ -34,6 +22,7 @@ export function CalendarSourcesDialog({
   const [name, setName] = useState('')
   const [url, setURL] = useState('')
   const [color, setColor] = useState(STATUS_COLORS.todo)
+  const [confirmDelete, setConfirmDelete] = useState<number | null>(null)
 
   async function submit() {
     const trimmedName = name.trim()
@@ -43,23 +32,21 @@ export function CalendarSourcesDialog({
       await createSource.mutateAsync({ name: trimmedName, url: trimmedURL, color })
       setName('')
       setURL('')
-      toast.success('Calendar imported')
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Could not import calendar')
     }
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[calc(100dvh-2rem)] max-w-lg overflow-y-auto rounded-lg">
-        <DialogHeader>
-          <DialogTitle>Calendars</DialogTitle>
-          <DialogDescription>
-            Sync an Outlook or other iCalendar feed into Fai with its https (or webcal) link.
-            Events appear in this calendar with the color you pick, refresh in the background,
-            and stay out of Fai's own calendar export.
-          </DialogDescription>
-        </DialogHeader>
+    <Card>
+      <CardHeader>
+        <CardTitle>Calendars</CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
+        <p className="text-sm text-muted-foreground">
+          Sync an Outlook or other iCalendar feed into Fai with its https (or webcal) link. Events
+          refresh in the background and stay out of Fai's own calendar export.
+        </p>
 
         <div className="flex flex-col gap-2">
           {isError && (
@@ -74,37 +61,60 @@ export function CalendarSourcesDialog({
             <p className="text-sm text-muted-foreground">No imported calendars yet.</p>
           )}
           {sources?.map((source) => (
-            <div key={source.id} className="flex items-center gap-2 rounded-md border px-2 py-1.5">
-              <input
-                type="color"
-                defaultValue={source.color}
-                aria-label={`Event color for ${source.name}`}
-                title="Event color"
-                className="h-6 w-6 shrink-0 cursor-pointer rounded border border-input bg-transparent p-0.5"
-                onChange={(event) =>
-                  updateColor.mutate(
-                    { id: source.id, color: event.target.value },
-                    { onError: (error) => toast.error(error.message) },
-                  )
-                }
-              />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium">{source.name}</p>
-                <p className="truncate text-xs text-muted-foreground">{source.url}</p>
+            <div key={source.id} className="flex flex-col gap-1 rounded-md border px-2 py-1.5">
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  defaultValue={source.color}
+                  aria-label={`Event color for ${source.name}`}
+                  title="Event color"
+                  className="h-6 w-6 shrink-0 cursor-pointer rounded border border-input bg-transparent p-0.5"
+                  onChange={(event) =>
+                    updateColor.mutate(
+                      { id: source.id, color: event.target.value },
+                      { onError: (error) => toast.error(error.message) },
+                    )
+                  }
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">{source.name}</p>
+                  <p className="truncate text-xs text-muted-foreground">{source.url}</p>
+                </div>
+                <Button
+                  size="icon-xs"
+                  variant="ghost"
+                  aria-label={`Remove ${source.name}`}
+                  disabled={deleteSource.isPending}
+                  onClick={() => setConfirmDelete(source.id)}
+                >
+                  <Trash2 />
+                </Button>
               </div>
-              <Button
-                size="icon-xs"
-                variant="ghost"
-                aria-label={`Remove ${source.name}`}
-                disabled={deleteSource.isPending}
-                onClick={() =>
-                  deleteSource.mutate(source.id, {
-                    onError: (error) => toast.error(error.message),
-                  })
-                }
-              >
-                <Trash2 />
-              </Button>
+              {confirmDelete === source.id && (
+                <div className="flex items-center justify-end gap-2 border-t pt-1 text-xs">
+                  <span>Remove this feed?</span>
+                  <Button
+                    size="xs"
+                    variant="ghost"
+                    onClick={() => setConfirmDelete(null)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    size="xs"
+                    variant="destructive"
+                    disabled={deleteSource.isPending}
+                    onClick={() =>
+                      deleteSource.mutate(source.id, {
+                        onSuccess: () => setConfirmDelete(null),
+                        onError: (error) => toast.error(error.message),
+                      })
+                    }
+                  >
+                    Remove
+                  </Button>
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -152,7 +162,7 @@ export function CalendarSourcesDialog({
             </Button>
           </div>
         </div>
-      </DialogContent>
-    </Dialog>
+      </CardContent>
+    </Card>
   )
 }

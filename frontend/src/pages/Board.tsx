@@ -1,7 +1,9 @@
 import {
   DndContext,
   DragOverlay,
+  KeyboardSensor,
   PointerSensor,
+  TouchSensor,
   closestCenter,
   pointerWithin,
   useSensor,
@@ -14,19 +16,14 @@ import {
 import {
   SortableContext,
   horizontalListSortingStrategy,
+  sortableKeyboardCoordinates,
 } from '@dnd-kit/sortable'
 import { Pencil, Plus, Search } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { useHotkeys } from 'react-hotkeys-hook'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import {
   Select,
@@ -44,21 +41,25 @@ import {
   useCreateTask,
   useMoveTask,
   useReorderColumns,
+  useDeleteTask,
+  useRestoreTasks,
   useRunningTime,
   useStartTime,
   useStopTime,
   useTasks,
   useUpdateBoard,
   useUpdateColumn,
+  useUpdateTask,
+  useWorkspaces,
 } from '../api/hooks'
 import { BoardColumn } from '../components/board/BoardColumn'
-import { NewTaskDialog } from '../components/board/NewTaskDialog'
 import { RemindersColumn } from '../components/board/RemindersColumn'
 import { TaskCard } from '../components/board/TaskCard'
 import { isPastDue } from '../lib/format'
+import { showUndo } from '../lib/undo'
 import { useUIStore } from '../store/ui'
 import { useWorkspaceStore } from '../store/workspace'
-import type { Board as BoardType, Task } from '../api/types'
+import type { Task } from '../api/types'
 
 const collisionDetection: CollisionDetection = (args) => {
   const hits = pointerWithin(args)
@@ -174,87 +175,6 @@ function computeTaskDrop(tasks: Task[], activeId: number, overId: string) {
   }
 }
 
-function BoardDialog({
-  open,
-  onOpenChange,
-  board,
-  onSaved,
-}: {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  board?: BoardType
-  onSaved: (board: BoardType) => void
-}) {
-  const [name, setName] = useState('')
-  const workspaceId = useWorkspaceStore((state) => state.activeWorkspaceId)
-  const createBoard = useCreateBoard(workspaceId)
-  const updateBoard = useUpdateBoard()
-  const pending = createBoard.isPending || updateBoard.isPending
-
-  useEffect(() => {
-    if (open) setName(board?.name ?? '')
-  }, [open, board])
-
-  async function submit() {
-    const value = name.trim()
-    if (!value || pending) return
-    try {
-      const saved = board
-        ? await updateBoard.mutateAsync({ id: board.id, name: value })
-        : await createBoard.mutateAsync(value)
-      setName('')
-      onSaved(saved)
-      onOpenChange(false)
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Could not save board')
-    }
-  }
-
-  return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        onOpenChange(next)
-        if (!next) setName('')
-      }}
-    >
-      <DialogContent className="rounded-lg">
-        <DialogHeader>
-          <DialogTitle>{board ? 'Rename board' : 'New board'}</DialogTitle>
-          <DialogDescription>
-            {board
-              ? 'The board keeps its columns and tasks.'
-              : 'A board holds columns and the tasks inside them.'}
-          </DialogDescription>
-        </DialogHeader>
-        <Input
-          autoFocus
-          value={name}
-          placeholder="Board name"
-          aria-label="Board name"
-          disabled={pending}
-          onChange={(event) => setName(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.nativeEvent.isComposing) return
-            if (event.key === 'Enter') {
-              event.preventDefault()
-              void submit()
-            }
-          }}
-        />
-        <div className="flex justify-end gap-2">
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button disabled={!name.trim() || pending} onClick={() => void submit()}>
-            {board ? 'Save' : 'Create board'}
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
 function LoadError({
   title,
   detail,
@@ -297,7 +217,9 @@ function BoardSkeleton({ columns = 4 }: { columns?: number }) {
 }
 
 export function Board() {
-  const workspaceId = useWorkspaceStore((state) => state.activeWorkspaceId)
+  const { activeWorkspaceId, setActiveWorkspaceId } = useWorkspaceStore()
+  const workspaceId = activeWorkspaceId
+  const { data: workspaces } = useWorkspaces()
   const boardsQuery = useBoards(workspaceId)
   const boards = boardsQuery.data
   const { selectedBoardId, setSelectedBoardId, newTaskRequest } = useUIStore()
@@ -319,10 +241,14 @@ export function Board() {
   const updateColumn = useUpdateColumn(boardId)
   const reorderColumns = useReorderColumns(boardId)
   const moveTask = useMoveTask(boardId)
+  const updateTask = useUpdateTask(boardId)
+  const deleteTask = useDeleteTask(boardId)
+  const restoreTasks = useRestoreTasks(boardId)
   const { data: running } = useRunningTime()
   const startTime = useStartTime()
   const stopTime = useStopTime()
-  const [, setSearchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const navigate = useNavigate()
 
   const [query, setQuery] = useState('')
   const [priority, setPriority] = useState('all')
@@ -330,13 +256,21 @@ export function Board() {
   const [overColumnId, setOverColumnId] = useState<number | null>(null)
   const [dragTasks, setDragTasks] = useState<Task[] | null>(null)
   const [composerColumnId, setComposerColumnId] = useState<number | null>(null)
-  const [newTaskOpen, setNewTaskOpen] = useState(false)
-  const [newBoardOpen, setNewBoardOpen] = useState(false)
-  const [renameBoardOpen, setRenameBoardOpen] = useState(false)
+  const [expandedTaskId, setExpandedTaskId] = useState<number | null>(null)
+  const [boardEditor, setBoardEditor] = useState<'new' | 'rename' | null>(null)
+  const [showShortcuts, setShowShortcuts] = useState(false)
+  const [fieldFocus, setFieldFocus] = useState<{
+    field: 'due' | 'status' | 'labels'
+    nonce: number
+  } | null>(null)
+  const [boardName, setBoardName] = useState('')
   const [addingColumn, setAddingColumn] = useState(false)
   const [columnName, setColumnName] = useState('')
   const [columnIsDone, setColumnIsDone] = useState(false)
   const handledNewTaskRequest = useRef(0)
+  const createBoard = useCreateBoard(workspaceId)
+  const updateBoard = useUpdateBoard()
+  const boardSaving = createBoard.isPending || updateBoard.isPending
 
   const orderedColumns = useMemo(
     () => [...(columns ?? [])].sort((a, b) => a.position - b.position),
@@ -344,20 +278,122 @@ export function Board() {
   )
 
   useEffect(() => {
+    const raw = searchParams.get('task')
+    const id = raw ? Number(raw) : NaN
+    if (!Number.isFinite(id)) return
+    setExpandedTaskId(id)
+    const frame = requestAnimationFrame(() => {
+      document.getElementById(`task-${id}`)?.scrollIntoView({ block: 'nearest' })
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [searchParams])
+
+  useEffect(() => {
     setComposerColumnId(null)
     setQuery('')
     setPriority('all')
     setAddingColumn(false)
+    setExpandedTaskId(null)
   }, [boardId])
 
   useEffect(() => {
     if (newTaskRequest === handledNewTaskRequest.current) return
     if (!orderedColumns[0]) return
     handledNewTaskRequest.current = newTaskRequest
-    setNewTaskOpen(true)
+    setComposerColumnId(orderedColumns[0].id)
   }, [newTaskRequest, orderedColumns])
 
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
+  useHotkeys('c', () => {
+    if (orderedColumns[0]) setComposerColumnId(orderedColumns[0].id)
+  }, { enabled: Boolean(boardId && orderedColumns.length), preventDefault: true })
+  useHotkeys('j', () => moveBoardFocus(1), { preventDefault: true })
+  useHotkeys('k', () => moveBoardFocus(-1), { preventDefault: true })
+  useHotkeys(['enter', 'o'], () => {
+    if (expandedTaskId !== null) setExpandedTaskId(null)
+    else if (filteredTasks[0]) setExpandedTaskId(filteredTasks[0].id)
+  }, { preventDefault: true })
+  useHotkeys('x', () => {
+    if (expandedTaskId === null) return
+    const task = (tasks ?? []).find((item) => item.id === expandedTaskId)
+    if (!task) return
+    const done = Boolean(task.completed_at) || doneColumnIds.has(task.column_id)
+    const target = done
+      ? orderedColumns.find((column) => !column.is_done)
+      : orderedColumns.find((column) => column.is_done)
+    if (target) moveTask.mutate({ id: task.id, column_id: target.id })
+  }, { enabled: expandedTaskId !== null, preventDefault: true })
+  useHotkeys(['1', '2', '3', '4'], (event) => {
+    if (expandedTaskId === null) return
+    const priority = event.key === '1' ? 'low' : event.key === '2' ? 'medium' : 'high'
+    updateTask.mutate({ id: expandedTaskId, priority })
+  }, { enabled: expandedTaskId !== null, preventDefault: true })
+  useHotkeys('d', () => {
+    const id = expandedTaskId ?? filteredTasks[0]?.id
+    if (id === undefined) return
+    setExpandedTaskId(id)
+    setFieldFocus({ field: 'due', nonce: Date.now() })
+  }, { preventDefault: true })
+  useHotkeys('m', () => {
+    const id = expandedTaskId ?? filteredTasks[0]?.id
+    if (id === undefined) return
+    setExpandedTaskId(id)
+    setFieldFocus({ field: 'status', nonce: Date.now() })
+  }, { preventDefault: true })
+  useHotkeys('l', () => {
+    const id = expandedTaskId ?? filteredTasks[0]?.id
+    if (id === undefined) return
+    setExpandedTaskId(id)
+    setFieldFocus({ field: 'labels', nonce: Date.now() })
+  }, { preventDefault: true })
+  useHotkeys('t', () => {
+    if (expandedTaskId === null) return
+    if (running?.task_id === expandedTaskId) stopTime.mutate(expandedTaskId)
+    else startTime.mutate(expandedTaskId)
+  }, { enabled: expandedTaskId !== null, preventDefault: true })
+  useHotkeys('backspace', () => {
+    if (expandedTaskId === null) return
+    const task = (tasks ?? []).find((item) => item.id === expandedTaskId)
+    if (!task) return
+    deleteTask.mutate(task.id, {
+      onSuccess: () => {
+        setExpandedTaskId(null)
+        showUndo(`Deleted "${task.title}"`, () =>
+          restoreTasks.mutateAsync([task.id]).then(() => undefined),
+        )
+      },
+    })
+  }, { enabled: expandedTaskId !== null, preventDefault: true })
+  useHotkeys('escape', () => setExpandedTaskId(null), {
+    enabled: expandedTaskId !== null,
+    preventDefault: true,
+  })
+  useHotkeys('shift+enter', () => {
+    if (expandedTaskId !== null) setSearchParams({ task: String(expandedTaskId), panel: '1' })
+  }, { enabled: expandedTaskId !== null, preventDefault: true })
+  useHotkeys('shift+slash', () => setShowShortcuts((current) => !current), { preventDefault: true })
+
+  async function submitBoard() {
+    const value = boardName.trim()
+    if (!value || boardSaving) return
+    try {
+      if (boardEditor === 'rename' && board) {
+        await updateBoard.mutateAsync({ id: board.id, name: value })
+      } else {
+        const created = await createBoard.mutateAsync(value)
+        setSelectedBoardId(created.id)
+      }
+      setBoardName('')
+      setBoardEditor(null)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not save board')
+    }
+  }
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  )
 
   const doneColumnIds = useMemo(
     () => new Set(orderedColumns.filter((column) => column.is_done).map((column) => column.id)),
@@ -429,8 +465,18 @@ export function Board() {
 
   const activeTask = tasks?.find((task) => task.id === activeTaskId)
 
+  function moveBoardFocus(direction: 1 | -1) {
+    if (!filteredTasks.length) return
+    const index = filteredTasks.findIndex((task) => task.id === expandedTaskId)
+    const next = index < 0
+      ? (direction === 1 ? 0 : filteredTasks.length - 1)
+      : Math.min(filteredTasks.length - 1, Math.max(0, index + direction))
+    setExpandedTaskId(filteredTasks[next].id)
+  }
+
   function handleDragStart(event: DragStartEvent) {
     setOverColumnId(null)
+    setExpandedTaskId(null)
     if (event.active.data.current?.type === 'column') {
       setActiveTaskId(null)
       setDragTasks(null)
@@ -582,10 +628,6 @@ export function Board() {
     reorderColumns.mutate(ids, { onError: (error) => toast.error(error.message) })
   }
 
-  function openNewTask() {
-    setNewTaskOpen(true)
-  }
-
   if (boardsQuery.isError) {
     return (
       <div className="flex flex-col gap-4">
@@ -606,27 +648,31 @@ export function Board() {
   if (!boards.length) {
     return (
       <div className="flex flex-col gap-4">
-        <header className="flex flex-wrap items-center justify-between gap-3">
-          <h1 className="text-lg font-semibold">Boards</h1>
-          <Button size="sm" onClick={() => setNewBoardOpen(true)}>
-            <Plus />
-            New board
-          </Button>
-        </header>
-        <div className="flex flex-col items-start gap-2 rounded-md border border-dashed p-6">
+        <h1 className="text-lg font-semibold">Boards</h1>
+        <div className="flex max-w-md flex-col items-start gap-2 rounded-md border border-dashed p-6">
           <p className="text-sm font-medium">No boards yet</p>
-          <p className="text-xs text-muted-foreground">
-            A board holds your columns and tasks.
-          </p>
-          <Button size="sm" onClick={() => setNewBoardOpen(true)}>
-            Create a board
-          </Button>
+          <p className="text-xs text-muted-foreground">A board holds your columns and tasks.</p>
+          <div className="flex w-full items-center gap-2">
+            <Input
+              autoFocus
+              value={boardName}
+              placeholder="Board name"
+              aria-label="Board name"
+              disabled={boardSaving}
+              onChange={(event) => setBoardName(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.nativeEvent.isComposing) return
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  void submitBoard()
+                }
+              }}
+            />
+            <Button size="sm" disabled={!boardName.trim() || boardSaving} onClick={() => void submitBoard()}>
+              Create board
+            </Button>
+          </div>
         </div>
-        <BoardDialog
-          open={newBoardOpen}
-          onOpenChange={setNewBoardOpen}
-          onSaved={(created) => setSelectedBoardId(created.id)}
-        />
       </div>
     )
   }
@@ -653,39 +699,106 @@ export function Board() {
         setDragTasks(null)
       }}
     >
-      <div className="flex min-w-0 flex-col gap-4">
+      <div className="flex min-w-0 flex-col gap-4 pb-24">
         <h1 className="sr-only">{board?.name ?? 'Board'}</h1>
         <header className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex min-w-0 flex-col gap-1">
             <div className="flex min-w-0 items-center gap-1">
-              <Select
-                items={boards.map((item) => ({ value: String(item.id), label: item.name }))}
-                value={boardId ? String(boardId) : undefined}
-                onValueChange={(value) => value && setSelectedBoardId(Number(value))}
-              >
-                <SelectTrigger
-                  aria-label="Switch board"
-                  className="h-auto w-fit max-w-full border-0 bg-transparent py-0 pr-1 pl-0 text-lg font-semibold hover:bg-transparent focus-visible:ring-0 dark:bg-transparent dark:hover:bg-transparent [&_svg]:size-4"
-                >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent align="start">
-                  {boards.map((item) => (
-                    <SelectItem key={item.id} value={String(item.id)}>
-                      {item.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                className="text-muted-foreground"
-                aria-label="Rename board"
-                onClick={() => setRenameBoardOpen(true)}
-              >
-                <Pencil />
-              </Button>
+              {boardEditor ? (
+                <>
+                  <Input
+                    autoFocus
+                    value={boardName}
+                    placeholder="Board name"
+                    aria-label="Board name"
+                    className="h-8 w-56"
+                    disabled={boardSaving}
+                    onChange={(event) => setBoardName(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.nativeEvent.isComposing) return
+                      if (event.key === 'Enter') {
+                        event.preventDefault()
+                        void submitBoard()
+                      }
+                      if (event.key === 'Escape') {
+                        event.preventDefault()
+                        setBoardEditor(null)
+                        setBoardName('')
+                      }
+                    }}
+                  />
+                  <Button size="xs" disabled={!boardName.trim() || boardSaving} onClick={() => void submitBoard()}>
+                    Save
+                  </Button>
+                  <Button
+                    size="xs"
+                    variant="ghost"
+                    onClick={() => {
+                      setBoardEditor(null)
+                      setBoardName('')
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Select
+                    items={(workspaces ?? []).map((item) => ({
+                      value: String(item.id),
+                      label: item.name,
+                    }))}
+                    value={activeWorkspaceId ? String(activeWorkspaceId) : undefined}
+                    onValueChange={(value) => {
+                      if (!value) return
+                      setActiveWorkspaceId(Number(value))
+                      setSelectedBoardId(undefined)
+                    }}
+                  >
+                    <SelectTrigger size="sm" aria-label="Switch workspace" className="max-w-32">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent align="start">
+                      {(workspaces ?? []).map((item) => (
+                        <SelectItem key={item.id} value={String(item.id)}>
+                          {item.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select
+                    items={boards.map((item) => ({ value: String(item.id), label: item.name }))}
+                    value={boardId ? String(boardId) : undefined}
+                    onValueChange={(value) => value && setSelectedBoardId(Number(value))}
+                  >
+                    <SelectTrigger
+                      aria-label="Switch board"
+                      className="h-auto w-fit max-w-full border-0 bg-transparent py-0 pr-1 pl-0 text-lg font-semibold hover:bg-transparent focus-visible:ring-0 dark:bg-transparent dark:hover:bg-transparent [&_svg]:size-4"
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent align="start">
+                      {boards.map((item) => (
+                        <SelectItem key={item.id} value={String(item.id)}>
+                          {item.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    className="text-muted-foreground"
+                    aria-label="Rename board"
+                    onClick={() => {
+                      setBoardName(board?.name ?? '')
+                      setBoardEditor('rename')
+                    }}
+                  >
+                    <Pencil />
+                  </Button>
+                </>
+              )}
             </div>
             <p className="text-xs text-muted-foreground">
               {tasks ? summary : 'Loading tasks…'}
@@ -728,11 +841,22 @@ export function Board() {
                 <SelectItem value="low">Low</SelectItem>
               </SelectContent>
             </Select>
-            <Button size="sm" disabled={!orderedColumns.length} onClick={openNewTask}>
+            <Button
+              size="sm"
+              disabled={!orderedColumns.length}
+              onClick={() => orderedColumns[0] && setComposerColumnId(orderedColumns[0].id)}
+            >
               <Plus />
               New task
             </Button>
-            <Button size="sm" variant="outline" onClick={() => setNewBoardOpen(true)}>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setBoardName('')
+                setBoardEditor('new')
+              }}
+            >
               <Plus />
               New board
             </Button>
@@ -789,7 +913,20 @@ export function Board() {
                   canMoveRight={index < orderedColumns.length - 1}
                   onStartAdding={() => setComposerColumnId(column.id)}
                   onCancelAdding={() => setComposerColumnId(null)}
-                  onTaskClick={(task) => setSearchParams({ task: String(task.id) })}
+                  expandedTaskId={expandedTaskId}
+                  focusField={fieldFocus?.field}
+                  focusNonce={fieldFocus?.nonce}
+                  onTaskClick={(task) =>
+                    setExpandedTaskId((current) => (current === task.id ? null : task.id))
+                  }
+                  onOpenDetails={(task) => {
+                    if (window.matchMedia('(max-width: 767px)').matches) {
+                      navigate(`/tasks/${task.id}`)
+                      return
+                    }
+                    setSearchParams({ task: String(task.id), panel: '1' })
+                  }}
+                  onCloseExpanded={() => setExpandedTaskId(null)}
                   onAddTask={async (title) => {
                     await createTask.mutateAsync({ board_id: boardId, column_id: column.id, title })
                   }}
@@ -871,6 +1008,35 @@ export function Board() {
         )}
       </div>
 
+      {showShortcuts && (
+        <div className="fixed right-4 bottom-20 z-40 w-64 rounded-lg border bg-popover p-3 text-xs shadow-lg lg:bottom-4">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="font-medium">Shortcuts</span>
+            <Button size="xs" variant="ghost" onClick={() => setShowShortcuts(false)}>
+              Close
+            </Button>
+          </div>
+          <dl className="grid grid-cols-2 gap-1">
+            {[
+              ['j / k', 'Next / previous'],
+              ['Enter / o', 'Expand or collapse'],
+              ['x', 'Toggle done'],
+              ['1 to 4', 'Priority'],
+              ['t', 'Timer'],
+              ['Backspace', 'Delete'],
+              ['c', 'Quick add'],
+              ['Shift+Enter', 'Details'],
+              ['Escape', 'Collapse'],
+            ].map(([key, label]) => (
+              <Fragment key={key}>
+                <dt className="font-mono text-muted-foreground">{key}</dt>
+                <dd>{label}</dd>
+              </Fragment>
+            ))}
+          </dl>
+        </div>
+      )}
+
       <DragOverlay dropAnimation={null}>
         {activeTask ? (
           <TaskCard
@@ -884,26 +1050,6 @@ export function Board() {
           />
         ) : null}
       </DragOverlay>
-
-      <BoardDialog
-        open={newBoardOpen}
-        onOpenChange={setNewBoardOpen}
-        onSaved={(created) => setSelectedBoardId(created.id)}
-      />
-
-      <BoardDialog
-        open={renameBoardOpen}
-        onOpenChange={setRenameBoardOpen}
-        board={board}
-        onSaved={() => setRenameBoardOpen(false)}
-      />
-
-      <NewTaskDialog
-        open={newTaskOpen}
-        onOpenChange={setNewTaskOpen}
-        boardId={boardId}
-        columnId={orderedColumns[0]?.id}
-      />
     </DndContext>
   )
 }

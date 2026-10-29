@@ -18,7 +18,7 @@ func ValidWorkspaceTag(tag string) bool {
 }
 
 // ParseBodyLabels returns the distinct #label tokens in body, in first-seen order.
-// A space ends a token, so "#code review" yields "code".
+// A space ends a token; the editor inserts a dash instead while typing a label.
 func ParseBodyLabels(body string) []string {
 	var out []string
 	seen := map[string]bool{}

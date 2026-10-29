@@ -27,6 +27,7 @@ const (
 	ProviderAnthropic    = "anthropic"
 	ProviderOpenAI       = "openai"
 	ProviderOpenAICompat = "openai-compat"
+	ProviderOpenCodeGo   = "opencode-go"
 )
 
 // NormalizeProvider maps known aliases to the stored provider name. Unknown
@@ -37,6 +38,8 @@ func NormalizeProvider(provider string) string {
 		return ProviderOpenAI
 	case ProviderOpenAICompat, "opencode-zen", "opencode":
 		return ProviderOpenAICompat
+	case ProviderOpenCodeGo:
+		return ProviderOpenCodeGo
 	default:
 		return ProviderAnthropic
 	}
@@ -47,6 +50,7 @@ type Provider interface {
 	GenerateSubtasks(ctx context.Context, title, descriptionMD string) ([]string, error)
 	SuggestLabels(ctx context.Context, title, descriptionMD string, existing []string) ([]string, error)
 	PlanTask(ctx context.Context, title, body string) (TaskPlan, error)
+	Transcribe(ctx context.Context, audio []byte, format string) (string, error)
 }
 
 // NewProvider returns nil if no API key is configured, so every AI endpoint
@@ -61,6 +65,8 @@ func NewProvider(provider, baseURL, apiKey, model string) Provider {
 		return newOpenAICompat(baseURL, openAIBaseURL, apiKey, model)
 	case ProviderOpenAICompat:
 		return newOpenAICompat(baseURL, openCodeZenBaseURL, apiKey, model)
+	case ProviderOpenCodeGo:
+		return newOpenAICompat(baseURL, openCodeGoBaseURL, apiKey, model)
 	default:
 		return newAnthropic(baseURL, apiKey, model)
 	}

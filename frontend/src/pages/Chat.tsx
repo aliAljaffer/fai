@@ -2,15 +2,21 @@ import { Send } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { MarkdownRenderer } from '@/components/MarkdownRenderer'
 import { Textarea } from '@/components/ui/textarea'
 import { RefPicker } from '../components/refs/RefPicker'
 import { useRefPicker } from '../components/refs/useRefPicker'
-import { useAIChat, useAIStatus, type AIChatMessage } from '../api/hooks'
+import { useAIChat, useAIStatus, useChatHistory, useConfirmChatAction, type AIChatMessage, type PendingChatAction } from '../api/hooks'
+import { useWorkspaceStore } from '../store/workspace'
 
 export function Chat() {
   const { data: status } = useAIStatus()
+  const workspaceId = useWorkspaceStore((state) => state.activeWorkspaceId)
+  const { data: history } = useChatHistory(workspaceId)
   const chat = useAIChat()
+  const confirmAction = useConfirmChatAction()
   const [messages, setMessages] = useState<AIChatMessage[]>([])
+  const [pending, setPending] = useState<PendingChatAction | null>(null)
   const [draft, setDraft] = useState('')
   const transcriptRef = useRef<HTMLDivElement>(null)
   const refs = useRefPicker({ value: draft, onChange: setDraft })
@@ -20,6 +26,16 @@ export function Chat() {
     if (node) node.scrollTop = node.scrollHeight
   }, [messages, chat.isPending])
 
+  useEffect(() => {
+    if (!history?.length) return
+    setMessages(
+      history.map((message) => ({
+        role: message.role,
+        content: message.content,
+      })),
+    )
+  }, [history])
+
   async function send() {
     const content = draft.trim()
     if (!content || chat.isPending) return
@@ -27,8 +43,9 @@ export function Chat() {
     setMessages(next)
     setDraft('')
     try {
-      const result = await chat.mutateAsync(next)
+      const result = await chat.mutateAsync({ messages: next, workspaceId })
       setMessages((current) => [...current, { role: 'assistant' as const, content: result.reply }].slice(-10))
+      setPending(result.pending ?? null)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'The assistant did not answer')
     }
@@ -83,7 +100,7 @@ export function Chat() {
               <p className="mb-1 text-[0.65rem] font-medium tracking-wide text-muted-foreground uppercase">
                 {message.role === 'user' ? 'You' : 'Fai'}
               </p>
-              <p className="whitespace-pre-wrap">{message.content}</p>
+              <MarkdownRenderer source={message.content} />
             </div>
           ))
         )}
@@ -91,6 +108,36 @@ export function Chat() {
           <p role="status" className="mr-auto text-sm text-muted-foreground">
             Thinking…
           </p>
+        )}
+        {pending && (
+          <div className="mr-auto flex max-w-[85%] flex-col gap-2 rounded-md border bg-muted/50 px-3 py-2 text-sm">
+            <p>
+              Move <span className="font-mono text-xs">{pending.task_ref}</span> (
+              {pending.task_title}) to {pending.column_name}?
+            </p>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                disabled={confirmAction.isPending}
+                onClick={async () => {
+                  try {
+                    const result = await confirmAction.mutateAsync(pending)
+                    setMessages((current) =>
+                      [...current, { role: 'assistant' as const, content: result.reply }].slice(-10),
+                    )
+                    setPending(null)
+                  } catch (error) {
+                    toast.error(error instanceof Error ? error.message : 'Could not confirm')
+                  }
+                }}
+              >
+                Confirm
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setPending(null)}>
+                Cancel
+              </Button>
+            </div>
+          </div>
         )}
       </div>
 

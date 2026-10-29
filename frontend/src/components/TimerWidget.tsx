@@ -1,7 +1,6 @@
 import { Clock, Square } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { useBoards, useRunningTime, useStartTime, useStopTime, useTasks } from '../api/hooks'
 import { useUIStore } from '../store/ui'
@@ -21,6 +20,23 @@ export function TimerWidget() {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [, tick] = useState(0)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    function onPointer(event: PointerEvent) {
+      if (!containerRef.current?.contains(event.target as Node)) setOpen(false)
+    }
+    function onKey(event: KeyboardEvent) {
+      if (event.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('pointerdown', onPointer)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('pointerdown', onPointer)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
 
   useEffect(() => {
     const id = setInterval(() => tick((n) => n + 1), 1000)
@@ -55,28 +71,26 @@ export function TimerWidget() {
   }
 
   return (
-    <>
+    <div ref={containerRef} className="relative">
       <Button
         variant="outline"
         size="sm"
         className="text-muted-foreground"
         aria-label="Start a timer"
-        onClick={() => setOpen(true)}
+        aria-expanded={open}
+        aria-haspopup="dialog"
+        onClick={() => setOpen((current) => !current)}
       >
         <Clock className="size-3.5" />
         <span className="hidden sm:inline">Timer</span>
       </Button>
-      <Dialog
-        open={open}
-        onOpenChange={(next) => {
-          setOpen(next)
-          if (!next) setQuery('')
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Start a timer</DialogTitle>
-          </DialogHeader>
+      {open && (
+        <div
+          role="dialog"
+          aria-label="Start a timer"
+          className="absolute right-0 z-50 mt-2 flex w-72 flex-col gap-2 rounded-lg border bg-popover p-3 shadow-lg"
+        >
+          <p className="text-sm font-medium">Start a timer</p>
           <Input
             autoFocus
             aria-label="Find a task"
@@ -88,7 +102,7 @@ export function TimerWidget() {
             {filtered.map((task) => (
               <button
                 key={task.id}
-                className="rounded-md border px-3 py-2 text-left text-sm hover:bg-accent"
+                className="rounded-md border px-3 py-2 text-left text-sm hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50"
                 onClick={() => {
                   startTime.mutate(task.id)
                   setOpen(false)
@@ -102,8 +116,8 @@ export function TimerWidget() {
               <p className="py-4 text-center text-sm text-muted-foreground">No tasks found.</p>
             )}
           </div>
-        </DialogContent>
-      </Dialog>
-    </>
+        </div>
+      )}
+    </div>
   )
 }

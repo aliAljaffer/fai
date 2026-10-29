@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, ipcMain, Notification, shell } = require('electron')
+const { app, BrowserWindow, dialog, ipcMain, Menu, Notification, shell } = require('electron')
 const { autoUpdater } = require('electron-updater')
 const { spawn } = require('node:child_process')
 const fs = require('node:fs')
@@ -335,6 +335,53 @@ async function createWindow() {
   })
 
   await mainWindow.loadURL(`${origin}/`)
+}
+
+function sendMenuCommand(command) {
+  mainWindow?.webContents.send('fai:menu-command', command)
+}
+
+function buildMenu() {
+  const isMac = process.platform === 'darwin'
+  const template = [
+    ...(isMac ? [{ role: 'appMenu' }] : []),
+    {
+      label: 'File',
+      submenu: [
+        {
+          label: 'New Task',
+          accelerator: 'CmdOrCtrl+N',
+          click: () => sendMenuCommand('new-task'),
+        },
+        {
+          label: 'Command Palette',
+          accelerator: 'CmdOrCtrl+K',
+          click: () => sendMenuCommand('command-palette'),
+        },
+        {
+          label: 'Settings',
+          accelerator: 'CmdOrCtrl+,',
+          click: () => sendMenuCommand('settings'),
+        },
+        { type: 'separator' },
+        isMac ? { role: 'close' } : { role: 'quit' },
+      ],
+    },
+    { role: 'editMenu' },
+    {
+      label: 'Task',
+      submenu: [
+        {
+          label: 'Undo Last Delete',
+          accelerator: 'CmdOrCtrl+Z',
+          click: () => sendMenuCommand('undo'),
+        },
+      ],
+    },
+    { role: 'viewMenu' },
+    { role: 'windowMenu' },
+  ]
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template))
 }
 
 if (!app.requestSingleInstanceLock()) {

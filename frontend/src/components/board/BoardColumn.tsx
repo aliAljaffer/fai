@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import type { BoardColumn as BoardColumnType, Task } from '../../api/types'
 import { TaskCard } from './TaskCard'
+import { TaskInlineEditor } from './TaskInlineEditor'
 
 export function BoardColumn({
   column,
@@ -27,11 +28,16 @@ export function BoardColumn({
   adding,
   dragging,
   runningTaskId,
+  expandedTaskId,
+  focusField,
+  focusNonce,
   canMoveLeft,
   canMoveRight,
   onStartAdding,
   onCancelAdding,
   onTaskClick,
+  onOpenDetails,
+  onCloseExpanded,
   onAddTask,
   onRename,
   onMove,
@@ -49,11 +55,16 @@ export function BoardColumn({
   adding: boolean
   dragging: boolean
   runningTaskId: number | null
+  expandedTaskId: number | null
+  focusField?: 'due' | 'status' | 'labels'
+  focusNonce?: number
   canMoveLeft: boolean
   canMoveRight: boolean
   onStartAdding: () => void
   onCancelAdding: () => void
   onTaskClick: (task: Task) => void
+  onOpenDetails: (task: Task) => void
+  onCloseExpanded: () => void
   onAddTask: (title: string) => Promise<unknown>
   onRename: (name: string) => Promise<unknown>
   onMove: (direction: 'left' | 'right') => void
@@ -72,6 +83,7 @@ export function BoardColumn({
     id: `column-${column.id}`,
     data: { type: 'column' },
   })
+  const expandedTask = tasks.find((task) => task.id === expandedTaskId)
   const [title, setTitle] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [renaming, setRenaming] = useState(false)
@@ -225,10 +237,26 @@ export function BoardColumn({
               doneColumnIds={doneColumnIds}
               onToggleTimer={onToggleTimer}
               onToggleSubtask={onToggleSubtask}
+              dragDisabled={expandedTaskId === task.id}
+              expanded={expandedTaskId === task.id}
               onClick={() => onTaskClick(task)}
             />
           ))}
         </SortableContext>
+        {expandedTask && (
+          <div className="fai-expand">
+            <div>
+          <TaskInlineEditor
+            task={expandedTask}
+            columns={columns}
+            onClose={onCloseExpanded}
+            onOpenDetails={() => onOpenDetails(expandedTask)}
+            focusField={focusField}
+            focusNonce={focusNonce}
+          />
+            </div>
+          </div>
+        )}
         {!tasks.length && !adding && !dragging && (
           hasFilters ? (
             <p className="flex h-16 items-center justify-center text-xs text-muted-foreground">

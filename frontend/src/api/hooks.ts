@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from './client'
 import type {
   AISettings,
@@ -30,6 +30,19 @@ import type {
 } from './types'
 import { useWorkspaceStore } from '../store/workspace'
 
+const taskWriteQueues = new Map<number, Promise<unknown>>()
+
+function queueTaskWrite<T>(id: number, run: () => Promise<T>): Promise<T> {
+  const previous = taskWriteQueues.get(id) ?? Promise.resolve()
+  const next = previous.catch(() => undefined).then(run)
+  taskWriteQueues.set(id, next)
+  const cleanup = () => {
+    if (taskWriteQueues.get(id) === next) taskWriteQueues.delete(id)
+  }
+  next.then(cleanup, cleanup)
+  return next
+}
+
 function workspaceParam(workspaceId: number | undefined) {
   return workspaceId === undefined ? '' : `?workspace_id=${workspaceId}`
 }
@@ -56,6 +69,18 @@ export function useUpdateWorkspace() {
       qc.invalidateQueries({ queryKey: ['boards'] })
       qc.invalidateQueries({ queryKey: ['tasks'] })
       qc.invalidateQueries({ queryKey: ['notes'] })
+    },
+  })
+}
+
+export function useDeleteBoard() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) => api.delete<void>(`/boards/${id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['boards'] })
+      qc.invalidateQueries({ queryKey: ['tasks'] })
+      qc.invalidateQueries({ queryKey: ['columns'] })
     },
   })
 }
@@ -222,6 +247,37 @@ export function useTasks(boardId: number | undefined, filters: TaskFilters = {})
   })
 }
 
+export function useAllTasks(enabled = true) {
+  return useQuery({
+    queryKey: ['tasks', 'all', '', null, ''],
+    queryFn: () => api.get<Task[]>('/tasks'),
+    enabled,
+  })
+}
+
+export function useWorkspaceTasks(workspaceId?: number) {
+  const { data: boards } = useBoards(workspaceId)
+  const results = useQueries({
+    queries: (boards ?? []).map((board) => ({
+      queryKey: ['tasks', board.id, '', null, ''],
+      queryFn: () => api.get<Task[]>(`/tasks?board_id=${board.id}`),
+    })),
+  })
+  return {
+    data: results.flatMap((result) => result.data ?? []),
+    isLoading: results.some((result) => result.isLoading),
+  }
+}
+
+export function useAllColumns(boards: Board[] | undefined) {
+  return useQueries({
+    queries: (boards ?? []).map((board) => ({
+      queryKey: ['columns', board.id],
+      queryFn: () => api.get<BoardColumn[]>(`/boards/${board.id}/columns`),
+    })),
+  })
+}
+
 export function useTask(id: number | undefined) {
   return useQuery({
     queryKey: ['task', id],
@@ -230,11 +286,15 @@ export function useTask(id: number | undefined) {
   })
 }
 
-export function useResolveRefs(q: string) {
+export function useResolveRefs(q: string, workspaceId?: number) {
   const trimmed = q.trim()
   return useQuery({
-    queryKey: ['refs', trimmed.toLowerCase()],
-    queryFn: () => api.get<TaskRef[]>(`/refs/resolve?q=${encodeURIComponent(trimmed)}`),
+    queryKey: ['refs', trimmed.toLowerCase(), workspaceId ?? null],
+    queryFn: () => {
+      const params = new URLSearchParams({ q: trimmed })
+      if (workspaceId !== undefined) params.set('workspace_id', String(workspaceId))
+      return api.get<TaskRef[]>(`/refs/resolve?${params}`)
+    },
     enabled: trimmed.length > 0,
     staleTime: 30_000,
     retry: false,
@@ -340,23 +400,35 @@ export function useAITask(boardId: number | undefined) {
   })
 }
 
+export type TaskPatch = Partial<Pick<Task, 'title' | 'description_md' | 'priority' | 'due_date'>>
+
 export function useUpdateTask(boardId: number | undefined) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({
-      id,
-      ...body
-    }: {
-      id: number
-      title: string
-      description_md: string
-      priority: string
-      due_date?: string | null
-    }) => api.patch<Task>(`/tasks/${id}`, body),
+    mutationFn: ({ id, ...body }: { id: number } & TaskPatch) =>
+      queueTaskWrite(id, () => api.patch<Task>(`/tasks/${id}`, body)),
+    onMutate: async ({ id, ...body }) => {
+      await qc.cancelQueries({ queryKey: ['tasks'] })
+      await qc.cancelQueries({ queryKey: ['task', id] })
+      const previousLists = qc.getQueriesData<Task[]>({ queryKey: ['tasks'] })
+      const previousTask = qc.getQueryData<Task>(['task', id])
+      qc.setQueriesData<Task[]>({ queryKey: ['tasks'] }, (current) =>
+        current?.map((task) => (task.id === id ? { ...task, ...body } : task)),
+      )
+      qc.setQueryData<Task>(['task', id], (current) => (current ? { ...current, ...body } : current))
+      return { previousLists, previousTask }
+    },
+    onError: (_error, variables, context) => {
+      for (const [key, value] of context?.previousLists ?? []) qc.setQueryData(key, value)
+      if (context?.previousTask) qc.setQueryData(['task', variables.id], context.previousTask)
+    },
     onSuccess: (task) => {
-      qc.invalidateQueries({ queryKey: ['tasks', boardId] })
-      qc.invalidateQueries({ queryKey: ['task', task.id] })
+      qc.setQueryData<Task>(['task', task.id], task)
+      qc.setQueriesData<Task[]>({ queryKey: ['tasks'] }, (current) =>
+        current?.map((item) => (item.id === task.id ? { ...task } : item)),
+      )
       qc.invalidateQueries({ queryKey: ['tags'] })
+      if (boardId !== undefined) qc.invalidateQueries({ queryKey: ['boards', boardId, 'tags'] })
     },
   })
 }
@@ -426,7 +498,34 @@ export function useDeleteTask(boardId: number | undefined) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (id: number) => api.delete<void>(`/tasks/${id}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['tasks', boardId] }),
+    onMutate: async (id) => {
+      await qc.cancelQueries({ queryKey: ['tasks'] })
+      const previousLists = qc.getQueriesData<Task[]>({ queryKey: ['tasks'] })
+      qc.setQueriesData<Task[]>({ queryKey: ['tasks'] }, (current) =>
+        current?.filter((task) => task.id !== id),
+      )
+      return { previousLists }
+    },
+    onError: (_error, _id, context) => {
+      for (const [key, value] of context?.previousLists ?? []) qc.setQueryData(key, value)
+    },
+    onSuccess: (_data, id) => {
+      qc.removeQueries({ queryKey: ['task', id] })
+      qc.invalidateQueries({ queryKey: ['tasks', boardId] })
+    },
+  })
+}
+
+export function useRestoreTasks(boardId: number | undefined) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (ids: number[]) =>
+      Promise.all(ids.map((id) => api.post<Task>(`/tasks/${id}/restore`, {}))),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['tasks'] })
+      qc.invalidateQueries({ queryKey: ['task'] })
+      if (boardId !== undefined) qc.invalidateQueries({ queryKey: ['tasks', boardId] })
+    },
   })
 }
 
@@ -449,19 +548,9 @@ export function useBulkTaskActions() {
           case 'move':
             return api.post<void>(`/tasks/${task.id}/move`, { column_id: action.columnId })
           case 'priority':
-            return api.patch<void>(`/tasks/${task.id}`, {
-              title: task.title,
-              description_md: task.description_md,
-              priority: action.priority,
-              due_date: task.due_date,
-            })
+            return api.patch<void>(`/tasks/${task.id}`, { priority: action.priority })
           case 'dueDate':
-            return api.patch<void>(`/tasks/${task.id}`, {
-              title: task.title,
-              description_md: task.description_md,
-              priority: task.priority,
-              due_date: action.dueDate,
-            })
+            return api.patch<void>(`/tasks/${task.id}`, { due_date: action.dueDate })
           case 'addTag':
             return api.put<void>(`/tasks/${task.id}/tags/${action.tagId}`)
           case 'removeTag':
@@ -791,18 +880,62 @@ export interface AIChatMessage {
   content: string
 }
 
+export interface PendingChatAction {
+  type: string
+  task_id: number
+  task_ref: string
+  task_title: string
+  column_id: number
+  column_name: string
+}
+
 export function useAIChat() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (messages: AIChatMessage[]) =>
-      api.post<{ reply: string; created?: { type: string; id: number; title: string } }>('/ai/chat', {
+    mutationFn: ({ messages, workspaceId }: { messages: AIChatMessage[]; workspaceId?: number }) =>
+      api.post<{
+        reply: string
+        created?: { type: string; id: number; title: string }
+        pending?: PendingChatAction
+      }>('/ai/chat', {
         messages,
+        workspace_id: workspaceId,
         tz_offset: -new Date().getTimezoneOffset(),
       }),
     onSuccess: (result) => {
+      qc.invalidateQueries({ queryKey: ['chat-messages'] })
       if (!result.created) return
       qc.invalidateQueries({ queryKey: ['tasks'] })
       qc.invalidateQueries({ queryKey: ['reminders'] })
+    },
+  })
+}
+
+export function useChatHistory(workspaceId?: number) {
+  return useQuery({
+    queryKey: ['chat-messages', workspaceId ?? null],
+    queryFn: () =>
+      api.get<ChatMessage[]>(`/ai/chat/messages?workspace_id=${workspaceId}&limit=50`),
+    enabled: workspaceId !== undefined,
+  })
+}
+
+export interface ChatMessage {
+  id: number
+  workspace_id: number
+  role: 'user' | 'assistant'
+  content: string
+  created_at: string
+}
+
+export function useConfirmChatAction() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (pending: PendingChatAction) =>
+      api.post<{ reply: string }>('/ai/chat/confirm', pending),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['tasks'] })
+      qc.invalidateQueries({ queryKey: ['task'] })
     },
   })
 }
@@ -836,10 +969,13 @@ export function useCreateTaskFromNote(noteId: number) {
   })
 }
 
-export function useCalendarFeedURL() {
+export function useCalendarFeedURL(workspaceId?: number) {
   return useQuery({
-    queryKey: ['calendar-feed'],
-    queryFn: () => api.get<{ url: string }>('/calendar/feed'),
+    queryKey: ['calendar-feed', workspaceId ?? null],
+    queryFn: () =>
+      api.get<{ url: string }>(
+        workspaceId === undefined ? '/calendar/feed' : `/calendar/feed?workspace_id=${workspaceId}`,
+      ),
   })
 }
 

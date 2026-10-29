@@ -57,6 +57,24 @@ type Tag struct {
 	Color string `json:"color"`
 }
 
+type ChatMessage struct {
+	ID          int64     `json:"id"`
+	WorkspaceID int64     `json:"workspace_id"`
+	Role        string    `json:"role"`
+	Content     string    `json:"content"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+// TaskPatch updates only the fields it names. DueDateSet distinguishes an
+// omitted due date from an explicit clear.
+type TaskPatch struct {
+	Title         *string
+	DescriptionMd *string
+	Priority      *string
+	DueDate       *string
+	DueDateSet    bool
+}
+
 type Task struct {
 	ID               int64      `json:"id"`
 	BoardID          int64      `json:"board_id"`

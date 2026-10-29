@@ -530,16 +530,17 @@ func (e *jiraExporter) record(res jiraExportResult) {
 	}
 }
 
-// issueType maps the Fai type onto the configured Jira issue type.
+// issueType derives the Jira type from the child count. A task with more than
+// three children becomes an Epic, and every child becomes a subtask.
 func (e *jiraExporter) issueType(task store.Task) string {
-	switch task.Kind {
-	case "arc":
-		return e.epicType
-	case "step":
+	if task.ParentTaskID != nil {
 		return e.subtaskType
-	default:
-		return e.taskType
 	}
+	children, err := e.s.Store.ListSubtasks(e.ctx, task.ID)
+	if err == nil && len(children) > 3 {
+		return e.epicType
+	}
+	return e.taskType
 }
 
 // create links the task to a new Jira issue, or skips it when already linked.
@@ -555,9 +556,9 @@ func (e *jiraExporter) create(task store.Task, issueType, parentKey string) (str
 
 	parent := ""
 	epic := ""
-	if task.Kind == "step" {
+	if task.ParentTaskID != nil {
 		parent = parentKey
-	} else if task.Kind == "task" && parentKey != "" {
+	} else if issueType == e.epicType && parentKey != "" {
 		epic = parentKey
 	}
 	key, err := e.s.Jira.CreateIssue(e.projectKey, task.Title, issueType, parent, epic, e.epicLinkField)
@@ -573,7 +574,8 @@ func (e *jiraExporter) create(task store.Task, issueType, parentKey string) (str
 	return key, nil
 }
 
-// ensureParent exports a missing parent before its child and returns its Jira key.
+// ensureParent returns the parent's Jira key. A child is never exported alone:
+// when the parent has no link the child is skipped.
 func (e *jiraExporter) ensureParent(task store.Task) (string, bool) {
 	if task.ParentTaskID == nil {
 		return "", true
@@ -581,19 +583,12 @@ func (e *jiraExporter) ensureParent(task store.Task) (string, bool) {
 	if key, ok := e.keys[*task.ParentTaskID]; ok {
 		return key, true
 	}
-	parent, err := e.s.Store.GetTask(e.ctx, *task.ParentTaskID)
-	if err != nil {
+	link, err := e.s.Store.GetJiraLinkByTask(e.ctx, *task.ParentTaskID)
+	if err != nil || link == nil {
 		return "", false
 	}
-	parentKey, ok := e.ensureParent(parent)
-	if !ok {
-		return "", false
-	}
-	key, err := e.create(parent, e.issueType(parent), parentKey)
-	if err != nil {
-		return "", false
-	}
-	return key, true
+	e.keys[*task.ParentTaskID] = link.JiraKey
+	return link.JiraKey, true
 }
 
 func (e *jiraExporter) exportTree(taskID int64) {
@@ -607,7 +602,7 @@ func (e *jiraExporter) exportTree(taskID int64) {
 	}
 	parentKey, ok := e.ensureParent(task)
 	if !ok {
-		e.record(jiraExportResult{TaskID: task.ID, Title: task.Title, Status: "failed", Error: "parent export failed"})
+		e.record(jiraExportResult{TaskID: task.ID, Title: task.Title, Status: "skipped", Error: "parent is not linked to Jira"})
 		return
 	}
 	children, err := e.s.Store.ListSubtasks(e.ctx, task.ID)
@@ -622,7 +617,7 @@ func (e *jiraExporter) exportTree(taskID int64) {
 				if _, done := e.keys[child.ID]; done {
 					continue
 				}
-				e.record(jiraExportResult{TaskID: child.ID, Title: child.Title, Status: "failed", Error: "parent export failed"})
+				e.record(jiraExportResult{TaskID: child.ID, Title: child.Title, Status: "skipped", Error: "parent export failed"})
 			}
 		}
 		return

@@ -8,8 +8,8 @@ import type {
   EventDropArg,
   EventInput,
 } from '@fullcalendar/core'
-import { CalendarPlus, MessageSquarePlus } from 'lucide-react'
-import { format, addMonths, parseISO, startOfMonth, subMonths } from 'date-fns'
+import { MessageSquarePlus, X } from 'lucide-react'
+import { format, addDays, addMonths, parseISO, startOfMonth, subMonths } from 'date-fns'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
@@ -20,11 +20,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { CalendarDayDialog } from '../components/calendar/CalendarDayDialog'
-import { CalendarSourcesDialog } from '../components/calendar/CalendarSourcesDialog'
-import { ImportedEventDialog } from '../components/calendar/ImportedEventDialog'
 import { LogMeetingOutcomeDialog } from '../components/calendar/LogMeetingOutcomeDialog'
-import { useBoards, useCalendarSources, useImportedCalendars, useTasks, useUpdateTask } from '../api/hooks'
+import { useBoards, useCalendarSources, useColumns, useImportedCalendars, useTasks, useUpdateTask } from '../api/hooks'
+import { TaskComposer } from '../components/board/TaskComposer'
 import { useCalendarPrefs } from '../store/calendarPrefs'
 import { useUIStore } from '../store/ui'
 import { useWorkspaceStore } from '../store/workspace'
@@ -68,6 +66,7 @@ export function Calendar() {
     boards?.find((board) => board.id === selectedBoardId)?.id ?? boards?.[0]?.id
   const { data: tasks } = useTasks(boardId)
   const { data: sources } = useCalendarSources(workspaceId)
+  const { data: columns } = useColumns(boardId)
   const updateTask = useUpdateTask(boardId)
   const location = useLocation()
   const navigate = useNavigate()
@@ -80,11 +79,22 @@ export function Calendar() {
     sourceName: string
     date: string
   } | null>(null)
-  const [sourcesOpen, setSourcesOpen] = useState(false)
   const [range, setRange] = useState(initialRange)
   const [draggingTitle, setDraggingTitle] = useState<string | null>(null)
   const calendarRef = useRef<HTMLDivElement>(null)
   const { firstDay, setFirstDay } = useCalendarPrefs()
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches,
+  )
+
+  useEffect(() => {
+    const query = window.matchMedia('(max-width: 767px)')
+    function onChange() {
+      setIsMobile(query.matches)
+    }
+    query.addEventListener('change', onChange)
+    return () => query.removeEventListener('change', onChange)
+  }, [])
 
   const { data: importedCalendars } = useImportedCalendars(range.from, range.to, workspaceId)
 
@@ -144,13 +154,7 @@ export function Calendar() {
       return
     }
     updateTask.mutate(
-      {
-        id: props.task.id,
-        title: props.task.title,
-        description_md: props.task.description_md,
-        priority: props.task.priority,
-        due_date: format(info.event.start, 'yyyy-MM-dd'),
-      },
+      { id: props.task.id, due_date: format(info.event.start, 'yyyy-MM-dd') },
       { onError: () => info.revert() },
     )
   }
@@ -217,6 +221,16 @@ export function Calendar() {
     )
   }
 
+  const openColumn = [...(columns ?? [])]
+    .sort((a, b) => a.position - b.position)
+    .find((column) => !column.is_done)
+  const dayTasks = (tasks ?? []).filter((task) => task.due_date === dayDate)
+  const dayImported = (importedCalendars ?? []).flatMap((calendar) =>
+    calendar.events
+      .filter((event) => (event.all_day ? event.start.slice(0, 10) : format(new Date(event.start), 'yyyy-MM-dd')) === dayDate)
+      .map((event) => ({ event, sourceName: calendar.source.name })),
+  )
+
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       <header className="flex flex-wrap items-end justify-between gap-3">
@@ -247,10 +261,6 @@ export function Calendar() {
           <Button size="sm" disabled={!boardId} onClick={() => openNewOutcome(new Date())}>
             <MessageSquarePlus />
             Add meeting summary
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => setSourcesOpen(true)}>
-            <CalendarPlus />
-            Calendars
           </Button>
         </div>
       </header>
@@ -288,18 +298,66 @@ export function Calendar() {
         </div>
       )}
 
+      {isMobile ? (
+        <div className="flex flex-col gap-2">
+          {Array.from({ length: 7 }, (_, index) => format(addDays(new Date(), index), 'yyyy-MM-dd')).map(
+            (date) => {
+              const dateTasks = (tasks ?? []).filter((task) => task.due_date === date)
+              const dateEvents = (importedCalendars ?? []).flatMap((calendar) =>
+                calendar.events.filter((event) =>
+                  (event.all_day ? event.start.slice(0, 10) : format(new Date(event.start), 'yyyy-MM-dd')) === date,
+                ),
+              )
+              return (
+                <section key={date} className="rounded-lg border p-3">
+                  <div className="mb-1 flex items-center justify-between">
+                    <h2 className="text-sm font-semibold">{format(parseISO(date), 'EEE, d MMM')}</h2>
+                    <Button size="xs" variant="ghost" onClick={() => setDayDate(date)}>
+                      Add
+                    </Button>
+                  </div>
+                  {!dateTasks.length && !dateEvents.length && (
+                    <p className="text-xs text-muted-foreground">Nothing scheduled.</p>
+                  )}
+                  <ul className="flex flex-col">
+                    {dateTasks.map((task) => (
+                      <li key={`task-${task.id}`}>
+                        <button
+                          type="button"
+                          className="w-full rounded-sm px-1 py-1 text-left text-sm hover:bg-muted"
+                          onClick={() => {
+                            const params = new URLSearchParams(location.search)
+                            params.set('task', String(task.id))
+                            navigate({ pathname: location.pathname, search: params.toString() })
+                          }}
+                        >
+                          {task.title}
+                        </button>
+                      </li>
+                    ))}
+                    {dateEvents.map((event) => (
+                      <li key={`event-${event.id}`} className="px-1 py-1 text-sm text-muted-foreground">
+                        {event.title}
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )
+            },
+          )}
+        </div>
+      ) : (
       <div
         ref={calendarRef}
-        className="fai-calendar flex min-h-0 flex-1 flex-col overflow-x-auto rounded-lg border p-3"
+        className="fai-calendar flex flex-col overflow-x-auto rounded-lg border p-3"
       >
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <div className="min-w-0">
           <FullCalendar
             plugins={[dayGridPlugin, interactionPlugin]}
             initialView="dayGridMonth"
             headerToolbar={{ left: 'prev,next today', center: 'title', right: '' }}
             firstDay={firstDay}
-            height="100%"
-            expandRows
+            height="auto"
             fixedWeekCount={false}
             dayMaxEventRows={3}
             events={events}
@@ -325,35 +383,98 @@ export function Calendar() {
           />
         </div>
       </div>
-
-      <CalendarSourcesDialog open={sourcesOpen} onOpenChange={setSourcesOpen} />
-
-      {importedEvent && (
-        <ImportedEventDialog
-          event={importedEvent.event}
-          sourceName={importedEvent.sourceName}
-          date={importedEvent.date}
-          onOpenChange={(open) => !open && setImportedEvent(null)}
-          onMeetingSummary={() => {
-            const date = importedEvent.date
-            setImportedEvent(null)
-            openNewOutcome(parseISO(date))
-          }}
-        />
       )}
 
       {dayDate && boardId && (
-        <CalendarDayDialog
-          open
-          date={dayDate}
-          boardId={boardId}
-          allowSummary={dayDate <= today}
-          onOpenChange={(open) => !open && setDayDate(null)}
-          onMeetingSummary={() => {
-            setDayDate(null)
-            openNewOutcome(parseISO(dayDate))
-          }}
-        />
+        <section className="flex flex-col gap-3 rounded-lg border p-3" aria-label={`Agenda for ${format(parseISO(dayDate), 'd MMM yyyy')}`}>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold">{format(parseISO(dayDate), 'EEEE, d MMM yyyy')}</h2>
+            <Button size="icon-sm" variant="ghost" aria-label="Close agenda" onClick={() => { setDayDate(null); setImportedEvent(null) }}>
+              <X />
+            </Button>
+          </div>
+          <TaskComposer
+            boardId={boardId}
+            columnId={openColumn?.id}
+            dueDate={dayDate}
+            placeholder={`Add a task on ${format(parseISO(dayDate), 'd MMM')}`}
+          />
+          {dayTasks.length > 0 && (
+            <ul className="flex flex-col gap-1">
+              {dayTasks.map((task) => (
+                <li key={task.id}>
+                  <button
+                    type="button"
+                    className="w-full rounded-sm px-1 py-1 text-left text-sm hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/50"
+                    onClick={() => {
+                      const params = new URLSearchParams(location.search)
+                      params.set('task', String(task.id))
+                      navigate({ pathname: location.pathname, search: params.toString() })
+                    }}
+                  >
+                    {task.title}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {dayImported.length > 0 && (
+            <div className="flex flex-col gap-1 border-t pt-2">
+              <span className="text-xs font-medium text-muted-foreground">Imported</span>
+              {dayImported.map(({ event, sourceName }) => (
+                <button
+                  key={event.id}
+                  type="button"
+                  className="rounded-sm px-1 py-1 text-left text-sm hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/50"
+                  onClick={() => setImportedEvent({ event, sourceName, date: dayDate })}
+                >
+                  {event.title}
+                </button>
+              ))}
+            </div>
+          )}
+          {importedEvent && (
+            <div className="flex flex-col gap-2 rounded-md border bg-muted/30 p-2">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">{importedEvent.event.title}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {importedEvent.sourceName} · {format(parseISO(importedEvent.date), 'd MMM yyyy')}
+                  </p>
+                  {importedEvent.event.url && (
+                    <a
+                      className="text-xs text-primary underline"
+                      href={importedEvent.event.url}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Open event
+                    </a>
+                  )}
+                </div>
+                <Button size="icon-sm" variant="ghost" aria-label="Close event" onClick={() => setImportedEvent(null)}>
+                  <X />
+                </Button>
+              </div>
+              {importedEvent.date <= today && (
+                <Button size="sm" variant="outline" onClick={() => {
+                  const date = importedEvent.date
+                  setImportedEvent(null)
+                  openNewOutcome(parseISO(date))
+                }}>
+                  <MessageSquarePlus />
+                  Add meeting summary
+                </Button>
+              )}
+            </div>
+          )}
+          {dayDate <= today && (
+            <Button size="sm" variant="outline" className="self-start" onClick={() => openNewOutcome(parseISO(dayDate))}>
+              <MessageSquarePlus />
+              Add meeting summary
+            </Button>
+          )}
+        </section>
       )}
 
       {dialogDate && boardId && (

@@ -9,16 +9,19 @@ import (
 	"github.com/alialjaffer/fai/backend/internal/mailer"
 	"github.com/alialjaffer/fai/backend/internal/ntfy"
 	"github.com/alialjaffer/fai/backend/internal/store"
+	"github.com/alialjaffer/fai/backend/internal/telegram"
 )
 
 type Scheduler struct {
-	Store store.Store
-	Ntfy  *ntfy.Client
-	Mail  *mailer.Mailer
+	Store    store.Store
+	Ntfy     *ntfy.Client
+	Mail     *mailer.Mailer
+	Telegram *telegram.Notifier
+	Channel  string
 }
 
 // Run ticks every minute checking for due, unsent reminders and delivering them
-// via whichever channels are configured. No-ops when both are unconfigured.
+// via the selected channel, or every configured channel when none is selected.
 // Blocks until ctx is cancelled.
 func (s *Scheduler) Run(ctx context.Context) {
 	ticker := time.NewTicker(time.Minute)
@@ -35,7 +38,7 @@ func (s *Scheduler) Run(ctx context.Context) {
 }
 
 func (s *Scheduler) tick(ctx context.Context) {
-	if s.Ntfy == nil && s.Mail == nil {
+	if s.Ntfy == nil && s.Mail == nil && s.Telegram == nil {
 		return
 	}
 
@@ -62,7 +65,7 @@ func (s *Scheduler) tick(ctx context.Context) {
 		if title == "" {
 			title = "Untitled meeting"
 		}
-		if !s.notify(ctx, "meeting outcomes", m.ID, "Meeting ended", fmt.Sprintf("'%s' just ended — log the outcome?", title)) {
+		if !s.notify(ctx, "meeting outcomes", m.ID, "Meeting ended", fmt.Sprintf("'%s' just ended, log the outcome?", title)) {
 			continue
 		}
 		if err := s.Store.MarkMeetingOutcomePromptSent(ctx, m.ID); err != nil {
@@ -71,21 +74,41 @@ func (s *Scheduler) tick(ctx context.Context) {
 	}
 }
 
-// notify attempts every configured channel and reports whether at least one
-// delivered. Marking the item sent after a partial failure avoids re-sending
-// the channel that already succeeded on the next tick.
+// notify reports whether at least one selected channel delivered. Marking the
+// item sent after a partial failure avoids re-sending a channel that already
+// succeeded on the next tick.
 func (s *Scheduler) notify(ctx context.Context, kind string, id int64, subject, message string) bool {
 	delivered := false
-	if s.Ntfy != nil {
+	sendNtfy, sendMail, sendTelegram := true, true, true
+	switch s.Channel {
+	case "":
+	case "ntfy":
+		sendMail, sendTelegram = false, false
+	case "email", "mail", "smtp":
+		sendNtfy, sendTelegram = false, false
+	case "telegram":
+		sendNtfy, sendMail = false, false
+	default:
+		log.Printf("reminders: unknown channel %q, using every configured channel", s.Channel)
+	}
+
+	if sendNtfy && s.Ntfy != nil {
 		if err := s.Ntfy.Publish(subject, message); err != nil {
 			log.Printf("%s: ntfy %d: %v", kind, id, err)
 		} else {
 			delivered = true
 		}
 	}
-	if s.Mail != nil {
+	if sendMail && s.Mail != nil {
 		if err := s.Mail.Send(ctx, "fai: "+subject, message); err != nil {
 			log.Printf("%s: email %d: %v", kind, id, err)
+		} else {
+			delivered = true
+		}
+	}
+	if sendTelegram && s.Telegram != nil {
+		if err := s.Telegram.Publish(subject, message); err != nil {
+			log.Printf("%s: telegram %d: %v", kind, id, err)
 		} else {
 			delivered = true
 		}

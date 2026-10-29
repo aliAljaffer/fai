@@ -50,11 +50,13 @@ export function TaskDetail({
   onClose,
   onSave,
   onDelete,
+  embedded = false,
 }: {
   task: Task
   onClose: () => void
   onSave: (fields: { title: string; description_md: string; priority: string }) => void
   onDelete: () => void
+  embedded?: boolean
 }) {
   const [title, setTitle] = useState(task.title)
   const [description, setDescription] = useState(task.description_md)
@@ -88,9 +90,8 @@ export function TaskDetail({
     ? Math.max(0, Math.floor((Date.now() - new Date(running.started_at).getTime()) / 1000))
     : 0
 
-  return (
-    <Sheet open onOpenChange={(open) => !open && onClose()}>
-      <SheetContent className="w-full gap-4 overflow-y-auto p-4 sm:max-w-xl">
+  const content = (
+    <>
         <SheetHeader className="px-0">
           <div className="flex items-center gap-2">
             <input
@@ -270,12 +271,23 @@ export function TaskDetail({
             Cancel
           </Button>
         </SheetFooter>
+    </>
+  )
+
+  if (embedded) {
+    return <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 p-2">{content}</div>
+  }
+
+  return (
+    <Sheet open modal={false} onOpenChange={(open) => !open && onClose()}>
+      <SheetContent overlay={false} className="w-full gap-4 overflow-y-auto p-4 sm:max-w-xl">
+        {content}
       </SheetContent>
     </Sheet>
   )
 }
 
-function LabelSuggestions({ task }: { task: Task }) {
+export function LabelSuggestions({ task }: { task: Task }) {
   const { data: status } = useAIStatus()
   const { data: allTags } = useTags()
   const suggest = useSuggestLabels(task.id)
@@ -355,6 +367,8 @@ const MENTION_KINDS = [
   { kind: 'task', label: 'Tasks' },
   { kind: 'note', label: 'Notes' },
   { kind: 'reminder', label: 'Reminders' },
+  { kind: 'meeting', label: 'Meetings' },
+  { kind: 'chat', label: 'Chat' },
 ] as const
 
 function TaskMentions({ taskId }: { taskId: number }) {
@@ -376,7 +390,15 @@ function TaskMentions({ taskId }: { taskId: number }) {
       navigate(`/notes/${item.id}`)
       return
     }
-    navigate('/')
+    if (item.kind === 'meeting') {
+      navigate('/calendar')
+      return
+    }
+    if (item.kind === 'chat') {
+      navigate('/chat')
+      return
+    }
+    navigate('/board')
   }
 
   return (

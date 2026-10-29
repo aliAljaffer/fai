@@ -12,4 +12,9 @@ contextBridge.exposeInMainWorld('fai', {
     ipcRenderer.on('fai:update-state', listener)
     return () => ipcRenderer.removeListener('fai:update-state', listener)
   },
+  onMenuCommand: (callback) => {
+    const listener = (_event, command) => callback(command)
+    ipcRenderer.on('fai:menu-command', listener)
+    return () => ipcRenderer.removeListener('fai:menu-command', listener)
+  },
 })

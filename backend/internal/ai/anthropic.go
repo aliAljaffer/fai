@@ -85,6 +85,10 @@ func (p *anthropicProvider) PlanTask(ctx context.Context, title, body string) (T
 	return parseTaskPlan(text)
 }
 
+func (p *anthropicProvider) Transcribe(context.Context, []byte, string) (string, error) {
+	return "", fmt.Errorf("ai: transcription is not supported by the anthropic provider")
+}
+
 func textFromBlocks(blocks []anthropic.ContentBlockUnion) string {
 	var sb strings.Builder
 	for _, b := range blocks {

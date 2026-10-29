@@ -22,6 +22,7 @@ import (
 	"github.com/alialjaffer/fai/backend/internal/store"
 	"github.com/alialjaffer/fai/backend/internal/store/lite"
 	"github.com/alialjaffer/fai/backend/internal/store/pg"
+	"github.com/alialjaffer/fai/backend/internal/telegram"
 )
 
 func main() {
@@ -31,9 +32,9 @@ func main() {
 	var authMiddleware func(http.Handler) http.Handler
 	switch {
 	case cfg.DisableAuth:
-		log.Println("WARNING: DISABLE_AUTH=true — authentication is OFF. Never set this in production.")
+		log.Println("WARNING: DISABLE_AUTH=true: authentication is OFF. Never set this in production.")
 	case cfg.AuthMode == "proxy-header":
-		log.Println("AUTH_MODE=proxy-header — trusting X-Forwarded-User/-Email from a fronting oauth2-proxy. The backend MUST be unreachable except through that proxy.")
+		log.Println("AUTH_MODE=proxy-header: trusting X-Forwarded-User/-Email from a fronting oauth2-proxy. The backend MUST be unreachable except through that proxy.")
 		authMiddleware = auth.ProxyHeaderMiddleware
 	default:
 		// Fail-closed: auth is on by default, so a missing issuer/audience is a
@@ -65,11 +66,11 @@ func main() {
 
 	jiraClient := jira.New(cfg.JiraBaseURL, cfg.JiraEmail, cfg.JiraAPIToken)
 	if jiraClient == nil {
-		log.Println("JIRA_BASE_URL/EMAIL/API_TOKEN unset — Jira import disabled")
+		log.Println("JIRA_BASE_URL/EMAIL/API_TOKEN unset: Jira import disabled")
 	}
 	aiProvider := ai.NewProvider(cfg.AIProvider, cfg.AIBaseURL, cfg.AIAPIKey, cfg.AIModel)
 	if aiProvider == nil {
-		log.Println("AI_API_KEY unset — AI features disabled")
+		log.Println("AI_API_KEY unset: AI features disabled")
 	}
 	server := &httpapi.Server{
 		Store:                st,
@@ -93,20 +94,39 @@ func main() {
 	}
 	router := httpapi.NewRouter(server)
 
+	telegramClient := telegram.New(cfg.TelegramBotToken)
+	var telegramBot *telegram.Bot
+	switch {
+	case telegramClient == nil:
+		log.Println("TELEGRAM_BOT_TOKEN unset, Telegram assistant disabled")
+	case cfg.TelegramAllowedUserID == 0 || cfg.TelegramAllowedChatID == 0:
+		log.Println("TELEGRAM_ALLOWED_USER_ID/TELEGRAM_ALLOWED_CHAT_ID unset, Telegram assistant disabled")
+	default:
+		telegramBot = telegram.NewBot(telegramClient, cfg.TelegramAllowedUserID, cfg.TelegramAllowedChatID, server).
+			WithOffsetStore(telegram.FileOffsetStore{Path: cfg.TelegramStateFile})
+	}
+
 	ntfyClient := ntfy.New(cfg.NtfyURL, cfg.NtfyTopic, cfg.NtfyUsername, cfg.NtfyPassword)
 	if ntfyClient == nil {
-		log.Println("NTFY_URL/NTFY_TOPIC unset — reminder push notifications disabled")
+		log.Println("NTFY_URL/NTFY_TOPIC unset: reminder push notifications disabled")
 	}
 	if cfg.AttachmentsDir == "" {
-		log.Println("ATTACHMENTS_DIR unset — task/note attachments disabled")
+		log.Println("ATTACHMENTS_DIR unset: task/note attachments disabled")
 	}
 	mailClient := mailer.New(cfg.SMTPAddr, cfg.SMTPFrom, cfg.SMTPTo)
 	if mailClient == nil {
-		log.Println("SMTP_ADDR/SMTP_FROM/SMTP_TO unset — email notifications disabled")
+		log.Println("SMTP_ADDR/SMTP_FROM/SMTP_TO unset: email notifications disabled")
 	}
-	scheduler := &reminders.Scheduler{Store: st, Ntfy: ntfyClient, Mail: mailClient}
+	telegramNotifier := telegram.NewNotifier(cfg.TelegramBotToken, cfg.TelegramAllowedChatID)
+	scheduler := &reminders.Scheduler{
+		Store: st, Ntfy: ntfyClient, Mail: mailClient,
+		Telegram: telegramNotifier, Channel: cfg.ReminderChannel,
+	}
 	go scheduler.Run(context.Background())
 	go server.RunCalendarSync(context.Background())
+	if telegramBot != nil {
+		go telegramBot.Run(context.Background())
+	}
 
 	addr := net.JoinHostPort(cfg.BindAddr, cfg.Port)
 	log.Printf("fai backend listening on %s", addr)

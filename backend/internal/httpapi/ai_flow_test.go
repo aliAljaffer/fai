@@ -47,6 +47,10 @@ func (f *fakeAI) PlanTask(context.Context, string, string) (ai.TaskPlan, error) 
 	return ai.TaskPlan{Title: "Ship the note", Subtasks: []string{"Draft", "Review"}}, nil
 }
 
+func (f *fakeAI) Transcribe(context.Context, []byte, string) (string, error) {
+	return "transcribed text", nil
+}
+
 func TestNotePlanCreatesParentAndSubtasks(t *testing.T) {
 	st, err := lite.New(filepath.Join(t.TempDir(), "fai.db"))
 	if err != nil {

@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { PaletteSelect, PaletteSwatches } from '@/components/ThemePalettePicker'
+import { CalendarSourcesSection } from '@/components/calendar/CalendarSourcesSection'
 import { Input } from '@/components/ui/input'
 import {
   Select,
@@ -20,6 +21,7 @@ import {
   useCalendarFeedURL,
   useColumns,
   useCreateWorkspace,
+  useDeleteBoard,
   useExportBackup,
   useExportWorkspaceTasks,
   useImportWorkspaceTasks,
@@ -226,6 +228,83 @@ function WorkspacesCard() {
         </p>
       )}
         </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function BoardsCard() {
+  const workspaceId = useWorkspaceStore((state) => state.activeWorkspaceId)
+  const { data: boards } = useBoards(workspaceId)
+  const deleteBoard = useDeleteBoard()
+  const { selectedBoardId, setSelectedBoardId } = useUIStore()
+  const [confirming, setConfirming] = useState<number | null>(null)
+  const [confirmText, setConfirmText] = useState('')
+  const board = boards?.find((item) => item.id === confirming)
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Boards</CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
+        <p className="text-sm text-muted-foreground">
+          Deleting a board also deletes its columns and tasks. This cannot be undone.
+        </p>
+        {!boards?.length && <p className="text-sm text-muted-foreground">No boards yet.</p>}
+        {boards?.map((item) => (
+          <div key={item.id} className="flex flex-col gap-1 rounded-md border px-2 py-1.5">
+            <div className="flex items-center gap-2">
+              <span className="min-w-0 flex-1 truncate text-sm font-medium">{item.name}</span>
+              <Button
+                size="icon-xs"
+                variant="ghost"
+                aria-label={`Delete ${item.name}`}
+                onClick={() => {
+                  setConfirming(item.id)
+                  setConfirmText('')
+                }}
+              >
+                <Trash2 />
+              </Button>
+            </div>
+            {confirming === item.id && board && (
+              <div className="flex flex-col gap-1 border-t pt-1">
+                <label className="text-xs text-muted-foreground" htmlFor="board-delete-confirm">
+                  Type {board.name} to confirm
+                </label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="board-delete-confirm"
+                    value={confirmText}
+                    onChange={(event) => setConfirmText(event.target.value)}
+                    className="h-7 text-xs"
+                  />
+                  <Button size="xs" variant="ghost" onClick={() => setConfirming(null)}>
+                    Cancel
+                  </Button>
+                  <Button
+                    size="xs"
+                    variant="destructive"
+                    disabled={confirmText !== board.name || deleteBoard.isPending}
+                    onClick={() =>
+                      deleteBoard.mutate(board.id, {
+                        onSuccess: () => {
+                          if (selectedBoardId === board.id) setSelectedBoardId(undefined)
+                          setConfirming(null)
+                          setConfirmText('')
+                        },
+                        onError: (error) => toast.error(serverError(error)),
+                      })
+                    }
+                  >
+                    Delete
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
       </CardContent>
     </Card>
   )
@@ -795,7 +874,6 @@ function AICard() {
         api_key: apiKey.trim() || undefined,
       },
       {
-        onSuccess: () => toast.success('AI settings saved'),
         onError: (err) => setError(serverError(err)),
       },
     )
@@ -910,7 +988,6 @@ function AICard() {
                     clear_api_key: true,
                   },
                   {
-                    onSuccess: () => toast.success('Stored API key removed'),
                     onError: (err) => setError(serverError(err)),
                   },
                 )
@@ -1017,7 +1094,7 @@ export function Settings() {
   const { data: boards } = useBoards(workspaceId)
   const { data: workspaces } = useWorkspaces()
   const jiraImport = useJiraImport()
-  const { data: feed } = useCalendarFeedURL()
+  const { data: feed } = useCalendarFeedURL(workspaceId)
   const selectedBoardId = useUIStore((state) => state.selectedBoardId)
   const board =
     boards?.find((b) => b.id === selectedBoardId) ?? boards?.[0]
@@ -1041,7 +1118,11 @@ export function Settings() {
 
       <WorkspaceDataCard />
 
+      <BoardsCard />
+
       <BackupCard />
+
+      <CalendarSourcesSection />
 
       <AppearanceCard />
 
@@ -1177,7 +1258,6 @@ export function Settings() {
               onClick={() => {
                 if (!feed) return
                 navigator.clipboard.writeText(feed.url).then(
-                  () => toast.success('Subscription URL copied'),
                   () => toast.error('Could not copy the URL'),
                 )
               }}

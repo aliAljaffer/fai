@@ -29,6 +29,20 @@ ORDER BY t.column_id, t.position;
 -- name: ListSubtasks :many
 SELECT * FROM tasks WHERE parent_task_id = ? AND archived = 0 ORDER BY created_at;
 
+
+-- name: PatchTask :one
+UPDATE tasks SET
+  title = COALESCE(sqlc.narg('title'), title),
+  description_md = COALESCE(sqlc.narg('description_md'), description_md),
+  priority = COALESCE(sqlc.narg('priority'), priority),
+  due_date = CASE WHEN sqlc.arg('due_date_set') = 1 THEN sqlc.narg('due_date') ELSE due_date END,
+  updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+WHERE tasks.id = sqlc.arg('id') AND archived = 0
+RETURNING *;
+
+-- name: RestoreTask :exec
+UPDATE tasks SET archived = 0, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?;
+
 -- name: UpdateTask :one
 UPDATE tasks SET
   title = sqlc.arg(title),

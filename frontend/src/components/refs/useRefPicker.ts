@@ -1,6 +1,7 @@
 import { useMemo, useState, type KeyboardEvent } from 'react'
 import { useDebounced } from '../../lib/useDebounced'
 import { useResolveRefs, useTags } from '../../api/hooks'
+import { useWorkspaceStore } from '../../store/workspace'
 
 export type RefField = HTMLInputElement | HTMLTextAreaElement
 
@@ -15,6 +16,7 @@ export interface RefOption {
   key: string
   label: string
   detail?: string
+  group?: string
   value: string
 }
 
@@ -48,8 +50,9 @@ export function useRefPicker({
   const [token, setToken] = useState<RefToken | null>(null)
   const [field, setField] = useState<RefField | null>(null)
   const [active, setActive] = useState(0)
+  const workspaceId = useWorkspaceStore((state) => state.activeWorkspaceId)
   const debouncedQuery = useDebounced(token?.kind === '@' ? token.query : '', 150)
-  const { data: refs } = useResolveRefs(debouncedQuery)
+  const { data: refs } = useResolveRefs(debouncedQuery, workspaceId)
   const { data: tags } = useTags()
 
   const options = useMemo<RefOption[]>(() => {
@@ -59,6 +62,7 @@ export function useRefPicker({
         key: `task-${item.id}`,
         label: item.ref,
         detail: item.title,
+        group: item.workspace_name,
         value: `@${item.ref}`,
       }))
     }
@@ -82,9 +86,20 @@ export function useRefPicker({
   }, [token, refs, tags])
 
   function handleChange(next: string, element: RefField | null) {
+    const caret = element?.selectionStart ?? next.length
+    if (token?.kind === '#' && caret > token.start && next[caret - 1] === ' ') {
+      const dashed = next.slice(0, caret - 1) + '-' + next.slice(caret)
+      onChange(dashed)
+      if (element) {
+        setField(element)
+        requestAnimationFrame(() => element.setSelectionRange(caret, caret))
+      }
+      setToken(findToken(dashed, caret))
+      setActive(0)
+      return
+    }
     onChange(next)
     if (element) setField(element)
-    const caret = element?.selectionStart ?? next.length
     setToken(findToken(next, caret))
     setActive(0)
   }

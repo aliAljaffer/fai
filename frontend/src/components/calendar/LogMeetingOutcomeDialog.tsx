@@ -73,7 +73,6 @@ export function LogMeetingOutcomeDialog({
         ? await updateOutcome.mutateAsync({ id: savedOutcome.id, ...body })
         : await createOutcome.mutateAsync({ occurred_on: occurredOn, ...body })
       setSavedOutcome(saved)
-      toast.success('Meeting summary saved')
       return saved
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Could not save meeting summary')
@@ -117,8 +116,11 @@ export function LogMeetingOutcomeDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg rounded-lg">
+    <Dialog open={open} modal={false} onOpenChange={onOpenChange}>
+      <DialogContent
+        overlay={false}
+        className="top-0 right-0 left-auto h-full w-full max-w-lg translate-x-0 translate-y-0 overflow-y-auto rounded-none"
+      >
         <DialogHeader>
           <DialogTitle>Meeting summary, {occurredOn}</DialogTitle>
           <DialogDescription>

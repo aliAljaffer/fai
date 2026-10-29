@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -216,20 +217,65 @@ func (s *Server) getTask(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, task)
 }
 
+type taskPatchBody struct {
+	Title         *string         `json:"title"`
+	DescriptionMd *string         `json:"description_md"`
+	Priority      *string         `json:"priority"`
+	DueDate       json.RawMessage `json:"due_date"`
+}
+
 func (s *Server) updateTask(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseID(r, "taskID")
 	if !ok {
 		writeError(w, http.StatusBadRequest, "invalid task id")
 		return
 	}
-	var body taskBody
+	var body taskPatchBody
 	if err := decodeJSON(r, &body); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid body")
 		return
 	}
-	task, err := s.Store.UpdateTask(r.Context(), id, body.Title, body.DescriptionMd, body.Priority, body.DueDate)
+	patch := store.TaskPatch{
+		Title:         body.Title,
+		DescriptionMd: body.DescriptionMd,
+		Priority:      body.Priority,
+	}
+	if body.DueDate != nil {
+		patch.DueDateSet = true
+		if string(body.DueDate) != "null" {
+			var due string
+			if err := json.Unmarshal(body.DueDate, &due); err != nil {
+				writeError(w, http.StatusBadRequest, "due_date must be a date string or null")
+				return
+			}
+			patch.DueDate = &due
+		}
+	}
+	if patch.Title == nil && patch.DescriptionMd == nil && patch.Priority == nil && !patch.DueDateSet {
+		writeError(w, http.StatusBadRequest, "no fields to update")
+		return
+	}
+	task, err := s.Store.PatchTask(r.Context(), id, patch)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, task)
+}
+
+func (s *Server) restoreTask(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseID(r, "taskID")
+	if !ok {
+		writeError(w, http.StatusBadRequest, "invalid task id")
+		return
+	}
+	if err := s.Store.RestoreTask(r.Context(), id); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	task, err := s.Store.GetTask(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "task not found")
 		return
 	}
 	writeJSON(w, http.StatusOK, task)

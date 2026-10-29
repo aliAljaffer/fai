@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { TaskRefText } from '../MarkdownRenderer'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -86,7 +87,7 @@ export function RemindersColumn() {
               className="group rounded-md border border-attention/40 bg-attention/10 p-2"
             >
               <div className="flex items-start justify-between gap-2">
-                <p className="text-sm font-medium break-words">{reminder.title}</p>
+                <p className="text-sm font-medium break-words"><TaskRefText text={reminder.title} /></p>
                 <Button
                   variant="ghost"
                   size="icon-xs"

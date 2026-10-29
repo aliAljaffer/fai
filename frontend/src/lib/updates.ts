@@ -26,6 +26,7 @@ interface FaiDesktop {
   setAutoDownload: (enabled: boolean) => Promise<UpdateState>
   installUpdate: () => Promise<boolean>
   onUpdateState: (callback: (state: UpdateState) => void) => () => void
+  onMenuCommand?: (callback: (command: string) => void) => () => void
 }
 
 declare global {

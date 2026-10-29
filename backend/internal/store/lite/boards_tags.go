@@ -42,6 +42,21 @@ func (s *Store) UpdateBoard(ctx context.Context, id int64, name string) (store.B
 	return toBoard(b), err
 }
 
+func (s *Store) DeleteBoard(ctx context.Context, id int64) error {
+	res, err := s.db.ExecContext(ctx, `DELETE FROM boards WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return store.ErrNotFound
+	}
+	return nil
+}
+
 func toColumn(c sqlitedb.BoardColumn) store.BoardColumn {
 	t, _ := parseTime(c.CreatedAt)
 	return store.BoardColumn{
