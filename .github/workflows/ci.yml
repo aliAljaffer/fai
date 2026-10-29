@@ -4,6 +4,15 @@ on:
   pull_request:
   push:
     branches: [main]
+    paths-ignore:
+      - "**/*.md"
+      - "brand/**"
+      - "LICENSE"
+      - ".gitignore"
+      - "docker-compose*.yml"
+      - "Caddyfile.prod"
+      - ".env.prod.example"
+      - "Makefile"
 
 permissions:
   contents: read
