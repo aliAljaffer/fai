@@ -704,7 +704,7 @@ export function Board() {
         <header className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex min-w-0 flex-col gap-1">
             <div className="flex min-w-0 items-center gap-1">
-              {boardEditor ? (
+              {boardEditor === 'rename' ? (
                 <>
                   <Input
                     autoFocus
@@ -849,17 +849,56 @@ export function Board() {
               <Plus />
               New task
             </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => {
-                setBoardName('')
-                setBoardEditor('new')
-              }}
-            >
-              <Plus />
-              New board
-            </Button>
+            {boardEditor === 'new' ? (
+              <div className="flex items-center gap-1">
+                <Input
+                  autoFocus
+                  value={boardName}
+                  placeholder="Board name"
+                  aria-label="Board name"
+                  className="h-8 w-48"
+                  disabled={boardSaving}
+                  onChange={(event) => setBoardName(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.nativeEvent.isComposing) return
+                    if (event.key === 'Enter') {
+                      event.preventDefault()
+                      void submitBoard()
+                    }
+                    if (event.key === 'Escape') {
+                      event.preventDefault()
+                      setBoardEditor(null)
+                      setBoardName('')
+                    }
+                  }}
+                />
+                <Button size="sm" disabled={!boardName.trim() || boardSaving} onClick={() => void submitBoard()}>
+                  Create
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    setBoardEditor(null)
+                    setBoardName('')
+                  }}
+                >
+                  Cancel
+                </Button>
+              </div>
+            ) : (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setBoardName('')
+                  setBoardEditor('new')
+                }}
+              >
+                <Plus />
+                New board
+              </Button>
+            )}
           </div>
         </header>
 

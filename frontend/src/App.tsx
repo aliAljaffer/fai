@@ -20,7 +20,6 @@ import { List } from './pages/List'
 import { Notes } from './pages/Notes'
 import { Overview } from './pages/Overview'
 import { NoteEditor } from './pages/NoteEditor'
-import { Search as SearchPage } from './pages/Search'
 import { Settings } from './pages/Settings'
 import { Stats } from './pages/Stats'
 import { CommandPalette } from './components/CommandPalette'
@@ -45,7 +44,6 @@ const NAV_ITEMS = [
   { to: '/notes', label: 'Notes' },
   { to: '/chat', label: 'Chat' },
   { to: '/stats', label: 'Stats' },
-  { to: '/search', label: 'Search' },
   { to: '/settings', label: 'Settings' },
 ]
 
@@ -57,7 +55,6 @@ const ROUTE_TITLES: Record<string, string> = {
   '/notes': 'Notes',
   '/chat': 'Chat',
   '/stats': 'Stats',
-  '/search': 'Search',
   '/settings': 'Settings',
 }
 
@@ -239,7 +236,6 @@ export function App() {
           <Route path="/notes/:id" element={<NoteEditor />} />
           <Route path="/tasks/:id" element={<TaskDetailPage />} />
           <Route path="/stats" element={<Stats />} />
-          <Route path="/search" element={<SearchPage />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/auth/callback" element={<AuthCallback />} />
         </Routes>

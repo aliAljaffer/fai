@@ -14,8 +14,9 @@ import { useHotkeys } from 'react-hotkeys-hook'
 import { useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
-import { useAllTasks, useBoards, useColumns, useDeleteTask, useMoveTask, useRestoreTasks, useTask, useTasks } from '../api/hooks'
+import { useAllTasks, useBoards, useColumns, useDeleteTask, useMoveTask, useRestoreTasks, useSearch, useTask, useTasks } from '../api/hooks'
 import { showUndo } from '../lib/undo'
+import { useDebounced } from '../lib/useDebounced'
 import { useUIStore } from '../store/ui'
 import { useWorkspaceStore } from '../store/workspace'
 
@@ -26,7 +27,6 @@ const pages = [
   { label: 'Calendar', path: '/calendar', icon: Calendar },
   { label: 'Notes', path: '/notes', icon: NotebookPen },
   { label: 'Stats', path: '/stats', icon: BarChart3 },
-  { label: 'Search', path: '/search', icon: Search },
   { label: 'Settings', path: '/settings', icon: Settings },
 ]
 
@@ -39,9 +39,16 @@ export function CommandPalette() {
   const boardId =
     boards?.find((board) => board.id === selectedBoardId)?.id ?? boards?.[0]?.id
   const [allWorkspaces, setAllWorkspaces] = useState(false)
+  const [query, setQuery] = useState('')
   const { data: scopedTasks } = useTasks(boardId)
   const { data: allTasks } = useAllTasks(allWorkspaces)
   const tasks = allWorkspaces ? allTasks : scopedTasks
+  const debouncedQuery = useDebounced(query.trim(), 200)
+  const { data: search } = useSearch(
+    debouncedQuery,
+    allWorkspaces ? undefined : workspaceId,
+  )
+  const notes = search?.notes ?? []
 
   const focusedId = Number(new URLSearchParams(location.search).get('task'))
   const focusedValid = Number.isFinite(focusedId) && focusedId > 0
@@ -54,6 +61,7 @@ export function CommandPalette() {
 
   function close() {
     setCommandOpen(false)
+    setQuery('')
   }
 
   function go(path: string) {
@@ -81,15 +89,26 @@ export function CommandPalette() {
   useHotkeys('n', newTask, { preventDefault: true, enabled: !taskOpen && !commandOpen })
 
   return (
-    <Dialog open={commandOpen} onOpenChange={setCommandOpen}>
+    <Dialog
+      open={commandOpen}
+      onOpenChange={(open) => {
+        setCommandOpen(open)
+        if (!open) setQuery('')
+      }}
+    >
       <DialogContent className="overflow-hidden p-0 sm:max-w-lg" showCloseButton={false}>
         <DialogTitle className="sr-only">Command palette</DialogTitle>
-        <Command label="Command palette" className="flex flex-col">
+        <Command
+          label="Command palette"
+          className="flex flex-col"
+          value={query}
+          onValueChange={setQuery}
+        >
           <div className="flex items-center gap-2 border-b px-3">
             <Search className="size-4 shrink-0 text-muted-foreground" />
             <Command.Input
               autoFocus
-              placeholder="Jump to a page, task, or action…"
+              placeholder="Jump to a page, task, note, or action…"
               className="h-10 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
             />
           </div>
@@ -212,6 +231,28 @@ export function CommandPalette() {
                     >
                       <SquareCheckBig className="size-4 shrink-0 text-muted-foreground" />
                       <span className="truncate">{task.title}</span>
+                    </Command.Item>
+                  ))}
+                </Command.Group>
+              </>
+            )}
+
+            {!!notes.length && (
+              <>
+                <Command.Separator className="my-1 h-px bg-border" />
+                <Command.Group
+                  heading="Notes"
+                  className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground"
+                >
+                  {notes.map((note) => (
+                    <Command.Item
+                      key={note.id}
+                      value={`${note.title} ${note.body_md}`}
+                      onSelect={() => go(`/notes/${note.id}`)}
+                      className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm data-[selected=true]:bg-muted"
+                    >
+                      <NotebookPen className="size-4 shrink-0 text-muted-foreground" />
+                      <span className="truncate">{note.title}</span>
                     </Command.Item>
                   ))}
                 </Command.Group>

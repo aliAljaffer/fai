@@ -1,4 +1,4 @@
-import { Check, Pencil, Play, Square, X } from 'lucide-react'
+import { Check, Play, Square, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { addDays, format } from 'date-fns'
 import { useEffect, useRef, useState } from 'react'
@@ -73,6 +73,7 @@ export function TaskInlineEditor({
   const debouncedDescription = useDebounced(description, 800)
   const lastSaved = useRef(task.description_md)
   const titleRef = useRef<HTMLInputElement>(null)
+  const descriptionRef = useRef<HTMLTextAreaElement>(null)
 
   const doneColumn = columns.find((column) => column.is_done)
   const openColumn = columns.find((column) => !column.is_done)
@@ -98,6 +99,10 @@ export function TaskInlineEditor({
   useEffect(() => {
     if (editingTitle) titleRef.current?.focus()
   }, [editingTitle])
+
+  useEffect(() => {
+    if (editingDescription) descriptionRef.current?.focus()
+  }, [editingDescription])
 
   useEffect(() => {
     if (!focusField || focusNonce === undefined) return
@@ -297,19 +302,10 @@ export function TaskInlineEditor({
       </div>
 
       <div>
-        <div className="mb-1 flex items-center justify-between">
-          <span className="text-xs font-medium text-muted-foreground">Description</span>
-          <Button
-            size="xs"
-            variant="ghost"
-            onClick={() => setEditingDescription((current) => !current)}
-          >
-            <Pencil />
-            {editingDescription ? 'Preview' : 'Edit'}
-          </Button>
-        </div>
+        <span className="mb-1 block text-xs font-medium text-muted-foreground">Description</span>
         {editingDescription ? (
           <textarea
+            ref={descriptionRef}
             value={description}
             aria-label="Task description"
             rows={6}
@@ -320,14 +316,36 @@ export function TaskInlineEditor({
                 lastSaved.current = description
                 update.mutate({ id: task.id, description_md: description })
               }
+              setEditingDescription(false)
             }}
           />
         ) : description.trim() ? (
-          <div className="max-h-40 overflow-hidden">
+          <div
+            role="button"
+            tabIndex={0}
+            aria-label="Edit description"
+            className="max-h-40 cursor-text overflow-hidden rounded-md p-1 -m-1 outline-none hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring/50"
+            onClick={(event) => {
+              if ((event.target as HTMLElement).closest('a')) return
+              setEditingDescription(true)
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault()
+                setEditingDescription(true)
+              }
+            }}
+          >
             <MarkdownRenderer source={description} />
           </div>
         ) : (
-          <p className="text-xs text-muted-foreground">No description yet.</p>
+          <button
+            type="button"
+            className="w-full rounded-md p-1 -m-1 text-left text-xs text-muted-foreground outline-none hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring/50"
+            onClick={() => setEditingDescription(true)}
+          >
+            Click to add a description…
+          </button>
         )}
       </div>
 

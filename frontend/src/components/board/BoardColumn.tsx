@@ -93,8 +93,12 @@ export function BoardColumn({
   const renameStarted = useRef(false)
 
   useEffect(() => {
-    if (adding) inputRef.current?.focus()
-    else setTitle('')
+    if (adding) {
+      inputRef.current?.focus()
+      inputRef.current?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' })
+    } else {
+      setTitle('')
+    }
   }, [adding])
 
   useEffect(() => {

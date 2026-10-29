@@ -135,10 +135,9 @@ function SortableTaskCard(props: TaskCardProps) {
         aria-label={`Drag ${props.task.title}`}
         disabled={props.dragDisabled}
         className={cn(
-          'absolute top-1/2 right-0.5 z-10 flex size-5 -translate-y-1/2 touch-none items-center justify-center rounded text-muted-foreground opacity-0 outline-none hover:bg-muted focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring/50 group-hover/task:opacity-100',
+          'absolute top-1/2 right-0.5 z-10 flex size-5 -translate-y-1/2 touch-none items-center justify-center rounded text-muted-foreground opacity-0 outline-none hover:bg-muted focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring/50 group-hover/task:opacity-100 max-md:opacity-100',
           props.dragDisabled && 'hidden',
         )}
-        onPointerDown={(event) => event.stopPropagation()}
       >
         <GripVertical className="size-3.5" />
       </button>
