@@ -1034,8 +1034,9 @@ export function Settings() {
   const [forceUpdate, setForceUpdate] = useState(false)
 
   return (
-    <div className="grid items-start gap-3 sm:grid-cols-2 xl:grid-cols-3">
-      <h1 className="text-lg font-semibold sm:col-span-2 xl:col-span-3">Settings</h1>
+    <div className="flex flex-col gap-3">
+      <h1 className="text-lg font-semibold">Settings</h1>
+      <div className="columns-1 gap-3 [&>*]:mb-3 [&>*]:break-inside-avoid sm:columns-2 xl:columns-3">
       <WorkspacesCard />
 
       <WorkspaceDataCard />
@@ -1197,6 +1198,7 @@ export function Settings() {
       </Card>
 
       <AboutCard />
+      </div>
     </div>
   )
 }
