@@ -12,6 +12,7 @@ on:
 env:
   REGISTRY: ghcr.io
   OWNER: alialjaffer
+  HARBOR: harbor.alialjaffer.com/mirror
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -34,6 +35,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - uses: docker/login-action@v3
+        with:
+          registry: harbor.alialjaffer.com
+          username: ${{ secrets.HARBOR_USERNAME }}
+          password: ${{ secrets.HARBOR_PASSWORD }}
+
       - uses: docker/build-push-action@v6
         id: build
         with:
@@ -42,6 +49,8 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ env.OWNER }}/fai-backend:latest
             ${{ env.REGISTRY }}/${{ env.OWNER }}/fai-backend:${{ github.sha }}
+            ${{ env.HARBOR }}/fai-backend:latest
+            ${{ env.HARBOR }}/fai-backend:${{ github.sha }}
 
   frontend:
     runs-on: arc-runner-fai
@@ -59,6 +68,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - uses: docker/login-action@v3
+        with:
+          registry: harbor.alialjaffer.com
+          username: ${{ secrets.HARBOR_USERNAME }}
+          password: ${{ secrets.HARBOR_PASSWORD }}
+
       - uses: docker/build-push-action@v6
         id: build
         with:
@@ -72,6 +87,8 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ env.OWNER }}/fai-frontend:latest
             ${{ env.REGISTRY }}/${{ env.OWNER }}/fai-frontend:${{ github.sha }}
+            ${{ env.HARBOR }}/fai-frontend:latest
+            ${{ env.HARBOR }}/fai-frontend:${{ github.sha }}
 
       - uses: docker/build-push-action@v6
         with:
@@ -131,10 +148,10 @@ jobs:
           fi
           test -n "$BACKEND_DIGEST"
           test -n "$FRONTEND_DIGEST"
-          sed -i -E "s|ghcr.io/alialjaffer/fai-backend@sha256:[0-9a-f]{64}|ghcr.io/alialjaffer/fai-backend@${BACKEND_DIGEST}|" kubernetes/apps/fai/backend-deployment.yaml
-          sed -i -E "s|ghcr.io/alialjaffer/fai-frontend@sha256:[0-9a-f]{64}|ghcr.io/alialjaffer/fai-frontend@${FRONTEND_DIGEST}|" kubernetes/apps/fai/frontend-deployment.yaml
-          grep -q "ghcr.io/alialjaffer/fai-backend@${BACKEND_DIGEST}" kubernetes/apps/fai/backend-deployment.yaml
-          grep -q "ghcr.io/alialjaffer/fai-frontend@${FRONTEND_DIGEST}" kubernetes/apps/fai/frontend-deployment.yaml
+          sed -i -E "s#(ghcr\.io/alialjaffer|harbor\.alialjaffer\.com/mirror)/fai-backend@sha256:[0-9a-f]{64}#harbor.alialjaffer.com/mirror/fai-backend@${BACKEND_DIGEST}#" kubernetes/apps/fai/backend-deployment.yaml
+          sed -i -E "s#(ghcr\.io/alialjaffer|harbor\.alialjaffer\.com/mirror)/fai-frontend@sha256:[0-9a-f]{64}#harbor.alialjaffer.com/mirror/fai-frontend@${FRONTEND_DIGEST}#" kubernetes/apps/fai/frontend-deployment.yaml
+          grep -q "harbor.alialjaffer.com/mirror/fai-backend@${BACKEND_DIGEST}" kubernetes/apps/fai/backend-deployment.yaml
+          grep -q "harbor.alialjaffer.com/mirror/fai-frontend@${FRONTEND_DIGEST}" kubernetes/apps/fai/frontend-deployment.yaml
           if git diff --quiet; then
             echo "Fai images are already pinned."
             exit 0
