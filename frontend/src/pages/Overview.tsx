@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   ChevronRight,
   Clock,
+  Plus,
   TriangleAlert,
   type LucideIcon,
 } from 'lucide-react'
@@ -16,10 +17,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Skeleton } from '@/components/ui/skeleton'
 import { TagChip } from '../components/TagChip'
 import { TaskTypeIcon } from '../components/TaskTypeIcon'
-import { TaskComposer } from '../components/board/TaskComposer'
 import {
   useBoards,
-  useColumns,
   useImportedCalendars,
   useReminders,
   useWorkspaceTasks,
@@ -156,16 +155,11 @@ export function Overview() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const workspaceId = useWorkspaceStore((state) => state.activeWorkspaceId)
-  const { selectedBoardId } = useUIStore()
+  const { selectedBoardId, requestNewTask } = useUIStore()
   const { data: boards } = useBoards(workspaceId)
   const board = boards?.find((item) => item.id === selectedBoardId) ?? boards?.[0]
-  const { data: columns } = useColumns(board?.id)
   const { data: tasks, isLoading: tasksLoading } = useWorkspaceTasks(workspaceId)
   const { data: reminders } = useReminders(workspaceId)
-  const firstColumnId = useMemo(
-    () => [...(columns ?? [])].sort((a, b) => a.position - b.position)[0]?.id,
-    [columns],
-  )
 
   const [now] = useState(() => new Date())
   const today = format(now, 'yyyy-MM-dd')
@@ -257,12 +251,17 @@ export function Overview() {
             Here is what the day looks like. Open a task to see the details.
           </p>
         </div>
-        <TaskComposer
-          boardId={board?.id}
-          columnId={firstColumnId}
-          placeholder="Add a task"
-          className="w-full sm:w-80"
-        />
+        <Button
+          size="sm"
+          disabled={!board?.id}
+          onClick={() => {
+            navigate('/board')
+            requestNewTask()
+          }}
+        >
+          <Plus />
+          New task
+        </Button>
       </header>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
