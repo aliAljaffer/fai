@@ -256,6 +256,11 @@ func (s *Server) finishChat(ctx context.Context, rawReply string) (ChatOutcome, 
 			return ChatOutcome{}, fmt.Errorf("could not create it: %w", err)
 		}
 		outcome.Created = &created
+		if created.Type == "reminder" {
+			s.broadcast("reminders")
+		} else {
+			s.broadcast("tasks")
+		}
 	}
 	return outcome, nil
 }
@@ -489,6 +494,7 @@ func (s *Server) ConfirmChatAction(ctx context.Context, pending PendingChatActio
 	if _, err := s.Store.MoveTask(ctx, pending.TaskID, pending.ColumnID, position); err != nil {
 		return "", err
 	}
+	s.broadcast("tasks")
 	return "Moved @" + task.Ref + " to " + columnName + ".", nil
 }
 

@@ -46,6 +46,9 @@ type Server struct {
 	// visible in the UI even while cached events are served.
 	syncMu      sync.Mutex
 	calendarErr map[int64]string
+
+	hubOnce  sync.Once
+	hubValue *eventHub
 }
 
 type Transcriber interface {
@@ -83,7 +86,9 @@ func NewRouter(s *Server) http.Handler {
 				r.Use(s.AuthMiddleware)
 			}
 			r.Use(rateLimitByUser(600, 120))
+			r.Use(s.broadcastMutations)
 
+			r.Get("/events", s.events)
 			r.Get("/calendar/feed", s.calendarFeedInfo)
 			r.Get("/calendar/sources", s.listCalendarSources)
 			r.Post("/calendar/sources", s.createCalendarSource)

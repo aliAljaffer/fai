@@ -34,6 +34,7 @@ import { TaskDetailPage } from './pages/TaskDetailPage'
 import { useUIStore } from './store/ui'
 import { useWorkspaceStore } from './store/workspace'
 import { useWorkspaces } from './api/hooks'
+import { useLiveUpdates } from './lib/live'
 import { undoLatest } from './lib/undo'
 
 const NAV_ITEMS = [
@@ -79,6 +80,7 @@ export function App() {
   const requestNewTask = useUIStore((state) => state.requestNewTask)
   const setSelectedBoardId = useUIStore((state) => state.setSelectedBoardId)
   const { data: workspaces } = useWorkspaces()
+  useLiveUpdates()
   const { activeWorkspaceId, setActiveWorkspaceId } = useWorkspaceStore()
   const location = useLocation()
   const navigate = useNavigate()
