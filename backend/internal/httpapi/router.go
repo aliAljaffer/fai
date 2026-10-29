@@ -168,6 +168,7 @@ func NewRouter(s *Server) http.Handler {
 				r.Post("/meeting-outcomes/{outcomeID}/ai/extract-tasks", s.extractTasksFromOutcome)
 				r.Post("/notes/{noteID}/ai/plan", s.planNoteTask)
 				r.Post("/reminders/ai", s.aiReminder)
+				r.Post("/tasks/ai", s.aiTask)
 			})
 
 			r.Get("/meeting-outcomes", s.listMeetingOutcomes)

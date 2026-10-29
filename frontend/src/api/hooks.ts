@@ -323,6 +323,23 @@ export function useCreateTask(boardId: number | undefined) {
   })
 }
 
+export function useAITask(boardId: number | undefined) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: {
+      text: string
+      board_id?: number
+      column_id?: number
+      workspace_id?: number
+    }) =>
+      api.post<Task>('/tasks/ai', {
+        ...body,
+        tz_offset: -new Date().getTimezoneOffset(),
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['tasks', boardId] }),
+  })
+}
+
 export function useUpdateTask(boardId: number | undefined) {
   const qc = useQueryClient()
   return useMutation({
