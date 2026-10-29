@@ -80,6 +80,7 @@ type Store interface {
 	SetTaskParent(ctx context.Context, id int64, parentTaskID *int64) error
 	SetTaskKind(ctx context.Context, id int64, kind string) error
 	SetTaskCompletedAt(ctx context.Context, id int64, at time.Time) error
+	SetTaskTimestamps(ctx context.Context, id int64, createdAt, updatedAt time.Time) error
 	MoveTask(ctx context.Context, id, columnID int64, position float64) (Task, error)
 	ListTasksByColumnOrdered(ctx context.Context, columnID int64) ([]Task, error)
 	SetTaskPosition(ctx context.Context, id int64, position float64) error

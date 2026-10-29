@@ -49,6 +49,16 @@ func onlyAssigned(jql string) string {
 	return "(" + jql + ") AND " + filter
 }
 
+// jiraTime parses a Jira timestamp, which uses ISO 8601 with a numeric offset.
+func jiraTime(raw string) *time.Time {
+	for _, layout := range []string{time.RFC3339, "2006-01-02T15:04:05.000-0700"} {
+		if t, err := time.Parse(layout, raw); err == nil {
+			return &t
+		}
+	}
+	return nil
+}
+
 // completionTime returns Jira's resolution time, or the last update when the
 // workflow leaves the resolution empty, so stats reflect history rather than
 // the moment the import ran.
@@ -57,12 +67,24 @@ func completionTime(issue jira.Issue) *time.Time {
 	if raw == "" {
 		raw = issue.Updated
 	}
-	for _, layout := range []string{time.RFC3339, "2006-01-02T15:04:05.000-0700"} {
-		if t, err := time.Parse(layout, raw); err == nil {
-			return &t
-		}
+	return jiraTime(raw)
+}
+
+// issueTimestamps returns the task's own creation and last update times so an
+// import backfills history instead of stamping every row with the import time.
+func issueTimestamps(issue jira.Issue) (time.Time, time.Time, bool) {
+	created := jiraTime(issue.Created)
+	updated := jiraTime(issue.Updated)
+	if created == nil {
+		created = updated
 	}
-	return nil
+	if updated == nil {
+		updated = created
+	}
+	if created == nil {
+		return time.Time{}, time.Time{}, false
+	}
+	return *created, *updated, true
 }
 
 // Jira descriptions mention sibling issues by key (ABC-123). Rewriting those
@@ -107,6 +129,9 @@ type importedDescription struct {
 	description string
 	priority    string
 	dueDate     *string
+	createdAt   time.Time
+	updatedAt   time.Time
+	hasTimes    bool
 }
 
 func (s *Server) jiraLinks(w http.ResponseWriter, r *http.Request) {
@@ -260,6 +285,7 @@ func (s *Server) jiraImport(w http.ResponseWriter, r *http.Request) {
 
 		columnID := resolveColumn(issue.Status)
 		resolvedAt := completionTime(issue)
+		createdAt, updatedAt, hasTimes := issueTimestamps(issue)
 
 		if existing != nil {
 			task, err := s.Store.GetTask(ctx, existing.TaskID)
@@ -285,7 +311,7 @@ func (s *Server) jiraImport(w http.ResponseWriter, r *http.Request) {
 				description = issue.Description
 			}
 			if issue.Description != "" {
-				changed = append(changed, importedDescription{taskID: existing.TaskID, title: issue.Summary, description: issue.Description, priority: task.Priority, dueDate: task.DueDate})
+				changed = append(changed, importedDescription{taskID: existing.TaskID, title: issue.Summary, description: issue.Description, priority: task.Priority, dueDate: task.DueDate, createdAt: createdAt, updatedAt: updatedAt, hasTimes: hasTimes})
 			}
 			if _, err := s.Store.UpdateTask(ctx, existing.TaskID, issue.Summary, description, task.Priority, task.DueDate); err != nil {
 				return err
@@ -301,6 +327,11 @@ func (s *Server) jiraImport(w http.ResponseWriter, r *http.Request) {
 			}
 			if err := importComments(existing.TaskID, issue, comments); err != nil {
 				return err
+			}
+			if hasTimes {
+				if err := s.Store.SetTaskTimestamps(ctx, existing.TaskID, createdAt, updatedAt); err != nil {
+					return err
+				}
 			}
 			updated++
 			return nil
@@ -324,13 +355,18 @@ func (s *Server) jiraImport(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if issue.Description != "" {
-			changed = append(changed, importedDescription{taskID: task.ID, title: issue.Summary, description: issue.Description, priority: "medium"})
+			changed = append(changed, importedDescription{taskID: task.ID, title: issue.Summary, description: issue.Description, priority: "medium", createdAt: createdAt, updatedAt: updatedAt, hasTimes: hasTimes})
 		}
 		if _, err := s.Store.CreateJiraLinkImported(ctx, task.ID, issue.Key, s.Jira.IssueURL(issue.Key), s.JiraDefaultProject, issue.Status); err != nil {
 			return err
 		}
 		if err := importComments(task.ID, issue, comments); err != nil {
 			return err
+		}
+		if hasTimes {
+			if err := s.Store.SetTaskTimestamps(ctx, task.ID, createdAt, updatedAt); err != nil {
+				return err
+			}
 		}
 		created[issue.Key] = task.ID
 		imported++
@@ -430,6 +466,12 @@ func (s *Server) jiraImport(w http.ResponseWriter, r *http.Request) {
 		if _, err := s.Store.UpdateTask(ctx, item.taskID, item.title, description, item.priority, item.dueDate); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
+		}
+		if item.hasTimes {
+			if err := s.Store.SetTaskTimestamps(ctx, item.taskID, item.createdAt, item.updatedAt); err != nil {
+				writeError(w, http.StatusInternalServerError, err.Error())
+				return
+			}
 		}
 		linked++
 	}

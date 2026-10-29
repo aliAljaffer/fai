@@ -32,6 +32,7 @@ type Issue struct {
 	IssueType      string
 	ParentKey      string
 	ResolutionDate string
+	Created        string
 	Updated        string
 	AssigneeID     string
 }
@@ -68,6 +69,7 @@ type searchResponse struct {
 			Summary        string          `json:"summary"`
 			Description    json.RawMessage `json:"description"`
 			ResolutionDate string          `json:"resolutiondate"`
+			Created        string          `json:"created"`
 			Updated        string          `json:"updated"`
 			Status         struct {
 				Name string `json:"name"`
@@ -125,7 +127,7 @@ func (c *Client) searchIssuesPage(jql string, maxResults int, pageToken string) 
 	params := url.Values{
 		"jql":        {jql},
 		"maxResults": {fmt.Sprint(maxResults)},
-		"fields":     {"summary,description,status,issuetype,parent,subtasks,resolutiondate,updated,assignee"},
+		"fields":     {"summary,description,status,issuetype,parent,subtasks,resolutiondate,created,updated,assignee"},
 	}
 	if pageToken != "" {
 		params.Set("nextPageToken", pageToken)
@@ -159,7 +161,7 @@ func (c *Client) searchIssuesPage(jql string, maxResults int, pageToken string) 
 			Key: i.Key, Summary: i.Fields.Summary, Status: i.Fields.Status.Name,
 			IssueType:      i.Fields.IssueType.Name,
 			Description:    rawToMarkdown(i.Fields.Description),
-			ResolutionDate: i.Fields.ResolutionDate, Updated: i.Fields.Updated,
+			ResolutionDate: i.Fields.ResolutionDate, Created: i.Fields.Created, Updated: i.Fields.Updated,
 		}
 		if i.Fields.Parent != nil {
 			issue.ParentKey = i.Fields.Parent.Key

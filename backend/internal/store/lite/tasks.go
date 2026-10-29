@@ -197,6 +197,12 @@ func (s *Store) SetTaskCompletedAt(ctx context.Context, id int64, at time.Time) 
 	return err
 }
 
+func (s *Store) SetTaskTimestamps(ctx context.Context, id int64, createdAt, updatedAt time.Time) error {
+	_, err := s.db.ExecContext(ctx, `UPDATE tasks SET created_at = ?, updated_at = ? WHERE id = ?`,
+		formatTime(createdAt), formatTime(updatedAt), id)
+	return err
+}
+
 func (s *Store) MoveTask(ctx context.Context, id, columnID int64, position float64) (store.Task, error) {
 	t, err := s.q.MoveTask(ctx, sqlitedb.MoveTaskParams{ID: id, ColumnID: columnID, Position: position})
 	if err != nil {

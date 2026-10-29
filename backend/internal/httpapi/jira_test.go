@@ -129,7 +129,8 @@ func TestJiraImportOnlyAssignedAndBackfillsCompletion(t *testing.T) {
 	var gotJQL string
 	searchBody := `{"issues":[
 	  {"key":"DEV-7","fields":{"summary":"Done issue","status":{"name":"Done"},
-	    "resolutiondate":"2026-03-04T10:00:00.000+0000","updated":"2026-03-05T08:00:00.000+0000"}}
+	    "created":"2026-03-01T09:00:00.000+0000","resolutiondate":"2026-03-04T10:00:00.000+0000",
+	    "updated":"2026-03-05T08:00:00.000+0000"}}
 	],"isLast":true}`
 	jiraServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/comment") {
@@ -178,6 +179,12 @@ func TestJiraImportOnlyAssignedAndBackfillsCompletion(t *testing.T) {
 	}
 	if task.CompletedAt == nil || task.CompletedAt.Format("2006-01-02") != "2026-03-04" {
 		t.Errorf("completed_at = %v, want 2026-03-04", task.CompletedAt)
+	}
+	if got := task.CreatedAt.UTC().Format("2006-01-02T15:04:05"); got != "2026-03-01T09:00:00" {
+		t.Errorf("created_at = %v, want Jira creation time", task.CreatedAt)
+	}
+	if got := task.UpdatedAt.UTC().Format("2006-01-02T15:04:05"); got != "2026-03-05T08:00:00" {
+		t.Errorf("updated_at = %v, want Jira update time", task.UpdatedAt)
 	}
 }
 
