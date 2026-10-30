@@ -1,7 +1,8 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useHotkeys } from 'react-hotkeys-hook'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { ChevronRight, SlidersHorizontal } from 'lucide-react'
+import { Check, ChevronRight, ChevronsDownUp, ChevronsUpDown, SlidersHorizontal, X } from 'lucide-react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
@@ -16,7 +17,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { formatTimestamp } from '../lib/format'
-import { useBoards, useColumns, useDeleteTask, useJiraLinks, useMoveTask, useRestoreTasks, useRunningTime, useStartTime, useStopTime, useTags, useTasks, useUpdateTask } from '../api/hooks'
+import { useAIStatus, useBoards, useBulkTaskActions, useColumns, useCreateTag, useDeleteTask, useJiraLinks, useMoveTask, useRestoreTasks, useRunningTime, useStartTime, useStopTime, useSuggestLabelsBatch, useTags, useTasks, useUpdateTask } from '../api/hooks'
 import { showUndo } from '../lib/undo'
 import { BulkTaskBar } from '../components/board/BulkTaskBar'
 import { TaskComposer } from '../components/board/TaskComposer'
@@ -37,6 +38,7 @@ type SortKey = 'title' | 'priority' | 'due_date' | 'created_at' | 'updated_at'
 type ColumnKey = 'column' | 'tags' | Exclude<SortKey, 'title'>
 
 const priorityRank: Record<string, number> = { high: 0, medium: 1, low: 2 }
+const labelBatchSize = 20
 
 function compare(a: Task, b: Task, key: SortKey) {
   if (key === 'priority') return (priorityRank[a.priority] ?? 3) - (priorityRank[b.priority] ?? 3)
@@ -172,6 +174,12 @@ export function List() {
   const deleteTask = useDeleteTask(boardId)
   const restoreTasks = useRestoreTasks(boardId)
   const updateTask = useUpdateTask(boardId)
+  const bulk = useBulkTaskActions()
+  const createTag = useCreateTag()
+  const suggestBatch = useSuggestLabelsBatch()
+  const { data: aiStatus } = useAIStatus()
+  const [suggestions, setSuggestions] = useState<Record<number, string[]>>({})
+  const [suggesting, setSuggesting] = useState(false)
   const { data: running } = useRunningTime()
   const startTime = useStartTime()
   const stopTime = useStopTime()
@@ -303,7 +311,7 @@ export function List() {
   }, [tasks, taskIds, sort])
 
   // Rows currently on screen: roots plus expanded subtasks. Select-all and
-  // shift-click ranges operate on these, not on filtered-but-collapsed rows.
+  // shift-click ranges both operate on what is actually visible.
   const visibleRoots = useMemo(
     () =>
       hideDone
@@ -322,6 +330,9 @@ export function List() {
   const visibleIds = useMemo(() => visibleTasks.map((task) => task.id), [visibleTasks])
   const allSelected = visibleIds.length > 0 && visibleIds.every((id) => selected.has(id))
   const someSelected = !allSelected && visibleIds.some((id) => selected.has(id))
+  const parentIds = useMemo(() => [...childrenByParent.keys()], [childrenByParent])
+  const allExpanded =
+    parentIds.length > 0 && parentIds.every((id) => expanded.has(id))
   // Only act on selections that still exist in the current result set, so the
   // bulk bar never sends requests for deleted or filtered-out tasks.
   const selectedTasks = useMemo(
@@ -359,6 +370,88 @@ export function List() {
       })
     } else {
       setSelected((current) => new Set([...current, ...visibleIds]))
+    }
+  }
+
+  function toggleExpandAll() {
+    setExpanded(allExpanded ? new Set() : new Set(parentIds))
+  }
+
+  const taskById = useMemo(() => new Map((tasks ?? []).map((task) => [task.id, task])), [tasks])
+  // Suggestions live on the task they were proposed for, so accepting one label
+  // never adds it to tasks that were not suggested that label.
+  const suggestionGroups = useMemo(() => {
+    const groups = new Map<string, Task[]>()
+    for (const [id, labels] of Object.entries(suggestions)) {
+      const task = taskById.get(Number(id))
+      if (!task) continue
+      const attached = new Set((task.tags ?? []).map((tag) => tag.name.toLowerCase()))
+      for (const label of labels) {
+        if (attached.has(label.toLowerCase())) continue
+        groups.set(label, [...(groups.get(label) ?? []), task])
+      }
+    }
+    return [...groups].map(([label, grouped]) => ({ label, tasks: grouped }))
+  }, [suggestions, taskById])
+  const suggestionCount = useMemo(
+    () => suggestionGroups.reduce((total, group) => total + group.tasks.length, 0),
+    [suggestionGroups],
+  )
+
+  async function suggestLabels() {
+    setSuggesting(true)
+    try {
+      const ids = (tasks ?? []).map((task) => task.id)
+      const merged: Record<number, string[]> = {}
+      for (let i = 0; i < ids.length; i += labelBatchSize) {
+        const { results } = await suggestBatch.mutateAsync(ids.slice(i, i + labelBatchSize))
+        for (const result of results) merged[result.task_id] = result.labels
+      }
+      setSuggestions(merged)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not suggest labels')
+    } finally {
+      setSuggesting(false)
+    }
+  }
+
+  function dismissSuggestion(taskId: number, label: string) {
+    setSuggestions((current) => {
+      const next = { ...current }
+      const remaining = (next[taskId] ?? []).filter((item) => item !== label)
+      if (remaining.length) next[taskId] = remaining
+      else delete next[taskId]
+      return next
+    })
+  }
+
+  async function tagFor(label: string) {
+    return (
+      tags?.find((tag) => tag.name.toLowerCase() === label.toLowerCase()) ??
+      createTag.mutateAsync({ name: label })
+    )
+  }
+
+  async function acceptSuggestion(task: Task, label: string) {
+    dismissSuggestion(task.id, label)
+    try {
+      const tag = await tagFor(label)
+      await bulk.mutateAsync({ tasks: [task], action: { type: 'addTag', tagId: tag.id } })
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not add label')
+    }
+  }
+
+  async function acceptAllSuggestions() {
+    const groups = suggestionGroups
+    setSuggestions({})
+    try {
+      for (const group of groups) {
+        const tag = await tagFor(group.label)
+        await bulk.mutateAsync({ tasks: group.tasks, action: { type: 'addTag', tagId: tag.id } })
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not add labels')
     }
   }
 
@@ -445,6 +538,9 @@ export function List() {
 
   const renderRow = (task: Task, depth: number, leading?: ReactNode) => {
     const done = Boolean(task.completed_at) || doneColumnIds.has(task.column_id)
+    const suggested = (suggestions[task.id] ?? []).filter(
+      (label) => !(task.tags ?? []).some((tag) => tag.name.toLowerCase() === label.toLowerCase()),
+    )
     return (
       <TableRow
         key={task.id}
@@ -491,13 +587,45 @@ export function List() {
             >
               {task.title}
             </button>
-            <div className="ml-auto flex shrink-0 items-center gap-1">
+            <div className="ml-auto flex shrink-0 flex-wrap items-center justify-end gap-1">
               <JiraChip link={jiraLinkById.get(task.id)} />
               {task.ref && (
                 <span className="rounded border px-1 font-mono text-[0.65rem] text-muted-foreground">
                   {task.ref}
                 </span>
               )}
+              {suggested.map((label) => (
+                <span
+                  key={label}
+                  className="inline-flex items-center gap-0.5 rounded-full border border-dashed py-0.5 pr-0.5 pl-2 text-[0.65rem] text-muted-foreground"
+                >
+                  {label}
+                  <button
+                    type="button"
+                    className="rounded-full p-0.5 hover:bg-muted hover:text-foreground"
+                    aria-label={`Accept ${label} for ${task.ref}`}
+                    title="Accept"
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      void acceptSuggestion(task, label)
+                    }}
+                  >
+                    <Check className="size-3" />
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-full p-0.5 hover:bg-muted hover:text-foreground"
+                    aria-label={`Reject ${label} for ${task.ref}`}
+                    title="Reject"
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      dismissSuggestion(task.id, label)
+                    }}
+                  >
+                    <X className="size-3" />
+                  </button>
+                </span>
+              ))}
             </div>
           </div>
         </TableCell>
@@ -626,8 +754,18 @@ export function List() {
           />
           Hide done
         </label>
+        <Button
+          variant="outline"
+          size="sm"
+          className="ml-auto"
+          onClick={toggleExpandAll}
+          disabled={!parentIds.length}
+        >
+          {allExpanded ? <ChevronsDownUp /> : <ChevronsUpDown />}
+          {allExpanded ? 'Collapse all' : 'Expand all'}
+        </Button>
         <DropdownMenu>
-          <DropdownMenuTrigger render={<Button variant="outline" size="sm" className="ml-auto"><SlidersHorizontal /> Columns</Button>} />
+          <DropdownMenuTrigger render={<Button variant="outline" size="sm"><SlidersHorizontal /> Columns</Button>} />
           <DropdownMenuContent>
             <DropdownMenuGroup>
               <DropdownMenuLabel>Visible columns</DropdownMenuLabel>
@@ -665,6 +803,11 @@ export function List() {
           tasks={selectedTasks}
           columns={columns ?? []}
           tags={tags ?? []}
+          canSuggest={Boolean(aiStatus?.configured)}
+          suggesting={suggesting}
+          suggestionCount={suggestionCount}
+          onSuggest={() => void suggestLabels()}
+          onAcceptAll={() => void acceptAllSuggestions()}
           onClear={() => {
             setSelected(new Set())
             setLastSelected(null)

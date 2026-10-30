@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { LogMeetingOutcomeDialog } from '../components/calendar/LogMeetingOutcomeDialog'
+import { MeetingOutcomeForm } from '../components/calendar/MeetingOutcomeForm'
 import { useBoards, useCalendarSources, useColumns, useImportedCalendars, useMeetingOutcomeByEvent, useTasks, useUpdateTask } from '../api/hooks'
 import { TaskComposer } from '../components/board/TaskComposer'
 import { useCalendarPrefs } from '../store/calendarPrefs'
@@ -71,10 +71,12 @@ export function Calendar() {
   const location = useLocation()
   const navigate = useNavigate()
 
-  const [dialogDate, setDialogDate] = useState<string | null>(null)
+  const [outcomeForm, setOutcomeForm] = useState<{
+    date: string
+    event?: ImportedEvent
+    outcome?: MeetingOutcome
+  } | null>(null)
   const [dayDate, setDayDate] = useState<string | null>(null)
-  const [dialogOutcome, setDialogOutcome] = useState<MeetingOutcome | undefined>(undefined)
-  const [dialogEvent, setDialogEvent] = useState<ImportedEvent | undefined>(undefined)
   const [importedEvent, setImportedEvent] = useState<{
     event: ImportedEvent
     sourceName: string
@@ -127,6 +129,7 @@ export function Calendar() {
       : format(new Date(match.event.start), 'yyyy-MM-dd')
     setDayDate(date)
     setImportedEvent({ ...match, date })
+    setOutcomeForm(null)
     params.delete('event')
     params.delete('source')
     navigate({ pathname: location.pathname, search: params.toString() }, { replace: true })
@@ -135,9 +138,8 @@ export function Calendar() {
   useEffect(() => {
     const outcome = (location.state as { outcome?: MeetingOutcome } | null)?.outcome
     if (!outcome) return
-    setDialogOutcome(outcome)
-    setDialogEvent(undefined)
-    setDialogDate(outcome.occurred_on)
+    setDayDate(outcome.occurred_on)
+    setOutcomeForm({ date: outcome.occurred_on, outcome })
     navigate(location.pathname, { replace: true, state: null })
   }, [location, navigate])
 
@@ -202,6 +204,7 @@ export function Calendar() {
         ? props.event.start.slice(0, 10)
         : format(new Date(props.event.start), 'yyyy-MM-dd')
       if (date <= today) {
+        setOutcomeForm(null)
         setDayDate(date)
         setImportedEvent({ event: props.event, sourceName: props.sourceName, date })
         return
@@ -228,14 +231,16 @@ export function Calendar() {
     // The "+" button's React handler runs after FullCalendar's native cell click,
     // so stopPropagation in that handler cannot prevent this; ignore it here.
     if ((info.jsEvent.target as HTMLElement).closest('.fc-day-add')) return
+    setOutcomeForm(null)
     setDayDate(format(info.date, 'yyyy-MM-dd'))
   }
 
   function openNewOutcome(date: Date, event?: ImportedEvent) {
     if (format(date, 'yyyy-MM-dd') > today) return
-    setDialogOutcome(undefined)
-    setDialogEvent(event)
-    setDialogDate(format(date, 'yyyy-MM-dd'))
+    const dateStr = format(date, 'yyyy-MM-dd')
+    if (!event) setImportedEvent(null)
+    setDayDate(dateStr)
+    setOutcomeForm({ date: dateStr, event })
   }
 
   function renderDayCell(arg: DayCellContentArg) {
@@ -351,7 +356,7 @@ export function Calendar() {
                 <section key={date} className="rounded-lg border p-3">
                   <div className="mb-1 flex items-center justify-between">
                     <h2 className="text-sm font-semibold">{format(parseISO(date), 'EEE, d MMM')}</h2>
-                    <Button size="xs" variant="ghost" onClick={() => setDayDate(date)}>
+                    <Button size="xs" variant="ghost" onClick={() => { setOutcomeForm(null); setDayDate(date) }}>
                       Add
                     </Button>
                   </div>
@@ -381,6 +386,7 @@ export function Calendar() {
                           className="w-full rounded-sm px-1 py-1 text-left text-sm text-muted-foreground hover:bg-muted"
                           onClick={() => {
                             if (date <= today) {
+                              setOutcomeForm(null)
                               setDayDate(date)
                               setImportedEvent({ event, sourceName, date })
                             } else if (event.url) {
@@ -441,7 +447,7 @@ export function Calendar() {
         <section ref={agendaRef} className="flex flex-col gap-3 rounded-lg border p-3" aria-label={`Agenda for ${format(parseISO(dayDate), 'd MMM yyyy')}`}>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-sm font-semibold">{format(parseISO(dayDate), 'EEEE, d MMM yyyy')}</h2>
-            <Button size="icon-sm" variant="ghost" aria-label="Close agenda" onClick={() => { setDayDate(null); setImportedEvent(null) }}>
+            <Button size="icon-sm" variant="ghost" aria-label="Close agenda" onClick={() => { setDayDate(null); setImportedEvent(null); setOutcomeForm(null) }}>
               <X />
             </Button>
           </div>
@@ -524,15 +530,34 @@ export function Calendar() {
               )}
               {importedEvent.date <= today && (
                 <Button size="sm" variant="outline" onClick={() => {
+                  if (eventOutcome) {
+                    setDayDate(importedEvent.date)
+                    setOutcomeForm({
+                      date: importedEvent.date,
+                      outcome: eventOutcome,
+                      event: importedEvent.event,
+                    })
+                    return
+                  }
                   openNewOutcome(parseISO(importedEvent.date), importedEvent.event)
                 }}>
                   <MessageSquarePlus />
-                  Add meeting summary
+                  {eventOutcome ? 'Edit meeting summary' : 'Add meeting summary'}
                 </Button>
               )}
             </div>
           )}
-          {dayDate <= today && (
+          {outcomeForm && outcomeForm.date === dayDate && (
+            <MeetingOutcomeForm
+              key={`${outcomeForm.date}-${outcomeForm.event?.id ?? outcomeForm.outcome?.id ?? 'new'}`}
+              outcome={outcomeForm.outcome}
+              occurredOn={outcomeForm.date}
+              boardId={boardId}
+              event={outcomeForm.event}
+              onClose={() => setOutcomeForm(null)}
+            />
+          )}
+          {!outcomeForm && dayDate <= today && (
             <Button size="sm" variant="outline" className="self-start" onClick={() => openNewOutcome(parseISO(dayDate))}>
               <MessageSquarePlus />
               Add meeting summary
@@ -541,16 +566,6 @@ export function Calendar() {
         </section>
       )}
 
-      {dialogDate && boardId && (
-        <LogMeetingOutcomeDialog
-          open={!!dialogDate}
-          onOpenChange={(open) => !open && setDialogDate(null)}
-          outcome={dialogOutcome}
-          occurredOn={dialogDate}
-          boardId={boardId}
-          event={dialogEvent}
-        />
-      )}
     </div>
   )
 }
