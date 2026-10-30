@@ -56,6 +56,7 @@ import {
 import { BoardColumn } from '../components/board/BoardColumn'
 import { RemindersColumn } from '../components/board/RemindersColumn'
 import { TaskCard } from '../components/board/TaskCard'
+import { planDrop } from '../lib/boardDrag'
 import { isPastDue } from '../lib/format'
 import { showUndo } from '../lib/undo'
 import { useUIStore } from '../store/ui'
@@ -129,119 +130,6 @@ const collisionDetection: CollisionDetection = (args) => {
       columnHits.some((hit) => hit.id === container.id),
     ),
   })
-}
-
-function tasksInColumn(tasks: Task[], columnId: number) {
-  return tasks
-    .filter((task) => task.column_id === columnId)
-    .sort((a, b) => a.position - b.position)
-}
-
-function withPositions(tasks: Task[], ordered: Task[]) {
-  const positions = new Map(ordered.map((task, index) => [task.id, (index + 1) * 1024]))
-  return tasks.map((task) =>
-    positions.has(task.id) ? { ...task, position: positions.get(task.id)! } : task,
-  )
-}
-
-function previewTaskAtEnd(tasks: Task[], activeId: number, columnId: number) {
-  const active = tasks.find((task) => task.id === activeId)
-  if (!active) return tasks
-  const full = tasksInColumn(tasks, columnId)
-  if (full[full.length - 1]?.id === activeId) return tasks
-
-  const rest = tasks.filter((task) => task.id !== activeId)
-  const target = tasksInColumn(rest, columnId)
-  const moving = { ...active, column_id: columnId }
-  const ordered = [...target, moving]
-  return withPositions([...rest, moving], ordered)
-}
-
-function previewTaskMove(
-  tasks: Task[],
-  activeId: number,
-  targetColumnId: number,
-  overTaskId: number | null,
-  below: boolean,
-) {
-  const active = tasks.find((task) => task.id === activeId)
-  if (!active || active.column_id === targetColumnId) return tasks
-
-  const rest = tasks.filter((task) => task.id !== activeId)
-  const target = tasksInColumn(rest, targetColumnId)
-  let index = target.length
-  if (overTaskId !== null) {
-    const overIndex = target.findIndex((task) => task.id === overTaskId)
-    if (overIndex >= 0) index = overIndex + (below ? 1 : 0)
-  }
-
-  const moving = { ...active, column_id: targetColumnId }
-  const ordered = [...target.slice(0, index), moving, ...target.slice(index)]
-  return withPositions([...rest, moving], ordered)
-}
-
-function computePreviewDrop(tasks: Task[], original: Task[], activeId: number) {
-  const preview = tasks.find((task) => task.id === activeId)
-  const current = original.find((task) => task.id === activeId)
-  if (!preview || !current) return null
-
-  const previewColumn = tasksInColumn(tasks, preview.column_id)
-  const previewIndex = previewColumn.findIndex((task) => task.id === activeId)
-  if (previewIndex < 0) return null
-  const beforeTaskId = previewColumn[previewIndex + 1]?.id
-  const afterTaskId = previewColumn[previewIndex - 1]?.id
-
-  const currentColumn = tasksInColumn(original, current.column_id)
-  const currentIndex = currentColumn.findIndex((task) => task.id === activeId)
-  const changed =
-    current.column_id !== preview.column_id ||
-    currentColumn[currentIndex + 1]?.id !== beforeTaskId ||
-    currentColumn[currentIndex - 1]?.id !== afterTaskId
-
-  return {
-    id: activeId,
-    columnId: preview.column_id,
-    beforeTaskId,
-    afterTaskId,
-    changed,
-  }
-}
-
-function computeTaskDrop(tasks: Task[], activeId: number, overId: string) {
-  const active = tasks.find((task) => task.id === activeId)
-  if (!active) return null
-
-  let targetColumnId: number
-  let overTaskId: number | null = null
-  if (overId.startsWith('column-')) {
-    targetColumnId = Number(overId.slice('column-'.length))
-  } else {
-    const overTask = tasks.find((task) => task.id === Number(overId))
-    if (!overTask) return null
-    targetColumnId = overTask.column_id
-    overTaskId = overTask.id
-  }
-
-  const withActive = tasksInColumn(tasks, targetColumnId)
-  const activeIndex = withActive.findIndex((task) => task.id === activeId)
-  const withoutActive = withActive.filter((task) => task.id !== activeId)
-
-  let insertAt: number
-  if (overTaskId === null) {
-    insertAt = withoutActive.length
-  } else {
-    if (overTaskId === activeId) return null
-    insertAt = withActive.findIndex((task) => task.id === overTaskId)
-    if (insertAt < 0) return null
-  }
-
-  return {
-    id: activeId,
-    columnId: targetColumnId,
-    beforeTaskId: withoutActive[insertAt]?.id,
-    afterTaskId: withoutActive[insertAt - 1]?.id,
-    changed: active.column_id !== targetColumnId || activeIndex !== insertAt,
-  }
 }
 
 function LoadError({
@@ -578,43 +466,53 @@ export function Board() {
     setDragTasks(filteredTasks.map((task) => ({ ...task })))
   }
 
+  function pointerBelow(event: DragOverEvent | DragEndEvent, rect: { top: number; height: number }) {
+    const pointer = dragPointer.current
+    const translated = event.active.rect.current.translated
+    const y = pointer
+      ? pointer.y + event.delta.y
+      : translated
+        ? translated.top + translated.height / 2
+        : null
+    return y !== null && y > rect.top + rect.height / 2
+  }
+
   function handleDragOver(event: DragOverEvent) {
     if (event.active.data.current?.type === 'column') return
     const overId = event.over ? String(event.over.id) : ''
-    const overTask = overId.startsWith('column-')
+    const overIsColumn = overId.startsWith('column-')
+    const overTask = overIsColumn
       ? undefined
       : dragTasks?.find((task) => task.id === Number(overId))
-    const targetColumnId = overId.startsWith('column-')
+    const targetColumnId = overIsColumn
       ? Number(overId.slice('column-'.length))
       : overTask?.column_id ?? null
     setOverColumnId(targetColumnId)
-    if (!dragTasks || !event.over) return
+    if (!dragTasks || !event.over || targetColumnId === null) return
 
     const activeId = Number(event.active.id)
     const activeTask = dragTasks.find((task) => task.id === activeId)
-    if (!activeTask || targetColumnId === null) return
-    if (activeTask.column_id === targetColumnId) {
-      if (!overId.startsWith('column-')) return
-      const original = tasks?.find((task) => task.id === activeId)
-      if (original && original.column_id !== targetColumnId) return
-      setDragTasks((current) =>
-        current ? previewTaskAtEnd(current, activeId, targetColumnId) : current,
-      )
+    if (!activeTask) return
+    const originalColumnId = tasks?.find((task) => task.id === activeId)?.column_id
+    if (
+      !overIsColumn &&
+      activeTask.column_id === targetColumnId &&
+      targetColumnId === originalColumnId
+    ) {
       return
     }
 
-    const translated = event.active.rect.current.translated
-    const pointer = dragPointer.current
-    const below = pointer
-      ? pointer.y + event.delta.y > event.over.rect.top + event.over.rect.height / 2
-      : Boolean(
-          translated &&
-            translated.top + translated.height / 2 >
-              event.over.rect.top + event.over.rect.height / 2,
-        )
+    const below = pointerBelow(event, event.over.rect)
     setDragTasks((current) =>
       current
-        ? previewTaskMove(current, activeId, targetColumnId, overTask?.id ?? null, below)
+        ? planDrop(
+            current,
+            tasks ?? current,
+            activeId,
+            targetColumnId,
+            overTask?.id ?? null,
+            below,
+          )?.tasks ?? current
         : current,
     )
   }
@@ -647,29 +545,36 @@ export function Board() {
     }
 
     const taskId = Number(active.id)
-    const originalTask = tasks?.find((task) => task.id === taskId)
-    const previewTask = dragTasks?.find((task) => task.id === taskId)
-    const crossedColumns = Boolean(
-      dragTasks &&
-        originalTask &&
-        previewTask &&
-        originalTask.column_id !== previewTask.column_id,
-    )
-
-    let result: ReturnType<typeof computeTaskDrop> = null
-    if (dragTasks && (crossedColumns || overId.startsWith('column-'))) {
-      result = computePreviewDrop(dragTasks, tasks!, taskId)
-    } else if (dragTasks && overId !== String(active.id)) {
-      result = computeTaskDrop(dragTasks, taskId, overId)
+    const source = topLevelTasks
+    const overIsColumn = overId.startsWith('column-')
+    const overTask = overIsColumn
+      ? undefined
+      : source.find((task) => task.id === Number(overId))
+    if (!overIsColumn && !overTask) {
+      setDragTasks(null)
+      return
     }
+    const targetColumnId = overIsColumn
+      ? Number(overId.slice('column-'.length))
+      : overTask!.column_id
+    const sameColumn =
+      source.find((task) => task.id === taskId)?.column_id === targetColumnId
+    const plan = planDrop(
+      source,
+      source,
+      taskId,
+      targetColumnId,
+      overTask?.id ?? null,
+      sameColumn && overTask ? undefined : pointerBelow(event, over.rect),
+    )
     setDragTasks(null)
-    if (!result || !result.changed) return
+    if (!plan || !plan.changed) return
     moveTask.mutate(
       {
-        id: result.id,
-        column_id: result.columnId,
-        before_task_id: result.beforeTaskId,
-        after_task_id: result.afterTaskId,
+        id: plan.id,
+        column_id: plan.columnId,
+        before_task_id: plan.beforeTaskId,
+        after_task_id: plan.afterTaskId,
       },
       { onError: (error) => toast.error(error.message) },
     )
