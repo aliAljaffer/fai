@@ -19,12 +19,19 @@ const updateState = {
   progress: 0,
   error: null,
   autoDownload: false,
+  releaseUrl: null,
 }
 
 const updatePrefs = { autoDownload: false }
 let updatePrefsLoaded = false
 
 const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000
+const RELEASE_API = 'https://api.github.com/repos/aliAljaffer/fai/releases/latest'
+const RELEASE_PAGE = 'https://github.com/aliAljaffer/fai/releases/latest'
+
+// Squirrel rejects unsigned bundles, so macOS checks the release tag and sends
+// the user to the download page instead of installing in place.
+const manualUpdates = process.platform === 'darwin'
 
 function backendBinary() {
   const name = process.platform === 'win32' ? 'fai-backend.exe' : 'fai-backend'
@@ -197,8 +204,46 @@ function notifyUpdate(title, body) {
   notification.show()
 }
 
+function newerVersion(candidate, current) {
+  const a = String(candidate).split('.').map(Number)
+  const b = String(current).split('.').map(Number)
+  for (let i = 0; i < Math.max(a.length, b.length); i += 1) {
+    const diff = (a[i] || 0) - (b[i] || 0)
+    if (diff !== 0) return diff > 0
+  }
+  return false
+}
+
+async function checkForManualUpdate() {
+  setUpdateState({ status: 'checking', error: null })
+  try {
+    const response = await fetch(RELEASE_API, {
+      headers: { 'User-Agent': `fai/${app.getVersion()}`, Accept: 'application/vnd.github+json' },
+    })
+    if (!response.ok) throw new Error(`GitHub returned ${response.status}`)
+    const release = await response.json()
+    const latest = String(release.tag_name || '').replace(/^v/, '')
+    if (!latest) throw new Error('the latest release has no tag')
+    if (newerVersion(latest, app.getVersion())) {
+      setUpdateState({
+        status: 'available',
+        version: latest,
+        releaseUrl: release.html_url || RELEASE_PAGE,
+        error: null,
+      })
+      notifyUpdate('fai update available', `Version ${latest} is available. Download it from GitHub.`)
+    } else {
+      setUpdateState({ status: 'idle', version: null, releaseUrl: null, error: null })
+    }
+  } catch (err) {
+    setUpdateState({ status: 'error', error: err.message })
+  }
+  return updateState
+}
+
 async function checkForUpdates() {
   if (!app.isPackaged) return updateState
+  if (manualUpdates) return checkForManualUpdate()
   try {
     await autoUpdater.checkForUpdates()
   } catch (err) {
@@ -211,42 +256,44 @@ function configureUpdates() {
   if (!app.isPackaged) return
 
   loadUpdatePrefs()
-  autoUpdater.autoDownload = updatePrefs.autoDownload
-  autoUpdater.autoInstallOnAppQuit = true
-  setUpdateState({ autoDownload: updatePrefs.autoDownload })
+  if (!manualUpdates) {
+    autoUpdater.autoDownload = updatePrefs.autoDownload
+    autoUpdater.autoInstallOnAppQuit = true
+    setUpdateState({ autoDownload: updatePrefs.autoDownload })
 
-  autoUpdater.on('checking-for-update', () => {
-    setUpdateState({ status: 'checking', error: null })
-  })
-  autoUpdater.on('update-available', (info) => {
-    const autoDownload = updatePrefs.autoDownload
-    setUpdateState({
-      status: autoDownload ? 'downloading' : 'available',
-      version: info.version,
-      progress: 0,
-      error: null,
-      autoDownload,
+    autoUpdater.on('checking-for-update', () => {
+      setUpdateState({ status: 'checking', error: null })
     })
-    notifyUpdate(
-      'fai update available',
-      autoDownload
-        ? `Version ${info.version} is downloading in the background.`
-        : `Version ${info.version} is available. Open fai to download it.`,
-    )
-  })
-  autoUpdater.on('update-not-available', () => {
-    setUpdateState({ status: 'idle', version: null, progress: 0, error: null })
-  })
-  autoUpdater.on('download-progress', (progress) => {
-    setUpdateState({ status: 'downloading', progress: progress.percent })
-  })
-  autoUpdater.on('update-downloaded', (info) => {
-    setUpdateState({ status: 'downloaded', version: info.version, progress: 100, error: null })
-    notifyUpdate('fai update ready', `Version ${info.version} is ready. Restart fai to install it.`)
-  })
-  autoUpdater.on('error', (err) => {
-    setUpdateState({ status: 'error', error: err.message })
-  })
+    autoUpdater.on('update-available', (info) => {
+      const autoDownload = updatePrefs.autoDownload
+      setUpdateState({
+        status: autoDownload ? 'downloading' : 'available',
+        version: info.version,
+        progress: 0,
+        error: null,
+        autoDownload,
+      })
+      notifyUpdate(
+        'fai update available',
+        autoDownload
+          ? `Version ${info.version} is downloading in the background.`
+          : `Version ${info.version} is available. Open fai to download it.`,
+      )
+    })
+    autoUpdater.on('update-not-available', () => {
+      setUpdateState({ status: 'idle', version: null, progress: 0, error: null })
+    })
+    autoUpdater.on('download-progress', (progress) => {
+      setUpdateState({ status: 'downloading', progress: progress.percent })
+    })
+    autoUpdater.on('update-downloaded', (info) => {
+      setUpdateState({ status: 'downloaded', version: info.version, progress: 100, error: null })
+      notifyUpdate('fai update ready', `Version ${info.version} is ready. Restart fai to install it.`)
+    })
+    autoUpdater.on('error', (err) => {
+      setUpdateState({ status: 'error', error: err.message })
+    })
+  }
 
   setTimeout(checkForUpdates, 5000)
   updateTimer = setInterval(checkForUpdates, UPDATE_CHECK_INTERVAL)
@@ -262,6 +309,10 @@ ipcMain.handle('fai:update-state', () => ({ ...updateState }))
 ipcMain.handle('fai:update-check', () => checkForUpdates())
 
 ipcMain.handle('fai:update-download', async () => {
+  if (manualUpdates) {
+    if (updateState.releaseUrl) shell.openExternal(updateState.releaseUrl)
+    return { ...updateState }
+  }
   if (updateState.status !== 'available') return { ...updateState }
   try {
     await autoUpdater.downloadUpdate()
@@ -280,7 +331,7 @@ ipcMain.handle('fai:update-auto-download', (_event, enabled) => {
   }
   autoUpdater.autoDownload = updatePrefs.autoDownload
   setUpdateState({ autoDownload: updatePrefs.autoDownload })
-  if (updatePrefs.autoDownload && updateState.status === 'available') {
+  if (!manualUpdates && updatePrefs.autoDownload && updateState.status === 'available') {
     autoUpdater.downloadUpdate().catch((err) => {
       setUpdateState({ status: 'error', error: err.message })
     })

@@ -21,11 +21,8 @@ asar: true
 mac:
   category: public.app-category.productivity
   icon: build/icon.png
-  hardenedRuntime: true
-  gatekeeperAssess: false
-  entitlements: build/entitlements.mac.plist
-  entitlementsInherit: build/entitlements.mac.plist
-  notarize: true
+  identity: "-"
+  hardenedRuntime: false
   target:
     - dmg
     - zip

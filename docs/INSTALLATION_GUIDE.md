@@ -105,12 +105,13 @@ publishes the Homebrew cask. Release notes come from `.github/changelog.py`, whi
 lists the commits since the previous tag and prepends the same entry to
 `CHANGELOG.md` on `main`.
 
-The macOS app is signed and notarized when these repository secrets are set:
-`CSC_LINK` (base64 Developer ID Application certificate), `CSC_KEY_PASSWORD`,
-`APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, and `APPLE_TEAM_ID`. Without them the
-macOS job builds an unsigned package and skips notarization. Add
-`--config.mac.notarize=false` to a local `electron-builder` run for the same
-fallback.
+The macOS app is ad-hoc signed and not notarized. Homebrew skips quarantine. A
+browser-downloaded DMG needs a right-click Open on first launch. Windows may
+show a SmartScreen warning.
+
+macOS cannot install updates in place without an Apple Developer ID, so the app
+checks the latest release tag and opens the download page instead. Update with
+`brew upgrade --cask fai` or by downloading the new DMG.
 
 Installed copies check GitHub Releases every six hours and show an update badge.
 Downloads wait for approval by default. Settings can enable automatic

@@ -16,10 +16,12 @@ export interface UpdateState {
   progress: number
   error: string | null
   autoDownload: boolean
+  releaseUrl: string | null
 }
 
 interface FaiDesktop {
   version: string
+  platform: string
   getUpdateState: () => Promise<UpdateState>
   checkForUpdates: () => Promise<UpdateState>
   downloadUpdate: () => Promise<UpdateState>
@@ -44,6 +46,7 @@ let state: UpdateState = {
   progress: 0,
   error: null,
   autoDownload: false,
+  releaseUrl: null,
 }
 
 const listeners = new Set<() => void>()
@@ -89,6 +92,10 @@ export function appVersion() {
 
 export function isDesktop() {
   return Boolean(window.fai)
+}
+
+export function isManualUpdate() {
+  return window.fai?.platform === 'darwin'
 }
 
 export async function checkForUpdates() {

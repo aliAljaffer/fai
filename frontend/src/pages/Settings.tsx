@@ -40,6 +40,7 @@ import {
   downloadUpdate,
   installUpdate,
   isDesktop,
+  isManualUpdate,
   setAutoDownload,
   useUpdateState,
 } from '../lib/updates'
@@ -1006,13 +1007,16 @@ function AICard() {
 function AboutCard() {
   const state = useUpdateState()
   const desktop = isDesktop()
+  const manual = isManualUpdate()
   const busy = state.status === 'checking' || state.status === 'downloading'
 
   const status =
     state.status === 'checking'
       ? 'Checking for updates…'
       : state.status === 'available'
-        ? `Version ${state.version ?? ''} is available. Download it when you are ready.`
+        ? manual
+          ? `Version ${state.version ?? ''} is available. Download it from GitHub.`
+          : `Version ${state.version ?? ''} is available. Download it when you are ready.`
         : state.status === 'downloading'
           ? `Downloading version ${state.version ?? ''} (${Math.round(state.progress)}%).`
           : state.status === 'downloaded'
@@ -1036,21 +1040,23 @@ function AboutCard() {
         {desktop ? (
           <>
             <p className="text-sm text-muted-foreground">{status}</p>
-            <label className="flex items-start justify-between gap-3 rounded-md border px-2 py-1.5">
-              <span className="flex flex-col gap-0.5">
-                <span className="text-sm">Download updates automatically</span>
-                <span className="text-xs text-muted-foreground">
-                  When off, fai announces a new version and downloads it only when you ask.
+            {!manual && (
+              <label className="flex items-start justify-between gap-3 rounded-md border px-2 py-1.5">
+                <span className="flex flex-col gap-0.5">
+                  <span className="text-sm">Download updates automatically</span>
+                  <span className="text-xs text-muted-foreground">
+                    When off, fai announces a new version and downloads it only when you ask.
+                  </span>
                 </span>
-              </span>
-              <Input
-                type="checkbox"
-                className="mt-0.5 h-4 w-4"
-                checked={state.autoDownload}
-                aria-label="Download updates automatically"
-                onChange={(event) => void setAutoDownload(event.target.checked)}
-              />
-            </label>
+                <Input
+                  type="checkbox"
+                  className="mt-0.5 h-4 w-4"
+                  checked={state.autoDownload}
+                  aria-label="Download updates automatically"
+                  onChange={(event) => void setAutoDownload(event.target.checked)}
+                />
+              </label>
+            )}
             <div className="flex flex-wrap gap-2">
               <Button
                 size="sm"
@@ -1066,7 +1072,7 @@ function AboutCard() {
                   className="update-indicator"
                   onClick={() => void downloadUpdate()}
                 >
-                  Download {state.version}
+                  {manual ? 'Open the download page' : `Download ${state.version}`}
                 </Button>
               )}
               {state.status === 'downloaded' && (

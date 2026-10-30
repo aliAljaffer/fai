@@ -2,6 +2,7 @@ const { contextBridge, ipcRenderer } = require('electron')
 
 contextBridge.exposeInMainWorld('fai', {
   version: ipcRenderer.sendSync('fai:app-version'),
+  platform: process.platform,
   getUpdateState: () => ipcRenderer.invoke('fai:update-state'),
   checkForUpdates: () => ipcRenderer.invoke('fai:update-check'),
   downloadUpdate: () => ipcRenderer.invoke('fai:update-download'),
