@@ -1,6 +1,6 @@
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { useState } from 'react'
+import { useState, type KeyboardEventHandler } from 'react'
 import { ChevronRight, GripVertical, Play, Square } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -99,6 +99,9 @@ function SortableTaskCard(props: TaskCardProps) {
     data: { type: 'task', columnId: props.task.column_id },
     disabled: props.dragDisabled,
   })
+  // Pointer drags start anywhere on the card. Keyboard drags stay on the grip
+  // so Space and arrows on the card's buttons do not start a drag.
+  const { onKeyDown, ...cardListeners } = listeners ?? {}
   const running = props.runningTaskId === props.task.id
   const [expanded, setExpanded] = useState(false)
   const isArc = props.task.kind === 'arc'
@@ -118,8 +121,9 @@ function SortableTaskCard(props: TaskCardProps) {
       ref={setNodeRef}
       id={`task-${props.task.id}`}
       style={{ transform: CSS.Transform.toString(transform), transition }}
+      {...cardListeners}
       className={cn(
-        'group/task relative rounded-md border bg-card px-2.5 py-2 text-card-foreground transition-colors select-none hover:border-foreground/20',
+        'group/task relative cursor-grab rounded-md border bg-card px-2.5 py-2 text-card-foreground transition-colors select-none active:cursor-grabbing hover:border-foreground/20',
         isDragging && 'opacity-40',
       )}
     >
@@ -133,7 +137,7 @@ function SortableTaskCard(props: TaskCardProps) {
       <button
         type="button"
         {...attributes}
-        {...listeners}
+        onKeyDown={onKeyDown as KeyboardEventHandler<HTMLButtonElement>}
         aria-label={`Drag ${props.task.title}`}
         disabled={props.dragDisabled}
         className={cn(

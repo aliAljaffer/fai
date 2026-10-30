@@ -503,18 +503,18 @@ export function Board() {
     }
 
     const below = pointerBelow(event, event.over.rect)
-    setDragTasks((current) =>
-      current
-        ? planDrop(
-            current,
-            tasks ?? current,
-            activeId,
-            targetColumnId,
-            overTask?.id ?? null,
-            below,
-          )?.tasks ?? current
-        : current,
-    )
+    setDragTasks((current) => {
+      if (!current) return current
+      const plan = planDrop(
+        current,
+        tasks ?? current,
+        activeId,
+        targetColumnId,
+        overTask?.id ?? null,
+        below,
+      )
+      return plan && plan.tasks !== current ? plan.tasks : current
+    })
   }
 
   function handleDragEnd(event: DragEndEvent) {

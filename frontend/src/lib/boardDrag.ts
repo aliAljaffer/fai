@@ -60,6 +60,9 @@ export function planDrop(
   const ordered = [...rest.slice(0, insertAt), moving, ...rest.slice(insertAt)]
   const beforeTaskId = ordered[insertAt + 1]?.id
   const afterTaskId = ordered[insertAt - 1]?.id
+  const sameOrder =
+    column.length === ordered.length &&
+    column.every((task, index) => task.id === ordered[index].id)
 
   const current = original.find((task) => task.id === activeId)
   const currentColumn = current ? tasksInColumn(original, current.column_id) : []
@@ -76,9 +79,8 @@ export function planDrop(
     beforeTaskId,
     afterTaskId,
     changed,
-    tasks: withPositions(
-      [...tasks.filter((task) => task.id !== activeId), moving],
-      ordered,
-    ),
+    tasks: sameOrder
+      ? tasks
+      : withPositions([...tasks.filter((task) => task.id !== activeId), moving], ordered),
   }
 }

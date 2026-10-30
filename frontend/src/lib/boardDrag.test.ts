@@ -82,6 +82,13 @@ describe('planDrop', () => {
     expect(drop).toMatchObject({ columnId: 2, beforeTaskId: 4, changed: true })
   })
 
+  it('keeps the same preview reference when the order does not change', () => {
+    const plan = planDrop(board, board, 1, 2, 4, false)!
+    expect(plan.tasks).not.toBe(board)
+    const again = planDrop(plan.tasks, board, 1, 2, 4, false)!
+    expect(again.tasks).toBe(plan.tasks)
+  })
+
   it('inserts at the top when dropped on a column header', () => {
     const plan = planDrop(board, board, 1, 2, null, false)
     expect(order(plan!.tasks, 2)).toEqual([1, 4, 5])
