@@ -42,7 +42,7 @@ jobs:
             goarch: amd64
             ext: .exe
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ env.RELEASE_TAG }}
 
@@ -96,7 +96,7 @@ jobs:
             npx electron-builder --linux "--${{ matrix.arch }}" --publish never
           fi
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: fai-${{ matrix.os }}-${{ matrix.arch }}
           if-no-files-found: error
@@ -113,9 +113,9 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: artifacts
 
@@ -140,7 +140,7 @@ jobs:
     needs: release
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           path: src
 
@@ -157,7 +157,7 @@ jobs:
             git clone git@github.com:aliAljaffer/homebrew-tap.git tap
           git -C tap config core.sshCommand "ssh -i $HOME/.ssh/tap -o IdentitiesOnly=yes"
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true

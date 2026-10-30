@@ -21,7 +21,7 @@ jobs:
   backend:
     runs-on: arc-runner-fai
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Verify runner toolchain
         run: go version
@@ -41,7 +41,7 @@ jobs:
   frontend:
     runs-on: arc-runner-fai
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Verify runner toolchain
         run: node --version

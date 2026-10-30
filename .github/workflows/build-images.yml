@@ -27,7 +27,7 @@ jobs:
     outputs:
       digest: ${{ steps.build.outputs.digest }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: docker/login-action@v3
         with:
@@ -41,7 +41,7 @@ jobs:
           username: ${{ secrets.HARBOR_USERNAME }}
           password: ${{ secrets.HARBOR_PASSWORD }}
 
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         id: build
         with:
           context: backend
@@ -60,7 +60,7 @@ jobs:
     outputs:
       digest: ${{ steps.build.outputs.digest }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: docker/login-action@v3
         with:
@@ -74,7 +74,7 @@ jobs:
           username: ${{ secrets.HARBOR_USERNAME }}
           password: ${{ secrets.HARBOR_PASSWORD }}
 
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         id: build
         with:
           context: frontend
@@ -90,7 +90,7 @@ jobs:
             ${{ env.HARBOR }}/fai-frontend:latest
             ${{ env.HARBOR }}/fai-frontend:${{ github.sha }}
 
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         with:
           context: frontend
           push: true
@@ -109,7 +109,7 @@ jobs:
     steps:
       - name: Create a GitHub App token
         id: app-token
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@v3
         with:
           app-id: ${{ secrets.HOMELAB_APP_ID }}
           private-key: ${{ secrets.HOMELAB_APP_PRIVATE_KEY }}
@@ -117,7 +117,7 @@ jobs:
           repositories: homelab
 
       - name: Check out the homelab manifests
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: aliAljaffer/homelab
           token: ${{ steps.app-token.outputs.token }}
