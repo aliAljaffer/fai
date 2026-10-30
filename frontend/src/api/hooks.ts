@@ -931,7 +931,7 @@ export function useAIChat() {
     mutationFn: ({ messages, workspaceId }: { messages: AIChatMessage[]; workspaceId?: number }) =>
       api.post<{
         reply: string
-        created?: { type: string; id: number; title: string }
+        created?: { type: string; id: number; title: string }[]
         pending?: PendingChatAction
       }>('/ai/chat', {
         messages,

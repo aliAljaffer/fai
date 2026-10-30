@@ -202,6 +202,7 @@ func audioFormat(mimeType string) string {
 }
 
 func (b *Bot) respond(ctx context.Context, chatID int64, text, prefix string) {
+	logChat(chatID, "user", text)
 	b.mu.Lock()
 	history := append([]ai.ChatMessage(nil), b.history[chatID]...)
 	b.mu.Unlock()
@@ -242,9 +243,17 @@ func (b *Bot) sendText(ctx context.Context, chatID int64, text string) {
 	if strings.TrimSpace(text) == "" {
 		return
 	}
-	if err := b.client.SendMessage(ctx, chatID, truncateRunes(text, maxMessageLength), nil); err != nil {
+	text = truncateRunes(text, maxMessageLength)
+	logChat(chatID, "bot", text)
+	if err := b.client.SendMessage(ctx, chatID, text, nil); err != nil {
 		log.Printf("telegram: send: %v", err)
 	}
+}
+
+// logChat writes one line per message so logs stay greppable by chat. Newlines
+// are flattened to keep a multi-line reply on its own line.
+func logChat(chatID int64, role, text string) {
+	log.Printf("telegram: chat %d %s: %s", chatID, role, strings.ReplaceAll(text, "\n", " "))
 }
 
 func (b *Bot) sendPending(ctx context.Context, chatID int64, text string, action httpapi.PendingChatAction) {

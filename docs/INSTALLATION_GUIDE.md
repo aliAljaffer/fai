@@ -201,6 +201,19 @@ the audio to mono MP3 with the bundled ffmpeg binary and retries. The last 10
 messages per chat stay in memory and are lost on restart. Message IDs are
 remembered for 10 minutes to prevent duplicate tasks after transport retries.
 
+Every inbound and outbound bot message is written to the API log as one line:
+
+```
+telegram: chat <chat_id> user: <message>
+telegram: chat <chat_id> bot: <reply>
+```
+
+Newlines are flattened so each message stays on one line. Query a chat with:
+
+```sh
+docker compose -f docker-compose.prod.yml logs backend | grep 'telegram: chat 123456789'
+```
+
 Telegram uses `getUpdates` long polling and needs no public route. Configure:
 
 - `TELEGRAM_BOT_TOKEN`

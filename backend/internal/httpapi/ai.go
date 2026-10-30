@@ -209,7 +209,7 @@ type aiChatBody struct {
 	WorkspaceID int64            `json:"workspace_id"`
 }
 
-const chatActionInstructions = `You can also create or change things for the owner. When you do, add a final line to your reply:
+const chatActionInstructions = `You can also create or change things for the owner. When you do, add one final line to your reply for each change:
 ACTION: {"type":"create_task","title":"...","due_date":"YYYY-MM-DD"}
 ACTION: {"type":"create_reminder","title":"...","remind_at":"RFC3339 with the local offset"}
 ACTION: {"type":"find_task","task":"@TAG-123"}
@@ -217,7 +217,7 @@ ACTION: {"type":"move_task","task":"@TAG-123","column":"Column name"}
 Use create_task for work to do. Use create_reminder only when the owner asks to be reminded or names a time of day for a nudge.
 Use find_task when the owner asks about an existing task. Use move_task to change the column of an existing task. Always copy the @ref from the task context for task actions. Never guess a task or a column.
 Resolve relative dates (today, tomorrow, Monday, in 10 minutes) against the current local time given below. A weekday alone means the next such day, or today when it is that day. Set a due date when the owner gives one and omit due_date when they do not.
-Write at most one ACTION line, as strict JSON on one line. Never claim you changed something unless you add the ACTION line.`
+Write each ACTION line as strict JSON on its own line. Never claim you changed something unless you add the ACTION line.`
 
 type chatAction struct {
 	Type     string  `json:"type"`
@@ -246,26 +246,30 @@ type PendingChatAction struct {
 
 type ChatOutcome struct {
 	Reply   string
-	Created *ChatCreated
+	Created []ChatCreated
 	Pending *PendingChatAction
 }
 
-// splitChatAction separates the model's prose from the optional action line. A
+// splitChatActions separates the model's prose from its action lines. A
 // malformed action line stays in the reply so the owner sees what went wrong.
-func splitChatAction(reply string) (string, *chatAction) {
-	idx := strings.LastIndex(reply, "ACTION:")
-	if idx == -1 {
-		return reply, nil
+func splitChatActions(reply string) (string, []chatAction) {
+	lines := strings.Split(reply, "\n")
+	kept := make([]string, 0, len(lines))
+	var actions []chatAction
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if !strings.HasPrefix(trimmed, "ACTION:") {
+			kept = append(kept, line)
+			continue
+		}
+		var action chatAction
+		if err := json.Unmarshal([]byte(strings.TrimSpace(strings.TrimPrefix(trimmed, "ACTION:"))), &action); err != nil {
+			kept = append(kept, line)
+			continue
+		}
+		actions = append(actions, action)
 	}
-	line := reply[idx+len("ACTION:"):]
-	if nl := strings.IndexByte(line, '\n'); nl >= 0 {
-		line = line[:nl]
-	}
-	var action chatAction
-	if err := json.Unmarshal([]byte(strings.TrimSpace(line)), &action); err != nil {
-		return reply, nil
-	}
-	return strings.TrimSpace(reply[:idx]), &action
+	return strings.TrimSpace(strings.Join(kept, "\n")), actions
 }
 
 func (s *Server) RunChat(ctx context.Context, messages []ai.ChatMessage, tzOffset *int) (ChatOutcome, error) {
@@ -301,43 +305,45 @@ func (s *Server) RunChat(ctx context.Context, messages []ai.ChatMessage, tzOffse
 }
 
 func (s *Server) finishChat(ctx context.Context, rawReply string) (ChatOutcome, error) {
-	reply, action := splitChatAction(rawReply)
+	reply, actions := splitChatActions(rawReply)
 	if reply == "" {
 		reply = "Done."
 	}
 	outcome := ChatOutcome{Reply: reply}
-	if action == nil {
-		return outcome, nil
-	}
 
-	switch action.Type {
-	case "find_task":
-		text, err := s.findChatTask(ctx, *action)
-		if err != nil {
-			return ChatOutcome{}, err
-		}
-		outcome.Reply = text
-	case "move_task":
-		pending, text, ok, err := s.prepareChatMove(ctx, *action)
-		if err != nil {
-			return ChatOutcome{}, err
-		}
-		if !ok {
+	for _, action := range actions {
+		switch action.Type {
+		case "find_task":
+			text, err := s.findChatTask(ctx, action)
+			if err != nil {
+				return ChatOutcome{}, err
+			}
 			outcome.Reply = text
-			return outcome, nil
-		}
-		outcome.Pending = &pending
-		outcome.Reply = text
-	default:
-		created, err := s.applyChatAction(ctx, *action)
-		if err != nil {
-			return ChatOutcome{}, fmt.Errorf("could not create it: %w", err)
-		}
-		outcome.Created = &created
-		if created.Type == "reminder" {
-			s.broadcast("reminders")
-		} else {
-			s.broadcast("tasks")
+		case "move_task":
+			if outcome.Pending != nil {
+				continue
+			}
+			pending, text, ok, err := s.prepareChatMove(ctx, action)
+			if err != nil {
+				return ChatOutcome{}, err
+			}
+			if !ok {
+				outcome.Reply = text
+				continue
+			}
+			outcome.Pending = &pending
+			outcome.Reply = text
+		default:
+			created, err := s.applyChatAction(ctx, action)
+			if err != nil {
+				return ChatOutcome{}, fmt.Errorf("could not create it: %w", err)
+			}
+			outcome.Created = append(outcome.Created, created)
+			if created.Type == "reminder" {
+				s.broadcast("reminders")
+			} else {
+				s.broadcast("tasks")
+			}
 		}
 	}
 	return outcome, nil
@@ -662,7 +668,7 @@ func (s *Server) aiChat(w http.ResponseWriter, r *http.Request) {
 		_, _ = s.Store.CreateChatMessage(r.Context(), body.WorkspaceID, "assistant", outcome.Reply)
 	}
 	response := map[string]any{"reply": outcome.Reply}
-	if outcome.Created != nil {
+	if len(outcome.Created) > 0 {
 		response["created"] = outcome.Created
 	}
 	if outcome.Pending != nil {

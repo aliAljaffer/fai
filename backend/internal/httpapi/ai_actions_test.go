@@ -115,6 +115,31 @@ ACTION: {"type":"find_task","task":"@` + task.Ref + `"}`}
 	}
 }
 
+func TestChatCreatesOneTaskPerActionLine(t *testing.T) {
+	st := actionTestStore(t)
+	ctx := context.Background()
+	provider := &fakeAI{reply: `I will create the tasks.
+ACTION: {"type":"create_task","title":"Update node 1","due_date":""}
+ACTION: {"type":"create_task","title":"Update node 2","due_date":""}
+ACTION: {"type":"create_task","title":"Update node 3","due_date":""}`}
+	server := &Server{Store: st, AI: provider}
+	outcome, err := server.RunChat(ctx, []ai.ChatMessage{{Role: "user", Content: "create one task per node"}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(outcome.Created) != 3 {
+		t.Fatalf("created = %#v, reply = %q", outcome.Created, outcome.Reply)
+	}
+	if strings.Contains(outcome.Reply, "ACTION:") {
+		t.Errorf("reply leaked action lines: %q", outcome.Reply)
+	}
+	for _, created := range outcome.Created {
+		if _, err := st.GetTask(ctx, created.ID); err != nil {
+			t.Errorf("task %d: %v", created.ID, err)
+		}
+	}
+}
+
 func TestChatFindTaskAcceptsNumericID(t *testing.T) {
 	st := actionTestStore(t)
 	ctx := context.Background()

@@ -339,7 +339,7 @@ func TestChatCreatesTaskFromAction(t *testing.T) {
 	}
 	var body struct {
 		Reply   string `json:"reply"`
-		Created *struct {
+		Created []struct {
 			Type  string `json:"type"`
 			ID    int64  `json:"id"`
 			Title string `json:"title"`
@@ -352,10 +352,10 @@ func TestChatCreatesTaskFromAction(t *testing.T) {
 	if body.Reply != "Added it for Wednesday." {
 		t.Errorf("reply = %q", body.Reply)
 	}
-	if body.Created == nil || body.Created.Type != "task" {
+	if len(body.Created) != 1 || body.Created[0].Type != "task" {
 		t.Fatalf("created = %#v", body.Created)
 	}
-	task, err := st.GetTask(context.Background(), body.Created.ID)
+	task, err := st.GetTask(context.Background(), body.Created[0].ID)
 	if err != nil {
 		t.Fatal(err)
 	}
