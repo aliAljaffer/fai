@@ -210,23 +210,32 @@ type aiChatBody struct {
 }
 
 const chatActionInstructions = `You can also create or change things for the owner. When you do, add one final line to your reply for each change:
-ACTION: {"type":"create_task","title":"...","due_date":"YYYY-MM-DD"}
+ACTION: {"type":"create_task","title":"...","due_date":"YYYY-MM-DD","steps":["...","..."]}
+ACTION: {"type":"create_arc","title":"...","tasks":[{"title":"...","due_date":"YYYY-MM-DD","steps":["...","..."]}]}
 ACTION: {"type":"create_reminder","title":"...","remind_at":"RFC3339 with the local offset"}
 ACTION: {"type":"find_task","task":"@TAG-123"}
 ACTION: {"type":"move_task","task":"@TAG-123","column":"Column name"}
-Use create_task for work to do. Use create_reminder only when the owner asks to be reminded or names a time of day for a nudge.
+Use create_task for work to do. When the owner asks for steps or subtasks under one task, put their titles in steps instead of separate create_task actions. Use create_arc when the owner asks for an arc or epic, or for a group of tasks that each have steps. Use create_reminder only when the owner asks to be reminded or names a time of day for a nudge.
 Use find_task when the owner asks about an existing task. Use move_task to change the column of an existing task. Always copy the @ref from the task context for task actions. Never guess a task or a column.
 Resolve relative dates (today, tomorrow, Monday, in 10 minutes) against the current local time given below. A weekday alone means the next such day, or today when it is that day. Set a due date when the owner gives one and omit due_date when they do not.
 Write each ACTION line as strict JSON on its own line. Never claim you changed something unless you add the ACTION line.`
 
 type chatAction struct {
-	Type     string  `json:"type"`
-	Title    string  `json:"title"`
-	DueDate  *string `json:"due_date"`
-	RemindAt string  `json:"remind_at"`
-	Task     string  `json:"task"`
-	TaskID   int64   `json:"task_id"`
-	Column   string  `json:"column"`
+	Type     string         `json:"type"`
+	Title    string         `json:"title"`
+	DueDate  *string        `json:"due_date"`
+	RemindAt string         `json:"remind_at"`
+	Task     string         `json:"task"`
+	TaskID   int64          `json:"task_id"`
+	Column   string         `json:"column"`
+	Steps    []string       `json:"steps"`
+	Tasks    []chatTaskSpec `json:"tasks"`
+}
+
+type chatTaskSpec struct {
+	Title   string   `json:"title"`
+	DueDate *string  `json:"due_date"`
+	Steps   []string `json:"steps"`
 }
 
 type ChatCreated struct {
@@ -356,30 +365,42 @@ func (s *Server) applyChatAction(ctx context.Context, action chatAction) (ChatCr
 	}
 	switch action.Type {
 	case "create_task":
-		var due *string
-		if action.DueDate != nil && strings.TrimSpace(*action.DueDate) != "" {
-			value := strings.TrimSpace(*action.DueDate)
-			if _, err := time.Parse("2006-01-02", value); err != nil {
-				return ChatCreated{}, fmt.Errorf("invalid due date %q", value)
-			}
-			due = &value
+		due, err := chatDueDate(action.DueDate)
+		if err != nil {
+			return ChatCreated{}, err
 		}
 		boardID, columnID, err := s.defaultBoardColumn(ctx)
 		if err != nil {
 			return ChatCreated{}, err
 		}
-		position, err := s.appendPosition(ctx, columnID)
-		if err != nil {
-			return ChatCreated{}, err
-		}
-		task, err := s.Store.CreateTask(ctx, store.CreateTaskParams{
-			BoardID: boardID, ColumnID: columnID, Title: title,
-			Priority: "medium", DueDate: due, Position: position, CreatedByFai: true,
-		})
+		task, err := s.createChatTask(ctx, boardID, columnID, title, due, nil, "", action.Steps)
 		if err != nil {
 			return ChatCreated{}, err
 		}
 		return ChatCreated{Type: "task", ID: task.ID, Title: task.Title}, nil
+	case "create_arc":
+		boardID, columnID, err := s.defaultBoardColumn(ctx)
+		if err != nil {
+			return ChatCreated{}, err
+		}
+		arc, err := s.createChatTask(ctx, boardID, columnID, title, nil, nil, "arc", nil)
+		if err != nil {
+			return ChatCreated{}, err
+		}
+		for _, spec := range action.Tasks {
+			taskTitle := strings.TrimSpace(spec.Title)
+			if taskTitle == "" {
+				continue
+			}
+			due, err := chatDueDate(spec.DueDate)
+			if err != nil {
+				return ChatCreated{}, err
+			}
+			if _, err := s.createChatTask(ctx, boardID, columnID, taskTitle, due, &arc.ID, "task", spec.Steps); err != nil {
+				return ChatCreated{}, err
+			}
+		}
+		return ChatCreated{Type: "arc", ID: arc.ID, Title: arc.Title}, nil
 	case "create_reminder":
 		remindAt, err := time.Parse(time.RFC3339, action.RemindAt)
 		if err != nil {
@@ -393,6 +414,48 @@ func (s *Server) applyChatAction(ctx context.Context, action chatAction) (ChatCr
 	default:
 		return ChatCreated{}, fmt.Errorf("unknown action %q", action.Type)
 	}
+}
+
+func chatDueDate(raw *string) (*string, error) {
+	if raw == nil || strings.TrimSpace(*raw) == "" {
+		return nil, nil
+	}
+	value := strings.TrimSpace(*raw)
+	if _, err := time.Parse("2006-01-02", value); err != nil {
+		return nil, fmt.Errorf("invalid due date %q", value)
+	}
+	return &value, nil
+}
+
+func (s *Server) createChatTask(ctx context.Context, boardID, columnID int64, title string, due *string, parentID *int64, kind string, steps []string) (store.Task, error) {
+	position, err := s.appendPosition(ctx, columnID)
+	if err != nil {
+		return store.Task{}, err
+	}
+	task, err := s.Store.CreateTask(ctx, store.CreateTaskParams{
+		BoardID: boardID, ColumnID: columnID, Title: title, Priority: "medium",
+		DueDate: due, Position: position, ParentTaskID: parentID, Kind: kind, CreatedByFai: true,
+	})
+	if err != nil {
+		return store.Task{}, err
+	}
+	for _, raw := range steps {
+		stepTitle := strings.TrimSpace(raw)
+		if stepTitle == "" {
+			continue
+		}
+		stepPosition, err := s.appendPosition(ctx, columnID)
+		if err != nil {
+			return store.Task{}, err
+		}
+		if _, err := s.Store.CreateTask(ctx, store.CreateTaskParams{
+			BoardID: boardID, ColumnID: columnID, Title: stepTitle, Priority: "medium",
+			Position: stepPosition, ParentTaskID: &task.ID, CreatedByFai: true,
+		}); err != nil {
+			return store.Task{}, err
+		}
+	}
+	return task, nil
 }
 
 func (s *Server) resolveChatActionTask(ctx context.Context, action chatAction) (store.Task, []store.TaskRef, error) {

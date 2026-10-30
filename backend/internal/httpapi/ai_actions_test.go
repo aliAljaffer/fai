@@ -115,6 +115,74 @@ ACTION: {"type":"find_task","task":"@` + task.Ref + `"}`}
 	}
 }
 
+func TestChatCreateTaskStepsNestUnderTask(t *testing.T) {
+	st := actionTestStore(t)
+	ctx := context.Background()
+	provider := &fakeAI{reply: `I will create one task with five steps.
+ACTION: {"type":"create_task","title":"Update homelab TalosOS version","steps":["Update control plane/worker node 1","Update control plane/worker node 2","Update control plane/worker node 3","Update pure worker node 1","Update pure worker node 2"]}`}
+	server := &Server{Store: st, AI: provider}
+	outcome, err := server.RunChat(ctx, []ai.ChatMessage{{Role: "user", Content: "add a task with a step for each of the 5 nodes"}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(outcome.Created) != 1 {
+		t.Fatalf("created = %#v", outcome.Created)
+	}
+	steps, err := st.ListSubtasks(ctx, outcome.Created[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(steps) != 5 {
+		t.Fatalf("steps = %d, want 5", len(steps))
+	}
+	for _, step := range steps {
+		if step.Kind != "step" || step.ParentTaskID == nil || *step.ParentTaskID != outcome.Created[0].ID {
+			t.Errorf("step %q: kind=%q parent=%v", step.Title, step.Kind, step.ParentTaskID)
+		}
+	}
+}
+
+func TestChatCreateArcNestsTasksAndSteps(t *testing.T) {
+	st := actionTestStore(t)
+	ctx := context.Background()
+	provider := &fakeAI{reply: `I will create the arc.
+ACTION: {"type":"create_arc","title":"Migrate the homelab","tasks":[{"title":"Update TalosOS","steps":["Update control plane 1","Update worker 1"]},{"title":"Update Cilium","steps":[]}]}`}
+	server := &Server{Store: st, AI: provider}
+	outcome, err := server.RunChat(ctx, []ai.ChatMessage{{Role: "user", Content: "create an arc with tasks and steps"}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(outcome.Created) != 1 || outcome.Created[0].Type != "arc" {
+		t.Fatalf("created = %#v", outcome.Created)
+	}
+	arc, err := st.GetTask(ctx, outcome.Created[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if arc.Kind != "arc" || arc.ParentTaskID != nil {
+		t.Fatalf("arc = %#v", arc)
+	}
+	tasks, err := st.ListSubtasks(ctx, arc.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tasks) != 2 {
+		t.Fatalf("tasks = %d, want 2", len(tasks))
+	}
+	steps, err := st.ListSubtasks(ctx, tasks[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(steps) != 2 {
+		t.Fatalf("steps = %d, want 2", len(steps))
+	}
+	for _, step := range steps {
+		if step.Kind != "step" || step.ParentTaskID == nil || *step.ParentTaskID != tasks[0].ID {
+			t.Errorf("step %q: kind=%q parent=%v", step.Title, step.Kind, step.ParentTaskID)
+		}
+	}
+}
+
 func TestChatCreatesOneTaskPerActionLine(t *testing.T) {
 	st := actionTestStore(t)
 	ctx := context.Background()
