@@ -16,6 +16,7 @@ import (
 	"github.com/alialjaffer/fai/backend/internal/httpapi"
 	"github.com/alialjaffer/fai/backend/internal/jira"
 	"github.com/alialjaffer/fai/backend/internal/mailer"
+	"github.com/alialjaffer/fai/backend/internal/metrics"
 	"github.com/alialjaffer/fai/backend/internal/migrate"
 	"github.com/alialjaffer/fai/backend/internal/ntfy"
 	"github.com/alialjaffer/fai/backend/internal/reminders"
@@ -92,6 +93,7 @@ func main() {
 		AttachmentsDir:       cfg.AttachmentsDir,
 		StaticDir:            cfg.StaticDir,
 		AuthMiddleware:       authMiddleware,
+		Metrics:              metrics.New(st),
 	}
 	if cfg.ElevenLabsAPIKey != "" {
 		server.Transcriber = transcribe.NewElevenLabs(cfg.ElevenLabsAPIKey, cfg.ElevenLabsSTTModel)
@@ -134,6 +136,14 @@ func main() {
 	}
 
 	addr := net.JoinHostPort(cfg.BindAddr, cfg.Port)
+	if cfg.MetricsAddr != "" {
+		go func() {
+			log.Printf("fai metrics listening on %s", cfg.MetricsAddr)
+			if err := http.ListenAndServe(cfg.MetricsAddr, server.Metrics.Handler()); err != nil {
+				log.Printf("metrics server stopped: %v", err)
+			}
+		}()
+	}
 	log.Printf("fai backend listening on %s", addr)
 	// ReadHeaderTimeout bounds unauthenticated slow-header requests; the read and
 	// write timeouts stay unset because AI calls can legitimately run for a minute.

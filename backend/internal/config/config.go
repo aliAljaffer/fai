@@ -7,9 +7,12 @@ import (
 )
 
 type Config struct {
-	DatabaseURL          string
-	Port                 string
-	BindAddr             string
+	DatabaseURL string
+	Port        string
+	BindAddr    string
+	// MetricsAddr enables the Prometheus listener when set (e.g. ":9090").
+	// Empty keeps it off, so the docker-compose deployment exposes no extra port.
+	MetricsAddr          string
 	DisableAuth          bool
 	OIDCIssuerURL        string
 	OIDCAudience         string
@@ -75,6 +78,7 @@ func Load() Config {
 		DatabaseURL:           os.Getenv("DATABASE_URL"),
 		Port:                  envOr("PORT", "8080"),
 		BindAddr:              os.Getenv("BIND_ADDR"),
+		MetricsAddr:           os.Getenv("METRICS_ADDR"),
 		DisableAuth:           os.Getenv("DISABLE_AUTH") == "true",
 		OIDCIssuerURL:         os.Getenv("OIDC_ISSUER_URL"),
 		OIDCAudience:          os.Getenv("OIDC_AUDIENCE"),

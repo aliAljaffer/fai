@@ -10,6 +10,7 @@ import (
 
 	"github.com/alialjaffer/fai/backend/internal/ai"
 	"github.com/alialjaffer/fai/backend/internal/jira"
+	"github.com/alialjaffer/fai/backend/internal/metrics"
 	"github.com/alialjaffer/fai/backend/internal/store"
 )
 
@@ -41,6 +42,8 @@ type Server struct {
 	// AuthMiddleware validates bearer tokens on every /api/* route when set.
 	// Left nil under DISABLE_AUTH for local dev.
 	AuthMiddleware func(http.Handler) http.Handler
+	// Metrics, when set, records request counts and latency per route pattern.
+	Metrics *metrics.Metrics
 
 	// Last poll result per calendar source, so a failed background sync is
 	// visible in the UI even while cached events are served.
@@ -62,6 +65,9 @@ type Transcriber interface {
 
 func NewRouter(s *Server) http.Handler {
 	r := chi.NewRouter()
+	if s.Metrics != nil {
+		r.Use(s.Metrics.Middleware)
+	}
 	r.Use(securityHeaders)
 	// The calendar feed carries its credential in the query string; keep it out
 	// of the access log without touching the handler's view of the request.
