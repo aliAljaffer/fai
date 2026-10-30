@@ -87,11 +87,21 @@ jobs:
       - name: Package
         working-directory: electron
         shell: bash
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           if [ "$RUNNER_OS" = "Windows" ]; then
             npx electron-builder --win "--${{ matrix.arch }}" --publish never
           elif [ "$RUNNER_OS" = "macOS" ]; then
-            npx electron-builder --mac "--${{ matrix.arch }}" --publish never
+            if [ -z "${APPLE_ID:-}" ]; then
+              echo "APPLE_ID is not set, skipping notarization"
+              NOTARIZE="--config.mac.notarize=false"
+            fi
+            npx electron-builder --mac "--${{ matrix.arch }}" --publish never $NOTARIZE
           else
             npx electron-builder --linux "--${{ matrix.arch }}" --publish never
           fi
@@ -114,6 +124,32 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Check out main
+        run: |
+          git fetch origin main
+          git checkout -B main origin/main
+
+      - name: Generate changelog
+        run: |
+          python3 .github/changelog.py \
+            --tag "$RELEASE_TAG" \
+            --notes release-notes.md \
+            --changelog CHANGELOG.md
+
+      - name: Commit the changelog
+        run: |
+          if git diff --quiet CHANGELOG.md; then
+            echo "CHANGELOG.md is already up to date"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add CHANGELOG.md
+          git commit -m "Add the ${RELEASE_TAG} changelog [skip ci]"
+          git push origin main
 
       - uses: actions/download-artifact@v8
         with:
@@ -133,7 +169,7 @@ jobs:
         with:
           tag_name: ${{ env.RELEASE_TAG }}
           name: fai ${{ env.RELEASE_TAG }}
-          generate_release_notes: true
+          body_path: release-notes.md
           files: dist/*
 
   homebrew:
