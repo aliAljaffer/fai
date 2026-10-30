@@ -15,9 +15,11 @@ the short install commands.
 | Calendar | Import iCalendar feeds, show recurring events, and create tasks from meeting action items |
 | Search and stats | Search tasks and notes. View completion heatmaps and tracked-time charts. |
 | Reminders | Show reminders on the board. Send notifications through ntfy or email. |
-| AI | Generate task breakdowns, label suggestions, note plans, meeting action items, and chat |
+| AI | Chat creates tasks with steps and arcs with nested tasks. Also generates label suggestions, note plans, and meeting action items. |
 | Jira | Import issues with JQL, export tasks, and map Jira statuses to board columns |
-| Themes | Built-in palettes, custom palettes, and workspace colors |
+| Themes | Built-in palettes, custom palettes, and workspace colors. Workspace themes are stored in the database. |
+| Live updates | `GET /api/events` streams server-sent events. Every open client sees changes made on another device. |
+| Backup | `GET /api/backup` downloads a zip with the database and attachments. `POST /api/backup/restore` restores it after you type `I understand`. |
 
 ## Requirements
 
@@ -81,6 +83,8 @@ are stored beside the database.
 make electron-dev
 make electron-dist
 ```
+
+The desktop app checks for updates with `electron-updater`.
 
 Data locations:
 
