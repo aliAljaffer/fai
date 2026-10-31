@@ -36,7 +36,7 @@ import {
 } from '../../api/hooks'
 import type { BoardColumn, Task } from '../../api/types'
 
-const SECTION_HEADING = 'text-xs font-semibold tracking-wide text-muted-foreground uppercase'
+const SECTION_HEADING = 'text-xs font-semibold text-muted-foreground'
 const FIELD_LABEL = 'text-xs font-medium text-muted-foreground'
 
 export function TaskInlineEditor({

@@ -97,7 +97,7 @@ export function Chat() {
                   : 'mr-auto max-w-[85%] rounded-md bg-muted/50 px-3 py-2 text-sm'
               }
             >
-              <p className="mb-1 text-[0.65rem] font-medium tracking-wide text-muted-foreground uppercase">
+              <p className="mb-1 text-[0.65rem] font-medium text-muted-foreground">
                 {message.role === 'user' ? 'You' : 'Fai'}
               </p>
               <MarkdownRenderer source={message.content} />

@@ -30,7 +30,7 @@ export function RefPicker({ picker }: { picker: RefPickerState }) {
       {picker.options.map((option, index) => (
         <Fragment key={option.key}>
           {option.group && option.group !== picker.options[index - 1]?.group && (
-            <span className="px-2 pt-1.5 pb-0.5 text-[0.65rem] font-medium tracking-wide text-muted-foreground uppercase">
+            <span className="px-2 pt-1.5 pb-0.5 text-[0.65rem] font-medium text-muted-foreground">
               {option.group}
             </span>
           )}

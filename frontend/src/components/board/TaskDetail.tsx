@@ -442,9 +442,7 @@ function TaskMentions({ taskId }: { taskId: number }) {
         if (!items.length) return null
         return (
           <div key={group.kind} className="flex flex-col gap-1">
-            <span className="text-[0.65rem] tracking-wide text-muted-foreground uppercase">
-              {group.label}
-            </span>
+            <span className="text-[0.65rem] text-muted-foreground">{group.label}</span>
             <ul className="flex flex-col gap-1">
               {items.map((item) => (
                 <li key={`${item.kind}-${item.id}`}>

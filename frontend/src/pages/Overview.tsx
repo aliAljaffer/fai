@@ -119,9 +119,7 @@ function TaskRow({ task, onOpen }: { task: Task; onOpen: (id: number) => void })
         </span>
       </span>
       {task.priority === 'high' && (
-        <span className="shrink-0 text-[0.65rem] font-medium tracking-wide text-destructive uppercase">
-          High
-        </span>
+        <span className="shrink-0 text-[0.65rem] font-medium text-destructive">High</span>
       )}
       <ChevronRight className="size-4 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
     </button>
@@ -265,10 +263,8 @@ export function Overview() {
     <div className="flex flex-col gap-6">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div className="flex flex-col gap-1">
-          <p className="text-xs font-medium tracking-[0.14em] text-muted-foreground uppercase">
-            {format(now, 'EEEE d MMMM')}
-          </p>
-          <h1 className="text-2xl font-semibold tracking-tight">{greetingFor(now.getHours())}</h1>
+          <p className="text-xs font-medium text-muted-foreground">{greetingFor(now.getHours())}</p>
+          <h1 className="text-2xl font-semibold tracking-tight">{format(now, 'EEEE d MMMM')}</h1>
           <p className="text-sm text-muted-foreground">
             Here is what the day looks like. Open a task to see the details.
           </p>
