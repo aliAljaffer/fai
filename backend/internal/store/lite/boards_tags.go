@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
 
 	"github.com/alialjaffer/fai/backend/internal/db/sqlitedb"
 	"github.com/alialjaffer/fai/backend/internal/store"
@@ -157,25 +158,53 @@ func (s *Store) RemoveTaskTag(ctx context.Context, taskID, tagID int64) error {
 	return s.q.RemoveTaskTag(ctx, sqlitedb.RemoveTaskTagParams{TaskID: taskID, TagID: tagID})
 }
 
+// Keeps the IN list under SQLite's bound-parameter limit.
+const tagChunkSize = 500
+
+func (s *Store) tagsForTasks(ctx context.Context, taskIDs []int64) (map[int64][]store.Tag, error) {
+	out := make(map[int64][]store.Tag, len(taskIDs))
+	for start := 0; start < len(taskIDs); start += tagChunkSize {
+		end := min(start+tagChunkSize, len(taskIDs))
+		chunk := taskIDs[start:end]
+		args := make([]any, len(chunk))
+		for i, id := range chunk {
+			args[i] = id
+		}
+		placeholders := strings.TrimSuffix(strings.Repeat("?,", len(chunk)), ",")
+		rows, err := s.db.QueryContext(ctx, `
+			SELECT tt.task_id, t.id, t.name, t.color
+			FROM tags t
+			JOIN task_tags tt ON tt.tag_id = t.id
+			WHERE tt.task_id IN (`+placeholders+`)
+			ORDER BY t.name`, args...)
+		if err != nil {
+			return nil, err
+		}
+		for rows.Next() {
+			var taskID int64
+			var tag store.Tag
+			if err := rows.Scan(&taskID, &tag.ID, &tag.Name, &tag.Color); err != nil {
+				rows.Close()
+				return nil, err
+			}
+			out[taskID] = append(out[taskID], tag)
+		}
+		if err := rows.Err(); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		rows.Close()
+	}
+	return out, nil
+}
+
 func (s *Store) ListTagsForTask(ctx context.Context, taskID int64) ([]store.Tag, error) {
-	rows, err := s.db.QueryContext(ctx, `
-		SELECT t.id, t.name, t.color
-		FROM tags t
-		JOIN task_tags tt ON tt.tag_id = t.id
-		WHERE tt.task_id = ?
-		ORDER BY t.name`, taskID)
+	tags, err := s.tagsForTasks(ctx, []int64{taskID})
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-
-	tags := []store.Tag{}
-	for rows.Next() {
-		var t store.Tag
-		if err := rows.Scan(&t.ID, &t.Name, &t.Color); err != nil {
-			return nil, err
-		}
-		tags = append(tags, t)
+	if got := tags[taskID]; got != nil {
+		return got, nil
 	}
-	return tags, rows.Err()
+	return []store.Tag{}, nil
 }

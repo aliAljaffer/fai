@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/alialjaffer/fai/backend/internal/mailer"
@@ -78,7 +80,7 @@ func (s *Scheduler) tick(ctx context.Context) {
 // item sent after a partial failure avoids re-sending a channel that already
 // succeeded on the next tick.
 func (s *Scheduler) notify(ctx context.Context, kind string, id int64, subject, message string) bool {
-	delivered := false
+	var delivered atomic.Bool
 	sendNtfy, sendMail, sendTelegram := true, true, true
 	switch s.Channel {
 	case "":
@@ -92,26 +94,40 @@ func (s *Scheduler) notify(ctx context.Context, kind string, id int64, subject, 
 		log.Printf("reminders: unknown channel %q, using every configured channel", s.Channel)
 	}
 
+	var wg sync.WaitGroup
 	if sendNtfy && s.Ntfy != nil {
-		if err := s.Ntfy.Publish(subject, message); err != nil {
-			log.Printf("%s: ntfy %d: %v", kind, id, err)
-		} else {
-			delivered = true
-		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := s.Ntfy.Publish(subject, message); err != nil {
+				log.Printf("%s: ntfy %d: %v", kind, id, err)
+			} else {
+				delivered.Store(true)
+			}
+		}()
 	}
 	if sendMail && s.Mail != nil {
-		if err := s.Mail.Send(ctx, "fai: "+subject, message); err != nil {
-			log.Printf("%s: email %d: %v", kind, id, err)
-		} else {
-			delivered = true
-		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := s.Mail.Send(ctx, "fai: "+subject, message); err != nil {
+				log.Printf("%s: email %d: %v", kind, id, err)
+			} else {
+				delivered.Store(true)
+			}
+		}()
 	}
 	if sendTelegram && s.Telegram != nil {
-		if err := s.Telegram.Publish(subject, message); err != nil {
-			log.Printf("%s: telegram %d: %v", kind, id, err)
-		} else {
-			delivered = true
-		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := s.Telegram.Publish(subject, message); err != nil {
+				log.Printf("%s: telegram %d: %v", kind, id, err)
+			} else {
+				delivered.Store(true)
+			}
+		}()
 	}
-	return delivered
+	wg.Wait()
+	return delivered.Load()
 }

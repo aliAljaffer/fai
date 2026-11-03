@@ -3,11 +3,14 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
+
+	"golang.org/x/sync/errgroup"
 
 	"github.com/alialjaffer/fai/backend/internal/ai"
 	"github.com/alialjaffer/fai/backend/internal/store"
@@ -136,21 +139,36 @@ func (s *Server) aiSuggestLabelsBatch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
-	tasks := make([]store.Task, 0, len(body.TaskIDs))
-	for _, id := range body.TaskIDs {
-		task, err := s.Store.GetTask(ctx, id)
-		if err != nil {
+	tasks := make([]store.Task, len(body.TaskIDs))
+	var tags []store.Tag
+	errTaskNotFound := errors.New("task not found")
+	g, ctx := errgroup.WithContext(ctx)
+	g.SetLimit(8)
+	for i, id := range body.TaskIDs {
+		i, id := i, id
+		g.Go(func() error {
+			task, err := s.Store.GetTask(ctx, id)
+			if err != nil {
+				return errTaskNotFound
+			}
+			tasks[i] = task
+			return nil
+		})
+	}
+	g.Go(func() error {
+		var err error
+		tags, err = s.Store.ListTags(ctx)
+		return err
+	})
+	if err := g.Wait(); err != nil {
+		if errors.Is(err, errTaskNotFound) {
 			writeError(w, http.StatusNotFound, "task not found")
 			return
 		}
-		tasks = append(tasks, task)
-	}
-
-	tags, err := s.Store.ListTags(ctx)
-	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+
 	existing := make([]string, 0, len(tags))
 	for _, tag := range tags {
 		existing = append(existing, tag.Name)
@@ -777,19 +795,33 @@ func (s *Server) confirmChatAction(w http.ResponseWriter, r *http.Request) {
 // faiContext gives the chat a small, bounded picture of the owner's work. Task
 // bodies and note bodies stay out of the prompt.
 func (s *Server) faiContext(ctx context.Context) string {
-	boards, err := s.Store.ListBoards(ctx, nil)
-	if err != nil {
+	var boards []store.Board
+	var tasks []store.Task
+	var notes []store.Note
+	var boardsErr, tasksErr, notesErr error
+	var load errgroup.Group
+	load.Go(func() error {
+		boards, boardsErr = s.Store.ListBoards(ctx, nil)
+		return nil
+	})
+	load.Go(func() error {
+		tasks, tasksErr = s.Store.ListTasks(ctx, store.ListTasksParams{})
+		return nil
+	})
+	load.Go(func() error {
+		notes, notesErr = s.Store.ListNotes(ctx, nil)
+		return nil
+	})
+	_ = load.Wait()
+	if boardsErr != nil || tasksErr != nil {
 		return ""
 	}
+
 	boardName := make(map[int64]string, len(boards))
 	for _, board := range boards {
 		boardName[board.ID] = board.Name
 	}
 
-	tasks, err := s.Store.ListTasks(ctx, store.ListTasksParams{})
-	if err != nil {
-		return ""
-	}
 	var out strings.Builder
 	out.WriteString("Tasks:\n")
 	count := 0
@@ -829,20 +861,26 @@ func (s *Server) faiContext(ctx context.Context) string {
 	}
 
 	out.WriteString("\nBoard columns:\n")
-	for _, board := range boards {
-		columns, err := s.Store.ListColumnsByBoard(ctx, board.ID)
-		if err != nil {
-			continue
-		}
-		out.WriteString("- ")
-		out.WriteString(board.Name)
-		out.WriteString(": ")
-		out.WriteString(columnNames(columns))
-		out.WriteString("\n")
+	columnLines := make([]string, len(boards))
+	var loadColumns errgroup.Group
+	loadColumns.SetLimit(4)
+	for i, board := range boards {
+		i, board := i, board
+		loadColumns.Go(func() error {
+			columns, err := s.Store.ListColumnsByBoard(ctx, board.ID)
+			if err != nil {
+				return nil
+			}
+			columnLines[i] = "- " + board.Name + ": " + columnNames(columns) + "\n"
+			return nil
+		})
+	}
+	_ = loadColumns.Wait()
+	for _, line := range columnLines {
+		out.WriteString(line)
 	}
 
-	notes, err := s.Store.ListNotes(ctx, nil)
-	if err == nil {
+	if notesErr == nil {
 		out.WriteString("\nNotes:\n")
 		if len(notes) == 0 {
 			out.WriteString("No notes.\n")

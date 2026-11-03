@@ -15,6 +15,8 @@ import (
 	"syscall"
 	"time"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/alialjaffer/fai/backend/internal/ics"
 	"github.com/alialjaffer/fai/backend/internal/store"
 )
@@ -193,23 +195,32 @@ func (s *Server) listImportedCalendars(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	out := make([]importedCalendar, 0, len(sources))
-	for _, source := range sources {
-		item := importedCalendar{Source: source, Events: []importedEvent{}}
-		data, fetchedAt, err := s.calendarFeedData(r.Context(), source, false)
-		if !fetchedAt.IsZero() {
-			item.LastSyncedAt = fetchedAt.UTC().Format(time.RFC3339)
-		}
-		if err == nil {
-			item.Events, err = parseImportedEvents(source, data, from, to)
-		}
-		if err != nil {
-			item.Error = err.Error()
-		} else {
-			item.Error = s.calendarSyncError(source.ID)
-		}
-		out = append(out, item)
+	out := make([]importedCalendar, len(sources))
+	for i, source := range sources {
+		out[i] = importedCalendar{Source: source, Events: []importedEvent{}}
 	}
+	var g errgroup.Group
+	g.SetLimit(4)
+	for i, source := range sources {
+		i, source := i, source
+		g.Go(func() error {
+			item := &out[i]
+			data, fetchedAt, err := s.calendarFeedData(r.Context(), source, false)
+			if !fetchedAt.IsZero() {
+				item.LastSyncedAt = fetchedAt.UTC().Format(time.RFC3339)
+			}
+			if err == nil {
+				item.Events, err = parseImportedEvents(source, data, from, to)
+			}
+			if err != nil {
+				item.Error = err.Error()
+			} else {
+				item.Error = s.calendarSyncError(source.ID)
+			}
+			return nil
+		})
+	}
+	_ = g.Wait()
 	sort.Slice(out, func(i, j int) bool { return out[i].Source.Name < out[j].Source.Name })
 	writeJSON(w, http.StatusOK, out)
 }
@@ -310,11 +321,18 @@ func (s *Server) syncCalendarFeeds(ctx context.Context) {
 		log.Printf("listing calendar feeds for sync: %v", err)
 		return
 	}
+	var g errgroup.Group
+	g.SetLimit(4)
 	for _, source := range sources {
-		if _, _, err := s.calendarFeedData(ctx, source, true); err != nil {
-			log.Printf("syncing calendar feed %s: %v", source.Name, err)
-		}
+		source := source
+		g.Go(func() error {
+			if _, _, err := s.calendarFeedData(ctx, source, true); err != nil {
+				log.Printf("syncing calendar feed %s: %v", source.Name, err)
+			}
+			return nil
+		})
 	}
+	_ = g.Wait()
 }
 
 func fetchCalendarFeed(ctx context.Context, source store.CalendarSource) ([]byte, error) {

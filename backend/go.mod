@@ -12,6 +12,7 @@ require (
 	github.com/prometheus/client_golang v1.25.0
 	github.com/sahilm/fuzzy v0.1.3
 	github.com/teambition/rrule-go v1.8.2
+	golang.org/x/sync v0.24.0
 	golang.org/x/time v0.16.0
 	modernc.org/sqlite v1.61.0
 )
@@ -54,7 +55,6 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	go.yaml.in/yaml/v4 v4.0.0-rc.2 // indirect
 	golang.org/x/oauth2 v0.37.0 // indirect
-	golang.org/x/sync v0.24.0 // indirect
 	golang.org/x/sys v0.49.0 // indirect
 	golang.org/x/text v0.43.0 // indirect
 	google.golang.org/protobuf v1.36.12 // indirect

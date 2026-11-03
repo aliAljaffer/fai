@@ -24,6 +24,10 @@ func toTask(t sqlitedb.Task) store.Task {
 }
 
 func (s *Store) decorateTasks(ctx context.Context, tasks []store.Task) error {
+	if len(tasks) == 0 {
+		return nil
+	}
+
 	rows, err := s.db.QueryContext(ctx, `SELECT id, tag FROM workspaces`)
 	if err != nil {
 		return err
@@ -44,10 +48,18 @@ func (s *Store) decorateTasks(ctx context.Context, tasks []store.Task) error {
 	}
 	rows.Close()
 
+	ids := make([]int64, len(tasks))
 	for i := range tasks {
-		tags, err := s.ListTagsForTask(ctx, tasks[i].ID)
-		if err != nil {
-			return err
+		ids[i] = tasks[i].ID
+	}
+	tagsByTask, err := s.tagsForTasks(ctx, ids)
+	if err != nil {
+		return err
+	}
+	for i := range tasks {
+		tags := tagsByTask[tasks[i].ID]
+		if tags == nil {
+			tags = []store.Tag{}
 		}
 		tasks[i].Tags = tags
 		tasks[i].Ref = tagsByWorkspace[tasks[i].WorkspaceID] + "-" + strconv.FormatInt(tasks[i].RefNum, 10)

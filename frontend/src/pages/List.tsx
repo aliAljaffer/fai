@@ -403,8 +403,11 @@ export function List() {
     try {
       const ids = (tasks ?? []).map((task) => task.id)
       const merged: Record<number, string[]> = {}
+      const batches: Promise<{ results: { task_id: number; labels: string[] }[] }>[] = []
       for (let i = 0; i < ids.length; i += labelBatchSize) {
-        const { results } = await suggestBatch.mutateAsync(ids.slice(i, i + labelBatchSize))
+        batches.push(suggestBatch.mutateAsync(ids.slice(i, i + labelBatchSize)))
+      }
+      for (const { results } of await Promise.all(batches)) {
         for (const result of results) merged[result.task_id] = result.labels
       }
       setSuggestions(merged)
@@ -446,10 +449,12 @@ export function List() {
     const groups = suggestionGroups
     setSuggestions({})
     try {
-      for (const group of groups) {
-        const tag = await tagFor(group.label)
-        await bulk.mutateAsync({ tasks: group.tasks, action: { type: 'addTag', tagId: tag.id } })
-      }
+      await Promise.all(
+        groups.map(async (group) => {
+          const tag = await tagFor(group.label)
+          await bulk.mutateAsync({ tasks: group.tasks, action: { type: 'addTag', tagId: tag.id } })
+        }),
+      )
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Could not add labels')
     }

@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/alialjaffer/fai/backend/internal/store"
 )
 
@@ -82,31 +84,52 @@ func (s *Server) exportWorkspaceTasks(w http.ResponseWriter, r *http.Request) {
 	}
 	entries := []entry{}
 	refs := map[int64]string{}
-	for _, board := range boards {
-		columns, err := s.Store.ListColumnsByBoard(r.Context(), board.ID)
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-		columnByID := map[int64]store.BoardColumn{}
-		for _, column := range columns {
-			columnByID[column.ID] = column
-		}
-		tasks, err := s.Store.ListTasks(r.Context(), store.ListTasksParams{BoardID: &board.ID})
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-		for _, task := range tasks {
-			column := columnByID[task.ColumnID]
-			entries = append(entries, entry{
-				task:       task,
-				boardName:  board.Name,
-				columnName: column.Name,
-				columnPos:  column.Position,
-				columnDone: column.IsDone,
-			})
-			refs[task.ID] = task.Ref
+	type boardResult struct {
+		entries []entry
+		refs    map[int64]string
+	}
+	results := make([]boardResult, len(boards))
+	var g errgroup.Group
+	g.SetLimit(4)
+	for i, board := range boards {
+		i, board := i, board
+		g.Go(func() error {
+			columns, err := s.Store.ListColumnsByBoard(r.Context(), board.ID)
+			if err != nil {
+				return err
+			}
+			columnByID := map[int64]store.BoardColumn{}
+			for _, column := range columns {
+				columnByID[column.ID] = column
+			}
+			tasks, err := s.Store.ListTasks(r.Context(), store.ListTasksParams{BoardID: &board.ID})
+			if err != nil {
+				return err
+			}
+			result := boardResult{refs: make(map[int64]string, len(tasks))}
+			for _, task := range tasks {
+				column := columnByID[task.ColumnID]
+				result.entries = append(result.entries, entry{
+					task:       task,
+					boardName:  board.Name,
+					columnName: column.Name,
+					columnPos:  column.Position,
+					columnDone: column.IsDone,
+				})
+				result.refs[task.ID] = task.Ref
+			}
+			results[i] = result
+			return nil
+		})
+	}
+	if err := g.Wait(); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	for _, result := range results {
+		entries = append(entries, result.entries...)
+		for id, ref := range result.refs {
+			refs[id] = ref
 		}
 	}
 	sort.SliceStable(entries, func(i, j int) bool {
