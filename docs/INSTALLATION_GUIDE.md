@@ -191,10 +191,10 @@ services, `AI_BASE_URL`.
 Set `AI_FALLBACK_MODEL` to retry with a second model when the first one fails.
 `AI_FALLBACK_PROVIDER`, `AI_FALLBACK_BASE_URL`, and `AI_FALLBACK_API_KEY` default
 to the primary provider, base URL, and key. For example,
-`AI_MODEL=deepseek-v4.1-flash-free` with
-`AI_FALLBACK_PROVIDER=opencode-go` and
-`AI_FALLBACK_MODEL=deepseek-v4.1-flash` uses the free model first and the
-subscription model when the free quota is exhausted.
+`AI_PROVIDER=opencode-go` with `AI_MODEL=deepseek-v4.1-flash` and
+`AI_FALLBACK_PROVIDER=opencode-zen` with
+`AI_FALLBACK_MODEL=deepseek-v4.1-flash-free` uses the OpenCode Go subscription
+first and the free model when the subscription is unavailable.
 
 Settings can also store the provider, model, base URL, and key in the database.
 Saved settings override environment values. AI endpoints are rate-limited per
