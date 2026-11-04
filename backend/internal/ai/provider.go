@@ -70,11 +70,11 @@ func NewProvider(provider, baseURL, apiKey, model string) Provider {
 	}
 	switch NormalizeProvider(provider) {
 	case ProviderOpenAI:
-		return newOpenAICompat(baseURL, openAIBaseURL, apiKey, model)
+		return newOpenAICompat(baseURL, openAIBaseURL, apiKey, model, "")
 	case ProviderOpenAICompat:
-		return newOpenAICompat(baseURL, openCodeZenBaseURL, apiKey, model)
+		return newOpenAICompat(baseURL, openCodeZenBaseURL, apiKey, model, "")
 	case ProviderOpenCodeGo:
-		return newOpenAICompat(baseURL, openCodeGoBaseURL, apiKey, model)
+		return newOpenAICompat(baseURL, openCodeGoBaseURL, apiKey, model, "fai")
 	default:
 		return newAnthropic(baseURL, apiKey, model)
 	}

@@ -27,10 +27,11 @@ type openAICompatProvider struct {
 	baseURL string
 	apiKey  string
 	model   string
+	session string
 	http    *http.Client
 }
 
-func newOpenAICompat(baseURL, fallbackBaseURL, apiKey, model string) Provider {
+func newOpenAICompat(baseURL, fallbackBaseURL, apiKey, model, session string) Provider {
 	baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
 	if baseURL == "" {
 		baseURL = fallbackBaseURL
@@ -38,7 +39,7 @@ func newOpenAICompat(baseURL, fallbackBaseURL, apiKey, model string) Provider {
 	if model == "" {
 		model = defaultOpenAICompatModel
 	}
-	return &openAICompatProvider{baseURL: baseURL, apiKey: apiKey, model: model, http: &http.Client{}}
+	return &openAICompatProvider{baseURL: baseURL, apiKey: apiKey, model: model, session: session, http: &http.Client{}}
 }
 
 type chatRequest struct {
@@ -84,6 +85,9 @@ func (p *openAICompatProvider) Chat(ctx context.Context, system string, messages
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+p.apiKey)
+	if p.session != "" {
+		req.Header.Set("x-opencode-session", p.session)
+	}
 
 	resp, err := p.http.Do(req)
 	if err != nil {
@@ -184,6 +188,9 @@ func (p *openAICompatProvider) Transcribe(ctx context.Context, audio []byte, for
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+p.apiKey)
+	if p.session != "" {
+		req.Header.Set("x-opencode-session", p.session)
+	}
 
 	resp, err := p.http.Do(req)
 	if err != nil {

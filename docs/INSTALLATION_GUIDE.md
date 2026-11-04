@@ -184,9 +184,17 @@ If one channel fails but another succeeds, fai marks the item sent.
 ### AI
 
 Set `AI_API_KEY` to enable task breakdowns, note plans, meeting extraction, and
-chat. `AI_PROVIDER` accepts `anthropic`, `openai`, and `openai-compat` (also
-called `opencode-zen`). Set `AI_MODEL` and, for OpenAI-compatible services,
-`AI_BASE_URL`.
+chat. `AI_PROVIDER` accepts `anthropic`, `openai`, `openai-compat` (also called
+`opencode-zen`), and `opencode-go`. Set `AI_MODEL` and, for OpenAI-compatible
+services, `AI_BASE_URL`.
+
+Set `AI_FALLBACK_MODEL` to retry with a second model when the first one fails.
+`AI_FALLBACK_PROVIDER`, `AI_FALLBACK_BASE_URL`, and `AI_FALLBACK_API_KEY` default
+to the primary provider, base URL, and key. For example,
+`AI_MODEL=deepseek-v4.1-flash-free` with
+`AI_FALLBACK_PROVIDER=opencode-go` and
+`AI_FALLBACK_MODEL=deepseek-v4.1-flash` uses the free model first and the
+subscription model when the free quota is exhausted.
 
 Settings can also store the provider, model, base URL, and key in the database.
 Saved settings override environment values. AI endpoints are rate-limited per

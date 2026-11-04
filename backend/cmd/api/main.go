@@ -71,6 +71,23 @@ func main() {
 		log.Println("JIRA_BASE_URL/EMAIL/API_TOKEN unset: Jira import disabled")
 	}
 	aiProvider := ai.NewProvider(cfg.AIProvider, cfg.AIBaseURL, cfg.AIAPIKey, cfg.AIModel)
+	if cfg.AIFallbackModel != "" {
+		fallbackProvider := cfg.AIFallbackProvider
+		if fallbackProvider == "" {
+			fallbackProvider = cfg.AIProvider
+		}
+		fallbackBaseURL := cfg.AIFallbackBaseURL
+		if fallbackBaseURL == "" && fallbackProvider == cfg.AIProvider {
+			fallbackBaseURL = cfg.AIBaseURL
+		}
+		fallbackKey := cfg.AIFallbackAPIKey
+		if fallbackKey == "" {
+			fallbackKey = cfg.AIAPIKey
+		}
+		aiProvider = ai.WithFallback(aiProvider,
+			ai.NewProvider(fallbackProvider, fallbackBaseURL, fallbackKey, cfg.AIFallbackModel))
+		log.Printf("AI fallback model: %s/%s", fallbackProvider, cfg.AIFallbackModel)
+	}
 	if aiProvider == nil {
 		log.Println("AI_API_KEY unset: AI features disabled")
 	}

@@ -40,7 +40,7 @@ func TestTranscribeSendsAudioContentParts(t *testing.T) {
 	}))
 	defer server.Close()
 
-	provider := newOpenAICompat(server.URL, "", "key", "")
+	provider := newOpenAICompat(server.URL, "", "key", "", "")
 	text, err := provider.Transcribe(context.Background(), []byte("audio"), "ogg")
 	if err != nil {
 		t.Fatal(err)
@@ -75,5 +75,29 @@ func TestTranscribeSendsAudioContentParts(t *testing.T) {
 	textPart, _ := parts[1].(map[string]any)
 	if textPart["type"] != "text" || !strings.Contains(textPart["text"].(string), "Transcribe") {
 		t.Errorf("text part = %#v", textPart)
+	}
+}
+
+func TestOpenCodeGoSetsSessionHeader(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/chat/completions" {
+			t.Errorf("path = %q", r.URL.Path)
+		}
+		if got := r.Header.Get("x-opencode-session"); got == "" {
+			t.Error("x-opencode-session is empty")
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"ok"}}]}`))
+	}))
+	defer server.Close()
+
+	text, err := NewProvider(ProviderOpenCodeGo, server.URL, "key", "model").Chat(
+		context.Background(), "", []ChatMessage{{Role: "user", Content: "hi"}},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if text != "ok" {
+		t.Fatalf("text = %q", text)
 	}
 }

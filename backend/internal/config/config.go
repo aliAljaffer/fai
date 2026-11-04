@@ -39,6 +39,10 @@ type Config struct {
 	AIBaseURL            string
 	AIAPIKey             string
 	AIModel              string
+	AIFallbackProvider   string
+	AIFallbackBaseURL    string
+	AIFallbackAPIKey     string
+	AIFallbackModel      string
 	// ElevenLabsAPIKey enables ElevenLabs speech-to-text for voice notes and
 	// takes precedence over the chat provider's Transcribe method.
 	ElevenLabsAPIKey   string
@@ -109,6 +113,10 @@ func Load() Config {
 		AIBaseURL:             os.Getenv("AI_BASE_URL"),
 		AIAPIKey:              os.Getenv("AI_API_KEY"),
 		AIModel:               os.Getenv("AI_MODEL"),
+		AIFallbackProvider:    os.Getenv("AI_FALLBACK_PROVIDER"),
+		AIFallbackBaseURL:     os.Getenv("AI_FALLBACK_BASE_URL"),
+		AIFallbackAPIKey:      os.Getenv("AI_FALLBACK_API_KEY"),
+		AIFallbackModel:       os.Getenv("AI_FALLBACK_MODEL"),
 		ElevenLabsAPIKey:      os.Getenv("ELEVENLABS_API_KEY"),
 		ElevenLabsSTTModel:    envOr("ELEVENLABS_STT_MODEL", "scribe_v2"),
 		STTBaseURL:            os.Getenv("STT_BASE_URL"),
