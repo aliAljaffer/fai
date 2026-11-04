@@ -62,3 +62,20 @@ func TestAudioFormat(t *testing.T) {
 		}
 	}
 }
+
+func TestClearPendingClearsOnlyThatChat(t *testing.T) {
+	bot := &Bot{
+		now: time.Now,
+		pending: map[string]pendingEntry{
+			"mine":  {chatID: 70},
+			"other": {chatID: 71},
+		},
+	}
+	bot.clearPending(70)
+	if _, ok := bot.pending["mine"]; ok {
+		t.Fatal("pending action for the chat was not cleared")
+	}
+	if _, ok := bot.pending["other"]; !ok {
+		t.Fatal("pending action for another chat was cleared")
+	}
+}

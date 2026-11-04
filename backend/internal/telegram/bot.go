@@ -32,6 +32,7 @@ type ChatRunner interface {
 
 type pendingEntry struct {
 	action  httpapi.PendingChatAction
+	chatID  int64
 	expires time.Time
 }
 
@@ -203,6 +204,7 @@ func audioFormat(mimeType string) string {
 
 func (b *Bot) respond(ctx context.Context, chatID int64, text, prefix string) {
 	logChat(chatID, "user", text)
+	b.clearPending(chatID)
 	b.mu.Lock()
 	history := append([]ai.ChatMessage(nil), b.history[chatID]...)
 	b.mu.Unlock()
@@ -264,7 +266,7 @@ func (b *Bot) sendPending(ctx context.Context, chatID int64, text string, action
 	}
 	b.mu.Lock()
 	b.prunePendingLocked()
-	b.pending[token] = pendingEntry{action: action, expires: b.now().Add(pendingTTL)}
+	b.pending[token] = pendingEntry{action: action, chatID: chatID, expires: b.now().Add(pendingTTL)}
 	b.mu.Unlock()
 
 	markup := &InlineKeyboardMarkup{InlineKeyboard: [][]InlineKeyboardButton{{
@@ -322,6 +324,16 @@ func (b *Bot) takePending(token string) (pendingEntry, bool) {
 	}
 	delete(b.pending, token)
 	return entry, true
+}
+
+func (b *Bot) clearPending(chatID int64) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	for token, entry := range b.pending {
+		if entry.chatID == chatID {
+			delete(b.pending, token)
+		}
+	}
 }
 
 func (b *Bot) prunePendingLocked() {
