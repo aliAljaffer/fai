@@ -41,6 +41,7 @@ type Bot struct {
 	runner        ChatRunner
 	allowedUserID int64
 	allowedChatID int64
+	tzOffset      *int
 	now           func() time.Time
 	offsets       OffsetStore
 
@@ -67,6 +68,13 @@ func NewBot(client *Client, allowedUserID, allowedChatID int64, runner ChatRunne
 func (b *Bot) WithOffsetStore(store OffsetStore) *Bot {
 	if b != nil {
 		b.offsets = store
+	}
+	return b
+}
+
+func (b *Bot) WithTZOffset(minutes int) *Bot {
+	if b != nil {
+		b.tzOffset = &minutes
 	}
 	return b
 }
@@ -213,7 +221,7 @@ func (b *Bot) respond(ctx context.Context, chatID int64, text, prefix string) {
 		history = history[len(history)-historyLimit:]
 	}
 
-	outcome, err := b.runner.RunChat(ctx, history, nil)
+	outcome, err := b.runner.RunChat(ctx, history, b.tzOffset)
 	if err != nil {
 		log.Printf("telegram: chat: %v", err)
 		b.sendText(ctx, chatID, "Could not answer that right now.")
@@ -278,7 +286,9 @@ func (b *Bot) sendPending(ctx context.Context, chatID int64, text string, action
 		b.mu.Lock()
 		delete(b.pending, token)
 		b.mu.Unlock()
+		return
 	}
+	logChat(chatID, "bot", text)
 }
 
 func (b *Bot) handleCallback(ctx context.Context, callback *CallbackQuery) {

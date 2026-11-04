@@ -79,3 +79,11 @@ func TestClearPendingClearsOnlyThatChat(t *testing.T) {
 		t.Fatal("pending action for another chat was cleared")
 	}
 }
+
+func TestWithTZOffsetSetsOffset(t *testing.T) {
+	bot := &Bot{}
+	bot.WithTZOffset(180)
+	if bot.tzOffset == nil || *bot.tzOffset != 180 {
+		t.Fatalf("tzOffset = %v", bot.tzOffset)
+	}
+}

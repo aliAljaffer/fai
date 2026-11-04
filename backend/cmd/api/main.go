@@ -131,7 +131,8 @@ func main() {
 		log.Println("TELEGRAM_ALLOWED_USER_ID/TELEGRAM_ALLOWED_CHAT_ID unset, Telegram assistant disabled")
 	default:
 		telegramBot = telegram.NewBot(telegramClient, cfg.TelegramAllowedUserID, cfg.TelegramAllowedChatID, server).
-			WithOffsetStore(telegram.FileOffsetStore{Path: cfg.TelegramStateFile})
+			WithOffsetStore(telegram.FileOffsetStore{Path: cfg.TelegramStateFile}).
+			WithTZOffset(cfg.TelegramTZOffset)
 	}
 
 	ntfyClient := ntfy.New(cfg.NtfyURL, cfg.NtfyTopic, cfg.NtfyUsername, cfg.NtfyPassword)

@@ -55,6 +55,7 @@ type Config struct {
 	TelegramBotToken      string
 	TelegramAllowedUserID int64
 	TelegramAllowedChatID int64
+	TelegramTZOffset      int
 	TelegramStateFile     string
 	// ReminderChannel selects one delivery channel when set. Empty keeps the
 	// legacy behavior of sending to every configured channel.
@@ -127,6 +128,7 @@ func Load() Config {
 		TelegramAllowedUserID: envInt64("TELEGRAM_ALLOWED_USER_ID"),
 		TelegramStateFile:     envOr("TELEGRAM_STATE_FILE", "fai-telegram-offset"),
 		TelegramAllowedChatID: envInt64("TELEGRAM_ALLOWED_CHAT_ID"),
+		TelegramTZOffset:      int(envInt64("TELEGRAM_TZ_OFFSET")),
 		ReminderChannel:       strings.ToLower(strings.TrimSpace(os.Getenv("REMINDER_CHANNEL"))),
 		StaticDir:             os.Getenv("STATIC_DIR"),
 		AuthMode:              envOr("AUTH_MODE", "oidc"),

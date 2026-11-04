@@ -221,6 +221,9 @@ transcribed and echoed as text. `STT_BASE_URL` handles transcription when set;
 otherwise `ELEVENLABS_API_KEY` does. Without either, the chat provider must
 accept audio, and Anthropic does not.
 
+Set `TELEGRAM_TZ_OFFSET` to the owner's offset in minutes east of UTC (for
+example `180` for Riyadh) so relative times in voice notes resolve correctly.
+
 If the transcription service rejects Telegram OGG/Opus, the backend converts
 the audio to mono MP3 with the bundled ffmpeg binary and retries. The last 10
 messages per chat stay in memory and are lost on restart. Message IDs are
