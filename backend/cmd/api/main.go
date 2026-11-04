@@ -95,7 +95,11 @@ func main() {
 		AuthMiddleware:       authMiddleware,
 		Metrics:              metrics.New(st),
 	}
-	if cfg.ElevenLabsAPIKey != "" {
+	switch {
+	case cfg.STTBaseURL != "":
+		server.Transcriber = transcribe.NewOpenAICompat(cfg.STTBaseURL, cfg.STTModel, cfg.STTAPIKey, cfg.STTLanguage)
+		log.Printf("STT_BASE_URL set: voice notes use %s", cfg.STTBaseURL)
+	case cfg.ElevenLabsAPIKey != "":
 		server.Transcriber = transcribe.NewElevenLabs(cfg.ElevenLabsAPIKey, cfg.ElevenLabsSTTModel)
 		log.Println("ELEVENLABS_API_KEY set: voice notes use ElevenLabs speech-to-text")
 	}

@@ -43,6 +43,10 @@ type Config struct {
 	// takes precedence over the chat provider's Transcribe method.
 	ElevenLabsAPIKey   string
 	ElevenLabsSTTModel string
+	STTBaseURL         string
+	STTModel           string
+	STTAPIKey          string
+	STTLanguage        string
 	// TelegramBotToken empty disables the assistant bot.
 	TelegramBotToken      string
 	TelegramAllowedUserID int64
@@ -107,6 +111,10 @@ func Load() Config {
 		AIModel:               os.Getenv("AI_MODEL"),
 		ElevenLabsAPIKey:      os.Getenv("ELEVENLABS_API_KEY"),
 		ElevenLabsSTTModel:    envOr("ELEVENLABS_STT_MODEL", "scribe_v2"),
+		STTBaseURL:            os.Getenv("STT_BASE_URL"),
+		STTModel:              envOr("STT_MODEL", "whisper-1"),
+		STTAPIKey:             os.Getenv("STT_API_KEY"),
+		STTLanguage:           os.Getenv("STT_LANGUAGE"),
 		TelegramBotToken:      os.Getenv("TELEGRAM_BOT_TOKEN"),
 		TelegramAllowedUserID: envInt64("TELEGRAM_ALLOWED_USER_ID"),
 		TelegramStateFile:     envOr("TELEGRAM_STATE_FILE", "fai-telegram-offset"),

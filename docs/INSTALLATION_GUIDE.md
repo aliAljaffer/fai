@@ -192,8 +192,13 @@ Settings can also store the provider, model, base URL, and key in the database.
 Saved settings override environment values. AI endpoints are rate-limited per
 user. The UI hides AI actions when neither source has a key.
 
-Set `ELEVENLABS_API_KEY` to use ElevenLabs for voice-note transcription instead
-of the chat provider. `ELEVENLABS_STT_MODEL` defaults to `scribe_v2`. The key
+Set `STT_BASE_URL` to use an OpenAI-compatible speech-to-text server for
+voice-note transcription. `STT_MODEL` names the model, `STT_API_KEY` is optional,
+and `STT_LANGUAGE` pins the language (for example `en`). The URL is the API root,
+so `http://speaches:8000/v1` calls `/v1/audio/transcriptions`.
+
+`ELEVENLABS_API_KEY` remains available as an external fallback when
+`STT_BASE_URL` is unset. `ELEVENLABS_STT_MODEL` defaults to `scribe_v2`. The key
 needs the `speech_to_text` permission.
 
 ### Telegram assistant
@@ -202,9 +207,9 @@ The Telegram assistant can create tasks and reminders, find tasks, and move a
 task after confirmation. It runs inside the API process and needs an AI key.
 
 Set an owner allowlist. Only private chats are accepted. Voice notes are
-transcribed and echoed as text. ElevenLabs handles transcription when
-`ELEVENLABS_API_KEY` is set. Otherwise, the chat provider must accept audio;
-Anthropic does not.
+transcribed and echoed as text. `STT_BASE_URL` handles transcription when set;
+otherwise `ELEVENLABS_API_KEY` does. Without either, the chat provider must
+accept audio, and Anthropic does not.
 
 If the transcription service rejects Telegram OGG/Opus, the backend converts
 the audio to mono MP3 with the bundled ffmpeg binary and retries. The last 10

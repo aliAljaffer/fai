@@ -14,8 +14,9 @@ focus change. Fixed placement no longer hides a row at the bottom of a short vie
 
 The assistant runs in the API binary over `getUpdates` long polling: allowlist by user and chat,
 private chats only, text and voice, `find_task` and `move_task` with inline confirmation, an
-in-memory 10-message history, and a reminder channel. Voice notes use ElevenLabs
-speech-to-text when `ELEVENLABS_API_KEY` is set. Without it, transcription falls back to the chat
+in-memory 10-message history, and a reminder channel. Voice notes use an
+OpenAI-compatible speech-to-text server when `STT_BASE_URL` is set, or ElevenLabs
+when `ELEVENLABS_API_KEY` is set. Without either, transcription falls back to the chat
 provider and needs an OpenAI-compatible model that accepts audio. If a request rejects raw
 OGG/Opus, the backend transcodes to mono 16 kHz MP3 with the static ffmpeg bundled in the image
 and retries. WhatsApp is out of scope.
