@@ -338,27 +338,46 @@ func TestChatCreatesTaskFromAction(t *testing.T) {
 		t.Fatalf("chat status = %d", res.StatusCode)
 	}
 	var body struct {
-		Reply   string `json:"reply"`
-		Created []struct {
-			Type  string `json:"type"`
-			ID    int64  `json:"id"`
-			Title string `json:"title"`
-		} `json:"created"`
+		Reply   string          `json:"reply"`
+		Pending json.RawMessage `json:"pending"`
 	}
 	if err := json.NewDecoder(res.Body).Decode(&body); err != nil {
 		t.Fatal(err)
 	}
 	res.Body.Close()
-	if body.Reply != "Added it for Wednesday." {
+	if !strings.Contains(body.Reply, `Create task "Refresh the Cloudflare token"`) {
 		t.Errorf("reply = %q", body.Reply)
 	}
-	if len(body.Created) != 1 || body.Created[0].Type != "task" {
-		t.Fatalf("created = %#v", body.Created)
+	if len(body.Pending) == 0 {
+		t.Fatal("pending = nil")
 	}
-	task, err := st.GetTask(context.Background(), body.Created[0].ID)
+	if tasks, err := st.ListTasks(context.Background(), store.ListTasksParams{}); err != nil || len(tasks) != 0 {
+		t.Fatalf("tasks before confirmation = %#v, err = %v", tasks, err)
+	}
+
+	res = postJSON(t, server.URL+"/api/ai/chat/confirm", string(body.Pending))
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("confirm status = %d", res.StatusCode)
+	}
+	var confirmed struct {
+		Reply string `json:"reply"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&confirmed); err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if !strings.Contains(confirmed.Reply, "Created task") {
+		t.Errorf("confirmation = %q", confirmed.Reply)
+	}
+
+	tasks, err := st.ListTasks(context.Background(), store.ListTasksParams{})
 	if err != nil {
 		t.Fatal(err)
 	}
+	if len(tasks) != 1 {
+		t.Fatalf("tasks = %#v", tasks)
+	}
+	task := tasks[0]
 	if task.Title != "Refresh the Cloudflare token" || task.DueDate == nil || *task.DueDate != "2099-01-07" {
 		t.Errorf("task = %#v", task)
 	}

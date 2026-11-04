@@ -13,7 +13,7 @@ focus change. Fixed placement no longer hides a row at the bottom of a short vie
 ## Telegram assistant
 
 The assistant runs in the API binary over `getUpdates` long polling: allowlist by user and chat,
-private chats only, text and voice, `find_task` and `move_task` with inline confirmation, an
+private chats only, text and voice, task and reminder actions with inline confirmation, an
 in-memory 10-message history, and a reminder channel. Voice notes use an
 OpenAI-compatible speech-to-text server when `STT_BASE_URL` is set, or ElevenLabs
 when `ELEVENLABS_API_KEY` is set. Without either, transcription falls back to the chat

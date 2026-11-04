@@ -212,7 +212,8 @@ needs the `speech_to_text` permission.
 ### Telegram assistant
 
 The Telegram assistant can create tasks and reminders, find tasks, and move a
-task after confirmation. It runs inside the API process and needs an AI key.
+task. It asks for confirmation before every change. It runs inside the API
+process and needs an AI key.
 
 Set an owner allowlist. Only private chats are accepted. Voice notes are
 transcribed and echoed as text. `STT_BASE_URL` handles transcription when set;

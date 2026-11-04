@@ -918,11 +918,13 @@ export interface AIChatMessage {
 
 export interface PendingChatAction {
   type: string
-  task_id: number
-  task_ref: string
-  task_title: string
-  column_id: number
-  column_name: string
+  summary?: string
+  actions?: unknown[]
+  task_id?: number
+  task_ref?: string
+  task_title?: string
+  column_id?: number
+  column_name?: string
 }
 
 export function useAIChat() {
@@ -972,6 +974,7 @@ export function useConfirmChatAction() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['tasks'] })
       qc.invalidateQueries({ queryKey: ['task'] })
+      qc.invalidateQueries({ queryKey: ['reminders'] })
     },
   })
 }

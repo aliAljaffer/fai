@@ -135,7 +135,7 @@ func (b *Bot) handleMessage(ctx context.Context, message *Message) {
 		return
 	}
 	if text == "/start" || text == "/help" {
-		b.sendText(ctx, message.Chat.ID, "Send text or a voice note. I can create tasks and reminders, find tasks, and move a task to another column. I will ask before moving a task.")
+		b.sendText(ctx, message.Chat.ID, "Send text or a voice note. I can create tasks and reminders, find tasks, and move a task to another column. I will ask you to confirm every change before I make it.")
 		return
 	}
 	b.respond(ctx, message.Chat.ID, text, "")

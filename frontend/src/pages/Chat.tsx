@@ -111,9 +111,9 @@ export function Chat() {
         )}
         {pending && (
           <div className="mr-auto flex max-w-[85%] flex-col gap-2 rounded-md border bg-muted/50 px-3 py-2 text-sm">
-            <p>
-              Move <span className="font-mono text-xs">{pending.task_ref}</span> (
-              {pending.task_title}) to {pending.column_name}?
+            <p className="whitespace-pre-line">
+              {pending.summary ||
+                `Move ${pending.task_ref ?? ''} (${pending.task_title ?? ''}) to ${pending.column_name ?? ''}?`}
             </p>
             <div className="flex gap-2">
               <Button

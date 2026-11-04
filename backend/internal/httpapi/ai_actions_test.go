@@ -125,10 +125,31 @@ ACTION: {"type":"create_task","title":"Update homelab TalosOS version","steps":[
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(outcome.Created) != 1 {
-		t.Fatalf("created = %#v", outcome.Created)
+	if outcome.Pending == nil {
+		t.Fatalf("pending = nil, reply = %q", outcome.Reply)
 	}
-	steps, err := st.ListSubtasks(ctx, outcome.Created[0].ID)
+	if tasks, err := st.ListTasks(ctx, store.ListTasksParams{}); err != nil || len(tasks) != 0 {
+		t.Fatalf("tasks before confirmation = %#v, err = %v", tasks, err)
+	}
+
+	if _, err := server.ConfirmChatAction(ctx, *outcome.Pending); err != nil {
+		t.Fatal(err)
+	}
+	tasks, err := st.ListTasks(ctx, store.ListTasksParams{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var parent store.Task
+	for _, task := range tasks {
+		if task.Title == "Update homelab TalosOS version" && task.Kind == "task" {
+			parent = task
+			break
+		}
+	}
+	if parent.ID == 0 {
+		t.Fatalf("parent task missing: %#v", tasks)
+	}
+	steps, err := st.ListSubtasks(ctx, parent.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +157,7 @@ ACTION: {"type":"create_task","title":"Update homelab TalosOS version","steps":[
 		t.Fatalf("steps = %d, want 5", len(steps))
 	}
 	for _, step := range steps {
-		if step.Kind != "step" || step.ParentTaskID == nil || *step.ParentTaskID != outcome.Created[0].ID {
+		if step.Kind != "step" || step.ParentTaskID == nil || *step.ParentTaskID != parent.ID {
 			t.Errorf("step %q: kind=%q parent=%v", step.Title, step.Kind, step.ParentTaskID)
 		}
 	}
@@ -152,24 +173,38 @@ ACTION: {"type":"create_arc","title":"Migrate the homelab","tasks":[{"title":"Up
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(outcome.Created) != 1 || outcome.Created[0].Type != "arc" {
-		t.Fatalf("created = %#v", outcome.Created)
+	if outcome.Pending == nil {
+		t.Fatalf("pending = nil, reply = %q", outcome.Reply)
 	}
-	arc, err := st.GetTask(ctx, outcome.Created[0].ID)
+	if tasks, err := st.ListTasks(ctx, store.ListTasksParams{}); err != nil || len(tasks) != 0 {
+		t.Fatalf("tasks before confirmation = %#v, err = %v", tasks, err)
+	}
+
+	if _, err := server.ConfirmChatAction(ctx, *outcome.Pending); err != nil {
+		t.Fatal(err)
+	}
+	tasks, err := st.ListTasks(ctx, store.ListTasksParams{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if arc.Kind != "arc" || arc.ParentTaskID != nil {
+	var arc store.Task
+	for _, task := range tasks {
+		if task.Title == "Migrate the homelab" {
+			arc = task
+			break
+		}
+	}
+	if arc.ID == 0 || arc.Kind != "arc" || arc.ParentTaskID != nil {
 		t.Fatalf("arc = %#v", arc)
 	}
-	tasks, err := st.ListSubtasks(ctx, arc.ID)
+	children, err := st.ListSubtasks(ctx, arc.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(tasks) != 2 {
-		t.Fatalf("tasks = %d, want 2", len(tasks))
+	if len(children) != 2 {
+		t.Fatalf("tasks = %d, want 2", len(children))
 	}
-	steps, err := st.ListSubtasks(ctx, tasks[0].ID)
+	steps, err := st.ListSubtasks(ctx, children[0].ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -177,7 +212,7 @@ ACTION: {"type":"create_arc","title":"Migrate the homelab","tasks":[{"title":"Up
 		t.Fatalf("steps = %d, want 2", len(steps))
 	}
 	for _, step := range steps {
-		if step.Kind != "step" || step.ParentTaskID == nil || *step.ParentTaskID != tasks[0].ID {
+		if step.Kind != "step" || step.ParentTaskID == nil || *step.ParentTaskID != children[0].ID {
 			t.Errorf("step %q: kind=%q parent=%v", step.Title, step.Kind, step.ParentTaskID)
 		}
 	}
@@ -195,15 +230,36 @@ ACTION: {"type":"create_task","title":"Update node 3","due_date":""}`}
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(outcome.Created) != 3 {
-		t.Fatalf("created = %#v, reply = %q", outcome.Created, outcome.Reply)
+	if outcome.Pending == nil || len(outcome.Pending.Actions) != 3 {
+		t.Fatalf("pending = %#v, reply = %q", outcome.Pending, outcome.Reply)
 	}
 	if strings.Contains(outcome.Reply, "ACTION:") {
 		t.Errorf("reply leaked action lines: %q", outcome.Reply)
 	}
-	for _, created := range outcome.Created {
-		if _, err := st.GetTask(ctx, created.ID); err != nil {
-			t.Errorf("task %d: %v", created.ID, err)
+	if tasks, err := st.ListTasks(ctx, store.ListTasksParams{}); err != nil || len(tasks) != 0 {
+		t.Fatalf("tasks before confirmation = %#v, err = %v", tasks, err)
+	}
+
+	if _, err := server.ConfirmChatAction(ctx, *outcome.Pending); err != nil {
+		t.Fatal(err)
+	}
+	tasks, err := st.ListTasks(ctx, store.ListTasksParams{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tasks) != 3 {
+		t.Fatalf("tasks = %#v", tasks)
+	}
+	for _, title := range []string{"Update node 1", "Update node 2", "Update node 3"} {
+		found := false
+		for _, task := range tasks {
+			if task.Title == title {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("missing task %q", title)
 		}
 	}
 }
@@ -297,5 +353,85 @@ func TestFaiContextIncludesTaskRefs(t *testing.T) {
 	contextText := server.faiContext(ctx)
 	if !strings.Contains(contextText, "@"+task.Ref+" Refresh the Cloudflare token") {
 		t.Fatalf("context = %q", contextText)
+	}
+}
+
+func TestChatCreateReminderIsPendingUntilConfirmed(t *testing.T) {
+	st := actionTestStore(t)
+	ctx := context.Background()
+	provider := &fakeAI{reply: `ACTION: {"type":"create_reminder","title":"Call the dentist","remind_at":"2099-01-01T10:00:00Z"}`}
+	server := &Server{Store: st, AI: provider}
+	outcome, err := server.RunChat(ctx, []ai.ChatMessage{{Role: "user", Content: "remind me to call the dentist"}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if outcome.Pending == nil {
+		t.Fatalf("pending = nil, reply = %q", outcome.Reply)
+	}
+	if reminders, err := st.ListReminders(ctx, nil); err != nil || len(reminders) != 0 {
+		t.Fatalf("reminders before confirmation = %#v, err = %v", reminders, err)
+	}
+
+	if _, err := server.ConfirmChatAction(ctx, *outcome.Pending); err != nil {
+		t.Fatal(err)
+	}
+	reminders, err := st.ListReminders(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(reminders) != 1 || reminders[0].Title != "Call the dentist" {
+		t.Fatalf("reminders = %#v", reminders)
+	}
+}
+
+func TestChatConfirmsMoveAndCreateTogether(t *testing.T) {
+	st := actionTestStore(t)
+	ctx := context.Background()
+	todoID := columnID(t, st, "To Do")
+	doneID := columnID(t, st, "Done")
+	task, err := st.CreateTask(ctx, store.CreateTaskParams{
+		BoardID: 1, ColumnID: todoID, Title: "Clayface", Priority: "medium", Position: 1024,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	provider := &fakeAI{reply: `ACTION: {"type":"move_task","task":"@` + task.Ref + `","column":"Done"}
+ACTION: {"type":"create_task","title":"Watch the next episode"}`}
+	server := &Server{Store: st, AI: provider}
+	outcome, err := server.RunChat(ctx, []ai.ChatMessage{{Role: "user", Content: "move Clayface to done and add a task to watch the next episode"}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if outcome.Pending == nil || len(outcome.Pending.Actions) != 2 {
+		t.Fatalf("pending = %#v, reply = %q", outcome.Pending, outcome.Reply)
+	}
+	if !strings.Contains(outcome.Reply, "Confirm these changes") {
+		t.Fatalf("reply = %q", outcome.Reply)
+	}
+
+	if _, err := server.ConfirmChatAction(ctx, *outcome.Pending); err != nil {
+		t.Fatal(err)
+	}
+	moved, err := st.GetTask(ctx, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if moved.ColumnID != doneID {
+		t.Fatalf("column = %d, want %d", moved.ColumnID, doneID)
+	}
+	tasks, err := st.ListTasks(ctx, store.ListTasksParams{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, task := range tasks {
+		if task.Title == "Watch the next episode" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("created task missing: %#v", tasks)
 	}
 }
