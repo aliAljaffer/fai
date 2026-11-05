@@ -23,6 +23,14 @@ tracking, reminders, Jira, optional AI, and themes. See the
 brew install --cask alialjaffer/tap/fai
 ```
 
+Then disable Apple quarantine on the application: 
+
+```
+xattr -d com.apple.quarantine /Applications/fai.app
+```
+
+More information regarding MacOS Quarantine: [How to Install a Quarantined Application on macOS Using Terminal](https://support.fotomaster.com/articles/how-to-install-a-quarantined-application-on-macos-using-terminal)
+
 ### Docker Compose
 
 ```sh
