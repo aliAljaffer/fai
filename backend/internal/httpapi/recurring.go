@@ -34,6 +34,19 @@ func decodeRepeat(raw json.RawMessage) (repeatChange, error) {
 	return repeatChange{set: true, rule: &rule}, nil
 }
 
+const aiRepeatPrompt = `Add "repeat": {"freq": "daily"|"weekly"|"monthly"|"yearly", "interval": number} ` +
+	"only when the message clearly asks for a repeat (every, daily, each week, every 2 weeks), with interval 1 or more. " +
+	"Leave repeat out when the message does not ask for one, and also when the pattern does not fit one freq and interval " +
+	"(every weekday, every Monday and Thursday). "
+
+func modelRepeat(raw json.RawMessage) repeatChange {
+	change, err := decodeRepeat(raw)
+	if err != nil {
+		return repeatChange{}
+	}
+	return change
+}
+
 func reminderRepeat(change repeatChange, remindAt time.Time) *store.ReminderRepeat {
 	if change.rule == nil {
 		return nil

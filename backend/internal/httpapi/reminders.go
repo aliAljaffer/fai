@@ -141,36 +141,39 @@ func aiReminderPrompt(text string, now time.Time) string {
 	return fmt.Sprintf(
 		"Turn this message into one reminder. The current local time is %s.\n"+
 			"Message: %q\n\n"+
-			`Respond with ONLY JSON in this shape: {"title": string, "remind_at": string}. `+
+			`Respond with ONLY JSON in this shape: {"title": string, "remind_at": string, "repeat": object (optional)}. `+
 			"remind_at must be RFC3339 with the same timezone offset as the current local time. "+
 			"If the message gives a day but no time, use 09:00. If it gives no time at all, use one hour from now. "+
+			"For a repeating reminder, remind_at is the first occurrence. "+
+			aiRepeatPrompt+
 			"Keep the title short and imperative, without the reminder time.",
 		now.Format(time.RFC3339), text,
 	)
 }
 
-func parseAIReminder(text string) (string, time.Time, error) {
+func parseAIReminder(text string) (string, time.Time, repeatChange, error) {
 	start := strings.Index(text, "{")
 	end := strings.LastIndex(text, "}")
 	if start == -1 || end == -1 || end < start {
-		return "", time.Time{}, fmt.Errorf("ai: no JSON object found in response")
+		return "", time.Time{}, repeatChange{}, fmt.Errorf("ai: no JSON object found in response")
 	}
 	var parsed struct {
-		Title    string `json:"title"`
-		RemindAt string `json:"remind_at"`
+		Title    string          `json:"title"`
+		RemindAt string          `json:"remind_at"`
+		Repeat   json.RawMessage `json:"repeat"`
 	}
 	if err := json.Unmarshal([]byte(text[start:end+1]), &parsed); err != nil {
-		return "", time.Time{}, fmt.Errorf("ai: invalid JSON object in response: %w", err)
+		return "", time.Time{}, repeatChange{}, fmt.Errorf("ai: invalid JSON object in response: %w", err)
 	}
 	title := strings.TrimSpace(parsed.Title)
 	if title == "" {
-		return "", time.Time{}, fmt.Errorf("ai: response has no reminder title")
+		return "", time.Time{}, repeatChange{}, fmt.Errorf("ai: response has no reminder title")
 	}
 	remindAt, err := time.Parse(time.RFC3339, parsed.RemindAt)
 	if err != nil {
-		return "", time.Time{}, fmt.Errorf("ai: response has an invalid remind_at")
+		return "", time.Time{}, repeatChange{}, fmt.Errorf("ai: response has an invalid remind_at")
 	}
-	return title, remindAt, nil
+	return title, remindAt, modelRepeat(parsed.Repeat), nil
 }
 
 func localNow(offset *int) time.Time {
@@ -222,12 +225,12 @@ func (s *Server) aiReminder(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
-	title, remindAt, err := parseAIReminder(reply)
+	title, remindAt, change, err := parseAIReminder(reply)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
-	reminder, err := s.Store.CreateReminder(r.Context(), title, remindAt, nil, body.WorkspaceID, nil)
+	reminder, err := s.Store.CreateReminder(r.Context(), title, remindAt, nil, body.WorkspaceID, reminderRepeat(change, remindAt))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

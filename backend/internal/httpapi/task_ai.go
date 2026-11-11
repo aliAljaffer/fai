@@ -15,38 +15,41 @@ func aiTaskPrompt(text string, now time.Time) string {
 	return fmt.Sprintf(
 		"Turn this message into one task. The current local time is %s.\n"+
 			"Message: %q\n\n"+
-			`Respond with ONLY JSON in this shape: {"title": string, "due_date": string, "priority": string}. `+
+			`Respond with ONLY JSON in this shape: {"title": string, "due_date": string, "priority": string, "repeat": object (optional)}. `+
 			"due_date must be YYYY-MM-DD in the same local timezone, or an empty string when the message gives no date. "+
 			"Resolve relative dates (today, tomorrow, Monday, next week) against the current local time. "+
 			"A weekday alone means the next such day, or today when it is that day. "+
 			"priority must be high, medium, or low. Use medium when the message does not say. "+
+			"A repeating task needs a due_date, which is its first occurrence. "+
+			aiRepeatPrompt+
 			"Keep the title short and imperative, without date or priority words.",
 		now.Format(time.RFC3339), text,
 	)
 }
 
-func parseAITask(text string) (string, *string, string, error) {
+func parseAITask(text string) (string, *string, string, *store.TaskRepeat, error) {
 	start := strings.Index(text, "{")
 	end := strings.LastIndex(text, "}")
 	if start == -1 || end == -1 || end < start {
-		return "", nil, "", fmt.Errorf("ai: no JSON object found in response")
+		return "", nil, "", nil, fmt.Errorf("ai: no JSON object found in response")
 	}
 	var parsed struct {
-		Title    string `json:"title"`
-		DueDate  string `json:"due_date"`
-		Priority string `json:"priority"`
+		Title    string          `json:"title"`
+		DueDate  string          `json:"due_date"`
+		Priority string          `json:"priority"`
+		Repeat   json.RawMessage `json:"repeat"`
 	}
 	if err := json.Unmarshal([]byte(text[start:end+1]), &parsed); err != nil {
-		return "", nil, "", fmt.Errorf("ai: invalid JSON object in response: %w", err)
+		return "", nil, "", nil, fmt.Errorf("ai: invalid JSON object in response: %w", err)
 	}
 	title := strings.TrimSpace(parsed.Title)
 	if title == "" {
-		return "", nil, "", fmt.Errorf("ai: response has no task title")
+		return "", nil, "", nil, fmt.Errorf("ai: response has no task title")
 	}
 	var due *string
 	if value := strings.TrimSpace(parsed.DueDate); value != "" {
 		if _, err := time.Parse("2006-01-02", value); err != nil {
-			return "", nil, "", fmt.Errorf("ai: response has an invalid due_date")
+			return "", nil, "", nil, fmt.Errorf("ai: response has an invalid due_date")
 		}
 		due = &value
 	}
@@ -56,7 +59,11 @@ func parseAITask(text string) (string, *string, string, error) {
 	default:
 		priority = "medium"
 	}
-	return title, due, priority, nil
+	repeat, err := taskCreateRepeat(modelRepeat(parsed.Repeat), "task", due)
+	if err != nil {
+		repeat = nil
+	}
+	return title, due, priority, repeat, nil
 }
 
 func (s *Server) aiTask(w http.ResponseWriter, r *http.Request) {
@@ -102,7 +109,7 @@ func (s *Server) aiTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	title, due, priority, err := parseAITask(reply)
+	title, due, priority, repeat, err := parseAITask(reply)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
@@ -132,6 +139,7 @@ func (s *Server) aiTask(w http.ResponseWriter, r *http.Request) {
 		DueDate:      due,
 		Position:     position,
 		CreatedByFai: true,
+		Repeat:       repeat,
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())

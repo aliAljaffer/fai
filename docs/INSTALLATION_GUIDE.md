@@ -206,6 +206,11 @@ reminder keeps the original schedule.
 
 The ICS feed shows only the current occurrence of a repeating task or reminder.
 
+The natural-language reminder and task inputs create a repeat when the text
+clearly asks for one, such as "every Monday" or "every 2 weeks". A pattern with
+more than one day or an exclusion, such as "every weekday" or "every Monday and
+Thursday", is not supported, and the item is created without a repeat.
+
 ### Notifications
 
 Reminders and meeting-outcome prompts use every configured channel. Both
