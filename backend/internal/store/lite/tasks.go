@@ -20,6 +20,7 @@ func toTask(t sqlitedb.Task) store.Task {
 		DescriptionMd: t.DescriptionMd, Priority: t.Priority, DueDate: nullStringToPtr(t.DueDate),
 		Position: t.Position, ParentTaskID: nullInt64ToPtr(t.ParentTaskID), Kind: t.Kind, MeetingOutcomeID: nullInt64ToPtr(t.MeetingOutcomeID), CreatedByFai: t.CreatedByFai,
 		CompletedAt: nullTimeToPtr(t.CompletedAt), Archived: t.Archived, Tags: []store.Tag{}, CreatedAt: createdAt, UpdatedAt: updatedAt,
+		Repeat: repeatRule(t.RepeatFreq, t.RepeatInterval), RepeatAnchor: nullStringToPtr(t.RepeatAnchor),
 	}
 }
 
@@ -80,7 +81,9 @@ func (s *Store) CreateTask(ctx context.Context, p store.CreateTaskParams) (store
 		return store.Task{}, err
 	}
 
+	repeatFreq, repeatInterval, repeatAnchor := taskRepeatColumns(p.Repeat)
 	t, err := s.q.WithTx(tx).CreateTask(ctx, sqlitedb.CreateTaskParams{
+		RepeatFreq: repeatFreq, RepeatInterval: repeatInterval, RepeatAnchor: repeatAnchor,
 		BoardID: p.BoardID, ColumnID: p.ColumnID, WorkspaceID: workspaceID, RefNum: refNum,
 		Title:         p.Title,
 		DescriptionMd: p.DescriptionMd, Priority: p.Priority, DueDate: ptrToNullString(p.DueDate),
@@ -193,7 +196,9 @@ func (s *Store) UpdateTask(ctx context.Context, id int64, title, descriptionMd, 
 
 func (s *Store) PatchTask(ctx context.Context, id int64, patch store.TaskPatch) (store.Task, error) {
 	dueDate := ptrToNullString(patch.DueDate)
+	repeatFreq, repeatInterval, repeatAnchor := taskRepeatColumns(patch.Repeat)
 	t, err := s.q.PatchTask(ctx, sqlitedb.PatchTaskParams{
+		RepeatSet: patch.RepeatSet, RepeatFreq: repeatFreq, RepeatInterval: repeatInterval, RepeatAnchor: repeatAnchor,
 		ID:            id,
 		Title:         ptrToNullString(patch.Title),
 		DescriptionMd: ptrToNullString(patch.DescriptionMd),
@@ -250,6 +255,44 @@ func (s *Store) MoveTask(ctx context.Context, id, columnID int64, position float
 		return store.Task{}, err
 	}
 	tasks := []store.Task{toTask(t)}
+	if err := s.decorateTasks(ctx, tasks); err != nil {
+		return store.Task{}, err
+	}
+	return tasks[0], nil
+}
+
+func (s *Store) RollRepeatingTask(ctx context.Context, p store.RollTaskParams) (store.Task, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return store.Task{}, err
+	}
+	defer tx.Rollback()
+
+	_, refNum, err := allocateRef(ctx, tx, p.BoardID, nil)
+	if err != nil {
+		return store.Task{}, err
+	}
+	qtx := s.q.WithTx(tx)
+	next, err := qtx.CreateNextRepeatTask(ctx, sqlitedb.CreateNextRepeatTaskParams{
+		ColumnID: p.ColumnID, RefNum: refNum, DueDate: p.DueDate, Position: p.Position, SourceID: p.TaskID,
+	})
+	if errors.Is(err, sql.ErrNoRows) {
+		return store.Task{}, store.ErrNotFound
+	}
+	if err != nil {
+		return store.Task{}, err
+	}
+	if err := qtx.CopyTaskTags(ctx, sqlitedb.CopyTaskTagsParams{NewTaskID: next.ID, SourceTaskID: p.TaskID}); err != nil {
+		return store.Task{}, err
+	}
+	if err := qtx.ClearTaskRepeat(ctx, p.TaskID); err != nil {
+		return store.Task{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return store.Task{}, err
+	}
+
+	tasks := []store.Task{toTask(next)}
 	if err := s.decorateTasks(ctx, tasks); err != nil {
 		return store.Task{}, err
 	}

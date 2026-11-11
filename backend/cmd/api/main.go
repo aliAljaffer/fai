@@ -132,6 +132,7 @@ func main() {
 	default:
 		telegramBot = telegram.NewBot(telegramClient, cfg.TelegramAllowedUserID, cfg.TelegramAllowedChatID, server).
 			WithOffsetStore(telegram.FileOffsetStore{Path: cfg.TelegramStateFile}).
+			WithHistoryStore(telegram.FileHistoryStore{Path: cfg.TelegramStateFile + "-history"}).
 			WithTZOffset(cfg.TelegramTZOffset)
 	}
 

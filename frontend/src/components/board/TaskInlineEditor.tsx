@@ -15,9 +15,11 @@ import {
 } from '@/components/ui/select'
 import { useDebounced } from '@/lib/useDebounced'
 import { cn } from '@/lib/utils'
+import { repeatBlocker } from '@/lib/repeat'
 import { normalizeKind } from '@/lib/taskType'
 import { MarkdownRenderer } from '../MarkdownRenderer'
 import { LabelEditor } from './LabelEditor'
+import { RepeatPicker } from './RepeatPicker'
 import { SubtaskTree } from './SubtaskTree'
 import { LabelSuggestions } from './TaskDetail'
 import {
@@ -57,6 +59,7 @@ export function TaskInlineEditor({
   focusNonce?: number
 }) {
   const update = useUpdateTask(task.board_id)
+  const repeatHint = repeatBlocker(task)
   const move = useMoveTask(task.board_id)
   const { data: subtasks } = useSubtasks(task.id)
   const { data: comments } = useTaskComments(task.id)
@@ -337,6 +340,26 @@ export function TaskInlineEditor({
                 </Button>
               ))}
             </div>
+          </div>
+
+          <div className="col-span-2 flex min-w-0 flex-col gap-1">
+            <div className="flex items-baseline justify-between gap-2">
+              <label htmlFor={`inline-repeat-${task.id}`} className={FIELD_LABEL}>
+                Repeat
+              </label>
+              {repeatHint && <span className="text-xs text-muted-foreground">{repeatHint}</span>}
+            </div>
+            <RepeatPicker
+              id={`inline-repeat-${task.id}`}
+              value={task.repeat}
+              disabled={Boolean(repeatHint)}
+              onChange={(repeat) =>
+                update.mutate(
+                  { id: task.id, repeat },
+                  { onError: (error) => toast.error(error.message) },
+                )
+              }
+            />
           </div>
         </div>
 

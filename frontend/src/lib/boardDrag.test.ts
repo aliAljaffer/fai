@@ -20,6 +20,7 @@ function task(id: number, columnId: number, position: number): Task {
     meeting_outcome_id: null,
     created_by_fai: false,
     completed_at: null,
+    repeat: null,
     archived: false,
     tags: [],
     created_at: '2026-01-01T00:00:00Z',

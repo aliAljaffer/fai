@@ -18,6 +18,7 @@ import type {
   MeetingOutcome,
   Note,
   Reminder,
+  Repeat,
   Tag,
   Task,
   TaskBacklink,
@@ -377,6 +378,7 @@ export function useCreateTask(boardId: number | undefined) {
       column_id: number
       title: string
       due_date?: string
+      repeat?: Repeat | null
       parent_task_id?: number
       kind?: 'arc' | 'task' | 'step'
     }) => api.post<Task>('/tasks', body),
@@ -401,7 +403,7 @@ export function useAITask(boardId: number | undefined) {
   })
 }
 
-export type TaskPatch = Partial<Pick<Task, 'title' | 'description_md' | 'priority' | 'due_date'>>
+export type TaskPatch = Partial<Pick<Task, 'title' | 'description_md' | 'priority' | 'due_date' | 'repeat'>>
 
 export function useUpdateTask(boardId: number | undefined) {
   const qc = useQueryClient()
@@ -647,7 +649,12 @@ export function useReminders(workspaceId?: number) {
 export function useCreateReminder(workspaceId?: number) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (body: { title: string; remind_at: string; task_id?: number }) =>
+    mutationFn: (body: {
+      title: string
+      remind_at: string
+      task_id?: number
+      repeat?: Repeat | null
+    }) =>
       api.post<Reminder>('/reminders', { ...body, workspace_id: workspaceId }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['reminders'] }),
   })
@@ -656,7 +663,16 @@ export function useCreateReminder(workspaceId?: number) {
 export function useUpdateReminder() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, ...body }: { id: number; title: string; remind_at: string; task_id?: number }) =>
+    mutationFn: ({
+      id,
+      ...body
+    }: {
+      id: number
+      title: string
+      remind_at: string
+      task_id?: number
+      repeat?: Repeat | null
+    }) =>
       api.patch<Reminder>(`/reminders/${id}`, body),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['reminders'] }),
   })

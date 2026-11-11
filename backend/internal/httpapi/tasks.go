@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -55,14 +56,15 @@ func (s *Server) listTasks(w http.ResponseWriter, r *http.Request) {
 }
 
 type taskBody struct {
-	BoardID       int64   `json:"board_id"`
-	ColumnID      int64   `json:"column_id"`
-	Title         string  `json:"title"`
-	DescriptionMd string  `json:"description_md"`
-	Priority      string  `json:"priority"`
-	DueDate       *string `json:"due_date"`
-	ParentTaskID  *int64  `json:"parent_task_id"`
-	Kind          string  `json:"kind"`
+	BoardID       int64           `json:"board_id"`
+	ColumnID      int64           `json:"column_id"`
+	Title         string          `json:"title"`
+	DescriptionMd string          `json:"description_md"`
+	Priority      string          `json:"priority"`
+	DueDate       *string         `json:"due_date"`
+	ParentTaskID  *int64          `json:"parent_task_id"`
+	Kind          string          `json:"kind"`
+	Repeat        json.RawMessage `json:"repeat"`
 }
 
 func (s *Server) createTask(w http.ResponseWriter, r *http.Request) {
@@ -76,6 +78,16 @@ func (s *Server) createTask(w http.ResponseWriter, r *http.Request) {
 	}
 	body.Kind = store.NormalizeKind(body.Kind, body.ParentTaskID != nil)
 	if err := s.validateTaskType(r.Context(), 0, body.Kind, body.ParentTaskID); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	change, err := decodeRepeat(body.Repeat)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	repeat, err := taskCreateRepeat(change, body.Kind, body.DueDate)
+	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -96,6 +108,7 @@ func (s *Server) createTask(w http.ResponseWriter, r *http.Request) {
 		Position:      position,
 		ParentTaskID:  body.ParentTaskID,
 		Kind:          body.Kind,
+		Repeat:        repeat,
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
@@ -129,6 +142,12 @@ func (s *Server) setTaskType(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
+	if body.Kind == "arc" {
+		if current, err := s.Store.GetTask(ctx, id); err == nil && current.Repeat != nil {
+			writeError(w, http.StatusBadRequest, "an arc cannot repeat")
+			return
+		}
+	}
 	if body.Kind == "step" || body.Kind == "task" {
 		if err := s.Store.SetTaskParent(ctx, id, body.ParentTaskID); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
@@ -219,6 +238,7 @@ type taskPatchBody struct {
 	DescriptionMd *string         `json:"description_md"`
 	Priority      *string         `json:"priority"`
 	DueDate       json.RawMessage `json:"due_date"`
+	Repeat        json.RawMessage `json:"repeat"`
 }
 
 func (s *Server) updateTask(w http.ResponseWriter, r *http.Request) {
@@ -248,8 +268,24 @@ func (s *Server) updateTask(w http.ResponseWriter, r *http.Request) {
 			patch.DueDate = &due
 		}
 	}
-	if patch.Title == nil && patch.DescriptionMd == nil && patch.Priority == nil && !patch.DueDateSet {
+	change, err := decodeRepeat(body.Repeat)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if patch.Title == nil && patch.DescriptionMd == nil && patch.Priority == nil && !patch.DueDateSet && !change.set {
 		writeError(w, http.StatusBadRequest, "no fields to update")
+		return
+	}
+	var current store.Task
+	if taskRepeatNeedsCurrent(patch, change) {
+		if current, err = s.Store.GetTask(r.Context(), id); err != nil {
+			writeError(w, http.StatusNotFound, "task not found")
+			return
+		}
+	}
+	if err := applyTaskRepeat(current, &patch, change); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	task, err := s.Store.PatchTask(r.Context(), id, patch)
@@ -310,6 +346,11 @@ func (s *Server) moveTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
+	before, err := s.Store.GetTask(ctx, id)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "task not found")
+		return
+	}
 	siblings, err := s.Store.ListTasksByColumnOrdered(ctx, body.ColumnID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
@@ -335,7 +376,7 @@ func (s *Server) moveTask(w http.ResponseWriter, r *http.Request) {
 		position, _ = computePosition(filtered, body.AfterTaskID, body.BeforeTaskID)
 	}
 
-	task, err := s.Store.MoveTask(ctx, id, body.ColumnID, position)
+	task, err := s.moveTaskItem(ctx, before, body.ColumnID, position, time.Now())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

@@ -157,6 +157,11 @@ export interface ExtractedTask {
   steps: string[]
 }
 
+export interface Repeat {
+  freq: 'daily' | 'weekly' | 'monthly' | 'yearly'
+  interval: number
+}
+
 export interface Reminder {
   id: number
   title: string
@@ -166,6 +171,7 @@ export interface Reminder {
   sent: boolean
   created_at: string
   completed_at: string | null
+  repeat: Repeat | null
 }
 
 export interface TimeEntry {
@@ -193,6 +199,7 @@ export interface Task {
   meeting_outcome_id: number | null
   created_by_fai: boolean
   completed_at: string | null
+  repeat: Repeat | null
   archived: boolean
   tags: Tag[]
   created_at: string

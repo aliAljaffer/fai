@@ -20,8 +20,16 @@ func (s *Server) prepareChatCreateReminder(_ context.Context, action chatAction,
 	if err != nil {
 		return chatAction{}, "", false, fmt.Errorf("invalid remind_at")
 	}
+	change, err := decodeRepeat(action.Repeat)
+	if err != nil {
+		return chatAction{}, "", false, err
+	}
 	action.RemindAt = remindAt.Format(time.RFC3339)
-	return action, "Create reminder \"" + action.Title + "\" at " + remindAt.Format(chatReminderLayout) + "?", true, nil
+	text := "Create reminder \"" + action.Title + "\" at " + remindAt.Format(chatReminderLayout)
+	if change.rule != nil {
+		text += ", repeats " + change.rule.Describe()
+	}
+	return action, text + "?", true, nil
 }
 
 func (s *Server) confirmChatCreateReminder(ctx context.Context, action chatAction) (string, error) {
@@ -33,12 +41,27 @@ func (s *Server) confirmChatCreateReminder(ctx context.Context, action chatActio
 	if err != nil {
 		return "", fmt.Errorf("invalid remind_at")
 	}
-	reminder, err := s.Store.CreateReminder(ctx, title, remindAt, nil, 0)
+	change, err := decodeRepeat(action.Repeat)
+	if err != nil {
+		return "", err
+	}
+	reminder, err := s.Store.CreateReminder(ctx, title, remindAt, nil, 0, reminderRepeat(change, remindAt))
 	if err != nil {
 		return "", err
 	}
 	s.broadcast("reminders")
 	return "Created reminder \"" + reminder.Title + "\".", nil
+}
+
+func chatNextTime(at time.Time) string {
+	return at.UTC().Format(chatReminderLayout) + " UTC"
+}
+
+func repeatChangeText(change repeatChange) string {
+	if change.rule == nil {
+		return "no repeat"
+	}
+	return "repeat " + change.rule.Describe()
 }
 
 func (s *Server) chatReminder(ctx context.Context, id int64) (store.Reminder, bool, error) {
@@ -70,7 +93,7 @@ func (s *Server) confirmedChatReminder(ctx context.Context, id int64) (store.Rem
 	return reminder, nil
 }
 
-func chatReminderChange(action chatAction, current store.Reminder) (string, time.Time, []string, error) {
+func chatReminderChange(action chatAction, current store.Reminder) (string, time.Time, *store.ReminderRepeat, []string, error) {
 	title, remindAt := current.Title, current.RemindAt
 	var changes []string
 	if next := strings.TrimSpace(action.Title); next != "" && next != current.Title {
@@ -80,12 +103,19 @@ func chatReminderChange(action chatAction, current store.Reminder) (string, time
 	if action.RemindAt != "" {
 		parsed, err := time.Parse(time.RFC3339, action.RemindAt)
 		if err != nil {
-			return "", time.Time{}, nil, fmt.Errorf("invalid remind_at")
+			return "", time.Time{}, nil, nil, fmt.Errorf("invalid remind_at")
 		}
 		remindAt = parsed
 		changes = append(changes, "time to "+parsed.Format(chatReminderLayout))
 	}
-	return title, remindAt, changes, nil
+	change, err := decodeRepeat(action.Repeat)
+	if err != nil {
+		return "", time.Time{}, nil, nil, err
+	}
+	if change.set {
+		changes = append(changes, repeatChangeText(change))
+	}
+	return title, remindAt, reminderRepeatForUpdate(current, remindAt, change, true), changes, nil
 }
 
 func (s *Server) prepareChatUpdateReminder(ctx context.Context, action chatAction, _ time.Time) (chatAction, string, bool, error) {
@@ -93,7 +123,7 @@ func (s *Server) prepareChatUpdateReminder(ctx context.Context, action chatActio
 	if err != nil || !found {
 		return chatAction{}, chatReminderMissing, false, err
 	}
-	_, _, changes, err := chatReminderChange(action, reminder)
+	_, _, _, changes, err := chatReminderChange(action, reminder)
 	if err != nil {
 		return chatAction{}, "", false, err
 	}
@@ -108,11 +138,11 @@ func (s *Server) confirmChatUpdateReminder(ctx context.Context, action chatActio
 	if err != nil {
 		return "", err
 	}
-	title, remindAt, _, err := chatReminderChange(action, reminder)
+	title, remindAt, repeat, _, err := chatReminderChange(action, reminder)
 	if err != nil {
 		return "", err
 	}
-	updated, err := s.Store.UpdateReminder(ctx, reminder.ID, title, remindAt, reminder.TaskID)
+	updated, err := s.Store.UpdateReminder(ctx, reminder.ID, title, remindAt, reminder.TaskID, repeat)
 	if err != nil {
 		return "", err
 	}
@@ -120,13 +150,17 @@ func (s *Server) confirmChatUpdateReminder(ctx context.Context, action chatActio
 	return "Updated reminder \"" + updated.Title + "\".", nil
 }
 
-func (s *Server) prepareChatCompleteReminder(ctx context.Context, action chatAction, _ time.Time) (chatAction, string, bool, error) {
+func (s *Server) prepareChatCompleteReminder(ctx context.Context, action chatAction, now time.Time) (chatAction, string, bool, error) {
 	reminder, found, err := s.chatReminder(ctx, action.ReminderID)
 	if err != nil || !found {
 		return chatAction{}, chatReminderMissing, false, err
 	}
 	if reminder.CompletedAt != nil {
 		return chatAction{}, "The reminder \"" + reminder.Title + "\" is already done.", false, nil
+	}
+	if state := reminder.RepeatState(); state != nil {
+		next := nextReminderTime(*state, reminder.RemindAt, now)
+		return action, "Mark reminder \"" + reminder.Title + "\" done? It repeats " + state.Rule.Describe() + ", so it moves to " + chatNextTime(next) + ".", true, nil
 	}
 	return action, "Mark reminder \"" + reminder.Title + "\" done?", true, nil
 }
@@ -136,10 +170,14 @@ func (s *Server) confirmChatCompleteReminder(ctx context.Context, action chatAct
 	if err != nil {
 		return "", err
 	}
-	if _, err := s.Store.SetReminderCompleted(ctx, reminder.ID, true); err != nil {
+	updated, err := s.completeReminderItem(ctx, reminder, time.Now())
+	if err != nil {
 		return "", err
 	}
 	s.broadcast("reminders")
+	if updated.Repeat != nil {
+		return "Marked reminder \"" + reminder.Title + "\" done. It repeats, so it moved to " + chatNextTime(updated.RemindAt) + ".", nil
+	}
 	return "Marked reminder \"" + reminder.Title + "\" done.", nil
 }
 

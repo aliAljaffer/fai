@@ -1,6 +1,10 @@
 package store
 
-import "time"
+import (
+	"time"
+
+	"github.com/alialjaffer/fai/backend/internal/recurrence"
+)
 
 // BackupData is the portable, engine-agnostic contents of one Fai instance.
 // Attachment bytes are not part of it; the storage keys point at files the
@@ -63,24 +67,26 @@ type BackupTag struct {
 }
 
 type BackupTask struct {
-	ID               int64      `json:"id"`
-	BoardID          int64      `json:"board_id"`
-	ColumnID         int64      `json:"column_id"`
-	WorkspaceID      int64      `json:"workspace_id"`
-	RefNum           int64      `json:"ref_num"`
-	Title            string     `json:"title"`
-	DescriptionMd    string     `json:"description_md"`
-	Priority         string     `json:"priority"`
-	DueDate          *string    `json:"due_date"`
-	Position         float64    `json:"position"`
-	ParentTaskID     *int64     `json:"parent_task_id"`
-	Kind             string     `json:"kind"`
-	MeetingOutcomeID *int64     `json:"meeting_outcome_id"`
-	CreatedByFai     bool       `json:"created_by_fai"`
-	CompletedAt      *time.Time `json:"completed_at"`
-	Archived         bool       `json:"archived"`
-	CreatedAt        time.Time  `json:"created_at"`
-	UpdatedAt        time.Time  `json:"updated_at"`
+	ID               int64            `json:"id"`
+	BoardID          int64            `json:"board_id"`
+	ColumnID         int64            `json:"column_id"`
+	WorkspaceID      int64            `json:"workspace_id"`
+	RefNum           int64            `json:"ref_num"`
+	Title            string           `json:"title"`
+	DescriptionMd    string           `json:"description_md"`
+	Priority         string           `json:"priority"`
+	DueDate          *string          `json:"due_date"`
+	Position         float64          `json:"position"`
+	ParentTaskID     *int64           `json:"parent_task_id"`
+	Kind             string           `json:"kind"`
+	MeetingOutcomeID *int64           `json:"meeting_outcome_id"`
+	CreatedByFai     bool             `json:"created_by_fai"`
+	CompletedAt      *time.Time       `json:"completed_at"`
+	Archived         bool             `json:"archived"`
+	CreatedAt        time.Time        `json:"created_at"`
+	UpdatedAt        time.Time        `json:"updated_at"`
+	Repeat           *recurrence.Rule `json:"repeat"`
+	RepeatAnchor     *string          `json:"repeat_anchor"`
 }
 
 type BackupTaskTag struct {
@@ -104,14 +110,16 @@ type BackupNoteTag struct {
 }
 
 type BackupReminder struct {
-	ID          int64      `json:"id"`
-	Title       string     `json:"title"`
-	RemindAt    time.Time  `json:"remind_at"`
-	TaskID      *int64     `json:"task_id"`
-	WorkspaceID int64      `json:"workspace_id"`
-	Sent        bool       `json:"sent"`
-	CreatedAt   time.Time  `json:"created_at"`
-	CompletedAt *time.Time `json:"completed_at"`
+	ID           int64            `json:"id"`
+	Title        string           `json:"title"`
+	RemindAt     time.Time        `json:"remind_at"`
+	TaskID       *int64           `json:"task_id"`
+	WorkspaceID  int64            `json:"workspace_id"`
+	Sent         bool             `json:"sent"`
+	CreatedAt    time.Time        `json:"created_at"`
+	CompletedAt  *time.Time       `json:"completed_at"`
+	Repeat       *recurrence.Rule `json:"repeat"`
+	RepeatAnchor *time.Time       `json:"repeat_anchor"`
 }
 
 type BackupTimeEntry struct {

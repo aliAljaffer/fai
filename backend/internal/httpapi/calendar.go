@@ -1,12 +1,15 @@
 package httpapi
 
 import (
+	"context"
 	"crypto/subtle"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/alialjaffer/fai/backend/internal/ics"
@@ -26,12 +29,6 @@ func (s *Server) calendarFeed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tasks, err := s.Store.ListTasks(r.Context(), store.ListTasksParams{})
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
 	var workspaceID int64
 	if raw := r.URL.Query().Get("workspace_id"); raw != "" {
 		parsed, err := strconv.ParseInt(raw, 10, 64)
@@ -42,8 +39,14 @@ func (s *Server) calendarFeed(w http.ResponseWriter, r *http.Request) {
 		workspaceID = parsed
 	}
 
+	tasks, reminders, err := s.feedSources(r.Context(), workspaceID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
 	base := s.feedBaseURL(r)
-	events := make([]ics.Event, 0, len(tasks))
+	events := make([]ics.Event, 0, len(tasks)+len(reminders))
 	for _, t := range tasks {
 		if workspaceID != 0 && t.WorkspaceID != workspaceID {
 			continue
@@ -57,7 +60,8 @@ func (s *Server) calendarFeed(w http.ResponseWriter, r *http.Request) {
 		}
 		events = append(events, ics.Event{
 			UID:         fmt.Sprintf("task-%d@fai", t.ID),
-			Date:        due,
+			Start:       due,
+			AllDay:      true,
 			Summary:     t.Title,
 			Description: "Priority: " + t.Priority,
 			URL:         fmt.Sprintf("%s/?task=%d", base, t.ID),
@@ -65,11 +69,41 @@ func (s *Server) calendarFeed(w http.ResponseWriter, r *http.Request) {
 			Updated:     t.UpdatedAt,
 		})
 	}
+	for _, reminder := range reminders {
+		if reminder.CompletedAt != nil {
+			continue
+		}
+		events = append(events, ics.Event{
+			UID:     fmt.Sprintf("reminder-%d@fai", reminder.ID),
+			Start:   reminder.RemindAt,
+			Summary: reminder.Title,
+		})
+	}
 
 	w.Header().Set("Content-Type", "text/calendar; charset=utf-8")
 	w.Header().Set("Content-Disposition", `inline; filename="fai.ics"`)
 	w.Header().Set("Cache-Control", "private, max-age=300")
 	w.Write([]byte(ics.Calendar("fai tasks", events, time.Now())))
+}
+
+func (s *Server) feedSources(ctx context.Context, workspaceID int64) ([]store.Task, []store.Reminder, error) {
+	var scope *int64
+	if workspaceID != 0 {
+		scope = &workspaceID
+	}
+	var (
+		reminders   []store.Reminder
+		reminderErr error
+		wg          sync.WaitGroup
+	)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		reminders, reminderErr = s.Store.ListReminders(ctx, scope)
+	}()
+	tasks, taskErr := s.Store.ListTasks(ctx, store.ListTasksParams{})
+	wg.Wait()
+	return tasks, reminders, errors.Join(taskErr, reminderErr)
 }
 
 // calendarFeedInfo hands the authenticated web UI the subscription URL to show.

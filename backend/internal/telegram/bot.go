@@ -45,7 +45,9 @@ type Bot struct {
 	tzOffset      *int
 	now           func() time.Time
 	offsets       OffsetStore
+	histories     HistoryStore
 
+	saveMu  sync.Mutex
 	mu      sync.Mutex
 	history map[int64][]ai.ChatMessage
 	pending map[string]pendingEntry
@@ -70,6 +72,21 @@ func (b *Bot) WithOffsetStore(store OffsetStore) *Bot {
 	if b != nil {
 		b.offsets = store
 	}
+	return b
+}
+
+func (b *Bot) WithHistoryStore(store HistoryStore) *Bot {
+	if b == nil || store == nil {
+		return b
+	}
+	saved, err := store.Load()
+	if err != nil {
+		log.Printf("telegram: load history: %v", err)
+	}
+	for chatID, messages := range saved {
+		b.history[chatID] = messages
+	}
+	b.histories = store
 	return b
 }
 
@@ -145,10 +162,20 @@ func (b *Bot) handleMessage(ctx context.Context, message *Message) {
 		return
 	}
 	if text == "/start" || text == "/help" {
-		b.sendText(ctx, message.Chat.ID, "Send text or a voice note. I can create tasks and reminders, find tasks, and move a task to another column. I will ask you to confirm every change before I make it.")
+		b.sendText(ctx, message.Chat.ID, helpText())
 		return
 	}
 	b.respond(ctx, message.Chat.ID, text, "")
+}
+
+func helpText() string {
+	var out strings.Builder
+	out.WriteString("Send text or a voice note. I can:")
+	for _, summary := range httpapi.ChatCapabilities() {
+		out.WriteString("\n- " + summary)
+	}
+	out.WriteString("\n\nI will ask you to confirm every change before I make it.")
+	return out.String()
 }
 
 func (b *Bot) allowed(chat Chat, from *User) bool {
@@ -277,6 +304,18 @@ func (b *Bot) respond(ctx context.Context, chatID int64, text, prefix string) {
 }
 
 func (b *Bot) remember(chatID int64, messages ...ai.ChatMessage) {
+	b.saveMu.Lock()
+	defer b.saveMu.Unlock()
+	snapshot := b.appendHistory(chatID, messages)
+	if b.histories == nil {
+		return
+	}
+	if err := b.histories.Save(snapshot); err != nil {
+		log.Printf("telegram: save history: %v", err)
+	}
+}
+
+func (b *Bot) appendHistory(chatID int64, messages []ai.ChatMessage) map[int64][]ai.ChatMessage {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	history := append(b.history[chatID], messages...)
@@ -284,6 +323,11 @@ func (b *Bot) remember(chatID int64, messages ...ai.ChatMessage) {
 		history = history[len(history)-historyLimit:]
 	}
 	b.history[chatID] = history
+	snapshot := make(map[int64][]ai.ChatMessage, len(b.history))
+	for id, chatHistory := range b.history {
+		snapshot[id] = append([]ai.ChatMessage(nil), chatHistory...)
+	}
+	return snapshot
 }
 
 func (b *Bot) sendText(ctx context.Context, chatID int64, text string) {

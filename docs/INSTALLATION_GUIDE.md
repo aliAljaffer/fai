@@ -7,14 +7,14 @@ the short install commands.
 
 | Area | Features |
 |---|---|
-| Tasks | Kanban and list views, filters, bulk actions, subtasks, labels, priorities, due dates, comments, and attachments |
+| Tasks | Kanban and list views, filters, bulk actions, subtasks, labels, priorities, due dates, repeats, comments, and attachments |
 | Task structure | Arcs group work, tasks track work, and steps break tasks down. Each task has a reference such as `FAI-42`. |
 | Workspaces | Separate tasks, notes, reminders, and calendars by workspace |
 | Time tracking | Start timers from a task or the navigation bar. View totals on tasks and in Stats. |
 | Notes | Markdown, `[[wikilinks]]`, backlinks, attachments, and AI task plans |
 | Calendar | Import iCalendar feeds, show recurring events, and create tasks from meeting action items |
 | Search and stats | Search tasks and notes. View completion heatmaps and tracked-time charts. |
-| Reminders | Show reminders on the board. Send notifications through ntfy or email. |
+| Reminders | Show reminders on the board. Send notifications through ntfy or email. Reminders and tasks can repeat. |
 | AI | Chat creates tasks with steps and arcs with nested tasks. Also generates label suggestions, note plans, and meeting action items. |
 | Jira | Import issues with JQL, export tasks, and map Jira statuses to board columns |
 | Themes | Built-in palettes, custom palettes, and workspace colors. Workspace themes are stored in the database. |
@@ -164,7 +164,7 @@ reaches 10 GiB.
 ### Calendar feed
 
 Subscribe to `GET /api/calendar.ics?token=<ICS_TOKEN>` from Apple Calendar or
-another ICS client. The read-only feed contains open tasks with due dates. It
+another ICS client. The read-only feed contains open tasks with due dates and open reminders. It
 does not include calendars imported into the web app.
 
 Set `ICS_TOKEN` and `PUBLIC_URL`. Generate the token with
@@ -172,11 +172,46 @@ Set `ICS_TOKEN` and `PUBLIC_URL`. Generate the token with
 Changing the token breaks existing subscriptions. In Docker Compose, Caddy
 routes the ICS path around Basic authentication.
 
+### Repeating reminders and tasks
+
+A reminder or a task can repeat every day, week, month, or year, or every 2, 3,
+or more of them (up to 365). Set the repeat when you create or edit the item.
+
+Repeating reminders:
+
+- When a notification reaches at least one channel, the reminder moves to its
+  next time and stays pending.
+- When you mark a repeating reminder done, it moves to its next time instead of
+  finishing.
+- A repeating reminder keeps the same UTC time. fai does not adjust for daylight
+  saving time.
+
+Repeating tasks:
+
+- A repeating task needs a due date. An arc cannot repeat.
+- Clearing the due date stops the repeat.
+- When you move a repeating task into a Done column, fai creates the next task
+  in the column the task came from. The next task has the same title,
+  description, priority, parent, and labels, and the next due date.
+- The next due date is never in the past. A task finished late gets the next
+  date on or after today.
+- The next task does not copy steps.
+- Moving a completed task back out of Done does not remove the next task.
+- Jira import and sync never create next tasks.
+
+Monthly and yearly repeats count from the first date. A task due on the 31st
+moves to the last day of shorter months and returns to the 31st afterwards.
+Changing a task's due date starts the repeat from the new date. Snoozing a
+reminder keeps the original schedule.
+
+The ICS feed shows only the current occurrence of a repeating task or reminder.
+
 ### Notifications
 
 Reminders and meeting-outcome prompts use every configured channel. Both
 channels are optional. The scheduler does nothing when neither is configured.
-If one channel fails but another succeeds, fai marks the item sent.
+If one channel fails but another succeeds, fai marks the item sent. A repeating
+reminder moves to its next time instead.
 
 - ntfy: `NTFY_URL`, `NTFY_TOPIC`, `NTFY_USERNAME`, and `NTFY_PASSWORD`
 - Email: `SMTP_ADDR`, `SMTP_FROM`, and comma-separated `SMTP_TO`
@@ -211,8 +246,9 @@ needs the `speech_to_text` permission.
 
 ### Telegram assistant
 
-The Telegram assistant can create tasks and reminders, find tasks, and move a
-task. It asks for confirmation before every change. It runs inside the API
+The Telegram assistant creates, edits, and finds tasks, reminders, and notes. It
+also logs time and runs the task timer. Send `/help` to see the full list. It asks for
+confirmation before every change. It runs inside the API
 process and needs an AI key. Confirmations expire after five minutes, and a new
 message clears earlier confirmations; an expired action is not applied.
 
@@ -226,9 +262,11 @@ Set `TELEGRAM_TZ_OFFSET` to the owner's offset in minutes east of UTC (for
 example `180` for Riyadh) so relative times in voice notes resolve correctly.
 
 If the transcription service rejects Telegram OGG/Opus, the backend converts
-the audio to mono MP3 with the bundled ffmpeg binary and retries. The last 10
-messages per chat stay in memory and are lost on restart. Message IDs are
-remembered for 10 minutes to prevent duplicate tasks after transport retries.
+the audio to mono MP3 with the bundled ffmpeg binary and retries. The bot keeps
+the last 10 messages per chat in memory and saves them next to the state file,
+so a restart keeps them. A missing or corrupt history file starts empty. Message
+IDs are remembered for 10 minutes to prevent duplicate tasks after transport
+retries.
 
 Every inbound and outbound bot message is written to the API log as one line:
 
@@ -249,6 +287,10 @@ Telegram uses `getUpdates` long polling and needs no public route. Configure:
 - `TELEGRAM_ALLOWED_USER_ID`
 - `TELEGRAM_ALLOWED_CHAT_ID`
 - `TELEGRAM_STATE_FILE` (optional, defaults to `fai-telegram-offset`)
+
+The state file holds the update offset. The history file uses the same path
+plus `-history`. In Docker Compose, set `TELEGRAM_STATE_FILE=/data/fai-telegram-offset`.
+That path is on the `faidata` volume and survives container recreation.
 
 ### Jira
 

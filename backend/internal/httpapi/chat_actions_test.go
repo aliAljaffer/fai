@@ -45,7 +45,7 @@ func TestFaiContextShowsChildrenAndReminders(t *testing.T) {
 	arc := chatTask(t, st, "Homelab", "arc", nil)
 	child := chatTask(t, st, "Update Cilium", "task", &arc.ID)
 	step := chatTask(t, st, "Read the changelog", "", &child.ID)
-	if _, err := st.CreateReminder(ctx, "Call the dentist", time.Date(2026, 11, 12, 9, 0, 0, 0, time.UTC), nil, 0); err != nil {
+	if _, err := st.CreateReminder(ctx, "Call the dentist", time.Date(2026, 11, 12, 9, 0, 0, 0, time.UTC), nil, 0, nil); err != nil {
 		t.Fatal(err)
 	}
 	text := (&Server{Store: st}).faiContext(ctx)
@@ -182,7 +182,7 @@ func TestChatLogTime(t *testing.T) {
 func TestChatReminderActions(t *testing.T) {
 	st := actionTestStore(t)
 	ctx := context.Background()
-	reminder, err := st.CreateReminder(ctx, "Call the dentist", time.Date(2026, 11, 12, 9, 0, 0, 0, time.UTC), nil, 0)
+	reminder, err := st.CreateReminder(ctx, "Call the dentist", time.Date(2026, 11, 12, 9, 0, 0, 0, time.UTC), nil, 0, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -238,5 +238,69 @@ func TestArcSummaryListsEveryTask(t *testing.T) {
 	want := "Create arc \"Arc\" with these 2 tasks?\n1. A (2 steps)\n2. B"
 	if got != want {
 		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+func TestChatTimerActions(t *testing.T) {
+	st := actionTestStore(t)
+	ctx := context.Background()
+	first := chatTask(t, st, "Renew the domain", "", nil)
+	second := chatTask(t, st, "Patch the router", "", nil)
+	server := &Server{Store: st}
+	running := func() *store.TaskTimeEntry {
+		t.Helper()
+		entry, err := st.GetRunningEntry(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return entry
+	}
+
+	outcome, _ := runChatAction(t, server, `ACTION: {"type":"start_timer","task":"@`+first.Ref+`"}`)
+	if !strings.Contains(outcome.Reply, "Start the timer on @"+first.Ref) || strings.Contains(outcome.Reply, "stops") {
+		t.Errorf("reply = %q", outcome.Reply)
+	}
+	if entry := running(); entry == nil || entry.TaskID != first.ID {
+		t.Fatalf("running = %#v", entry)
+	}
+
+	outcome, _ = runChatAction(t, server, `ACTION: {"type":"start_timer","task":"@`+second.Ref+`"}`)
+	if !strings.Contains(outcome.Reply, "stops the timer on @"+first.Ref+" (Renew the domain)") {
+		t.Errorf("reply = %q", outcome.Reply)
+	}
+	if entry := running(); entry == nil || entry.TaskID != second.ID {
+		t.Fatalf("running = %#v", entry)
+	}
+
+	server.AI = &fakeAI{reply: `ACTION: {"type":"start_timer","task":"@` + second.Ref + `"}`}
+	outcome, err := server.RunChat(ctx, []ai.ChatMessage{{Role: "user", Content: "start"}}, nil)
+	if err != nil || outcome.Pending != nil || !strings.Contains(outcome.Reply, "already running") {
+		t.Fatalf("outcome = %#v, err = %v", outcome, err)
+	}
+
+	server.AI = &fakeAI{reply: `ACTION: {"type":"stop_timer","task":"@` + first.Ref + `"}`}
+	outcome, err = server.RunChat(ctx, []ai.ChatMessage{{Role: "user", Content: "stop"}}, nil)
+	if err != nil || outcome.Pending != nil || !strings.Contains(outcome.Reply, "No timer is running on @"+first.Ref) {
+		t.Fatalf("outcome = %#v, err = %v", outcome, err)
+	}
+
+	outcome, confirmation := runChatAction(t, server, `ACTION: {"type":"stop_timer","task":"@`+second.Ref+`"}`)
+	if !strings.Contains(outcome.Reply, "Stop the timer on @"+second.Ref) || !strings.Contains(confirmation, "Stopped the timer on @"+second.Ref) {
+		t.Errorf("reply = %q, confirmation = %q", outcome.Reply, confirmation)
+	}
+	if running() != nil {
+		t.Fatal("timer still running")
+	}
+
+	runChatAction(t, server, `ACTION: {"type":"start_timer","task":"@`+first.Ref+`"}`)
+	outcome, _ = runChatAction(t, server, `ACTION: {"type":"stop_timer"}`)
+	if !strings.Contains(outcome.Reply, "@"+first.Ref) || running() != nil {
+		t.Errorf("reply = %q", outcome.Reply)
+	}
+
+	server.AI = &fakeAI{reply: `ACTION: {"type":"stop_timer"}`}
+	outcome, err = server.RunChat(ctx, []ai.ChatMessage{{Role: "user", Content: "stop"}}, nil)
+	if err != nil || outcome.Pending != nil || !strings.Contains(outcome.Reply, "No timer is running.") {
+		t.Fatalf("outcome = %#v, err = %v", outcome, err)
 	}
 }

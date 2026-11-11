@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/alialjaffer/fai/backend/internal/ai"
+	"github.com/alialjaffer/fai/backend/internal/store"
 )
 
 func (s *Server) listReminders(w http.ResponseWriter, r *http.Request) {
@@ -20,10 +21,11 @@ func (s *Server) listReminders(w http.ResponseWriter, r *http.Request) {
 }
 
 type reminderBody struct {
-	Title       string `json:"title"`
-	RemindAt    string `json:"remind_at"`
-	TaskID      *int64 `json:"task_id"`
-	WorkspaceID int64  `json:"workspace_id"`
+	Title       string          `json:"title"`
+	RemindAt    string          `json:"remind_at"`
+	TaskID      *int64          `json:"task_id"`
+	WorkspaceID int64           `json:"workspace_id"`
+	Repeat      json.RawMessage `json:"repeat"`
 }
 
 func (b reminderBody) remindAt() (time.Time, error) {
@@ -41,13 +43,18 @@ func (s *Server) createReminder(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid remind_at, expected RFC3339")
 		return
 	}
+	change, err := decodeRepeat(body.Repeat)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	if body.WorkspaceID != 0 {
 		if _, err := s.Store.GetWorkspace(r.Context(), body.WorkspaceID); err != nil {
 			writeError(w, http.StatusBadRequest, "unknown workspace_id")
 			return
 		}
 	}
-	reminder, err := s.Store.CreateReminder(r.Context(), body.Title, remindAt, body.TaskID, body.WorkspaceID)
+	reminder, err := s.Store.CreateReminder(r.Context(), body.Title, remindAt, body.TaskID, body.WorkspaceID, reminderRepeat(change, remindAt))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -71,7 +78,18 @@ func (s *Server) updateReminder(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid remind_at, expected RFC3339")
 		return
 	}
-	reminder, err := s.Store.UpdateReminder(r.Context(), id, body.Title, remindAt, body.TaskID)
+	change, err := decodeRepeat(body.Repeat)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	current, err := s.Store.GetReminder(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "reminder not found")
+		return
+	}
+	repeat := reminderRepeatForUpdate(current, remindAt, change, false)
+	reminder, err := s.Store.UpdateReminder(r.Context(), id, body.Title, remindAt, body.TaskID, repeat)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -92,7 +110,13 @@ func (s *Server) completeReminder(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid body")
 		return
 	}
-	reminder, err := s.Store.SetReminderCompleted(r.Context(), id, body.Completed)
+	var reminder store.Reminder
+	var err error
+	if body.Completed {
+		reminder, err = s.completeReminderByID(r.Context(), id)
+	} else {
+		reminder, err = s.Store.SetReminderCompleted(r.Context(), id, false)
+	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -203,7 +227,7 @@ func (s *Server) aiReminder(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
-	reminder, err := s.Store.CreateReminder(r.Context(), title, remindAt, nil, body.WorkspaceID)
+	reminder, err := s.Store.CreateReminder(r.Context(), title, remindAt, nil, body.WorkspaceID, nil)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

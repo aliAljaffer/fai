@@ -33,6 +33,7 @@ import { useUIStore } from '../store/ui'
 import { useWorkspaceStore } from '../store/workspace'
 import { cn } from '@/lib/utils'
 import type { JiraLink, Task } from '../api/types'
+import { RepeatIndicator } from '../components/board/RepeatPicker'
 
 type SortKey = 'title' | 'priority' | 'due_date' | 'created_at' | 'updated_at'
 type ColumnKey = 'column' | 'tags' | Exclude<SortKey, 'title'>
@@ -497,7 +498,15 @@ export function List() {
       </div>
     ),
     priority: (task) => task.priority,
-    due_date: (task) => task.due_date ?? '—',
+    due_date: (task) =>
+      task.due_date && task.repeat ? (
+        <span className="inline-flex items-center gap-1">
+          {task.due_date}
+          <RepeatIndicator repeat={task.repeat} />
+        </span>
+      ) : (
+        (task.due_date ?? '—')
+      ),
     created_at: (task) => formatTimestamp(task.created_at),
     updated_at: (task) => formatTimestamp(task.updated_at),
   }

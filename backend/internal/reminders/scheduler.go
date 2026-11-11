@@ -39,6 +39,19 @@ func (s *Scheduler) Run(ctx context.Context) {
 	}
 }
 
+type reminderSettler interface {
+	MarkReminderSent(ctx context.Context, id int64) error
+	AdvanceReminder(ctx context.Context, id int64, remindAt time.Time) (store.Reminder, error)
+}
+
+func settleDelivered(ctx context.Context, st reminderSettler, r store.Reminder, now time.Time) error {
+	if state := r.RepeatState(); state != nil {
+		_, err := st.AdvanceReminder(ctx, r.ID, state.Rule.Next(state.Anchor, now))
+		return err
+	}
+	return st.MarkReminderSent(ctx, r.ID)
+}
+
 func (s *Scheduler) tick(ctx context.Context) {
 	if s.Ntfy == nil && s.Mail == nil && s.Telegram == nil {
 		return
@@ -52,8 +65,8 @@ func (s *Scheduler) tick(ctx context.Context) {
 		if !s.notify(ctx, "reminders", r.ID, "Reminder", r.Title) {
 			continue
 		}
-		if err := s.Store.MarkReminderSent(ctx, r.ID); err != nil {
-			log.Printf("reminders: mark sent %d: %v", r.ID, err)
+		if err := settleDelivered(ctx, s.Store, r, time.Now()); err != nil {
+			log.Printf("reminders: settle %d: %v", r.ID, err)
 		}
 	}
 

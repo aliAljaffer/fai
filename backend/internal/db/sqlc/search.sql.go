@@ -65,7 +65,7 @@ func (q *Queries) SearchNotes(ctx context.Context, arg SearchNotesParams) ([]Sea
 }
 
 const searchTasks = `-- name: SearchTasks :many
-SELECT id, board_id, column_id, title, description_md, priority, due_date, position, parent_task_id, kind, meeting_outcome_id, completed_at, archived, created_at, updated_at, workspace_id, ref_num, created_by_fai
+SELECT id, board_id, column_id, title, description_md, priority, due_date, position, parent_task_id, kind, meeting_outcome_id, completed_at, archived, created_at, updated_at, workspace_id, ref_num, created_by_fai, repeat_freq, repeat_interval, repeat_anchor
 FROM tasks
 WHERE archived = false AND search_vector @@ websearch_to_tsquery('english', $1)
   AND ($2::bigint IS NULL OR workspace_id = $2)
@@ -97,6 +97,9 @@ type SearchTasksRow struct {
 	WorkspaceID      int64              `json:"workspace_id"`
 	RefNum           int64              `json:"ref_num"`
 	CreatedByFai     bool               `json:"created_by_fai"`
+	RepeatFreq       pgtype.Text        `json:"repeat_freq"`
+	RepeatInterval   pgtype.Int4        `json:"repeat_interval"`
+	RepeatAnchor     pgtype.Date        `json:"repeat_anchor"`
 }
 
 func (q *Queries) SearchTasks(ctx context.Context, arg SearchTasksParams) ([]SearchTasksRow, error) {
@@ -127,6 +130,9 @@ func (q *Queries) SearchTasks(ctx context.Context, arg SearchTasksParams) ([]Sea
 			&i.WorkspaceID,
 			&i.RefNum,
 			&i.CreatedByFai,
+			&i.RepeatFreq,
+			&i.RepeatInterval,
+			&i.RepeatAnchor,
 		); err != nil {
 			return nil, err
 		}
