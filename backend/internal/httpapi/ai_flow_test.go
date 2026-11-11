@@ -532,3 +532,65 @@ func postJSON(t *testing.T, url, body string) *http.Response {
 	}
 	return res
 }
+
+func createAIReminder(t *testing.T, reply string) (store.Reminder, *fakeAI) {
+	t.Helper()
+	st, err := lite.New(filepath.Join(t.TempDir(), "fai.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { st.Close() })
+	provider := &fakeAI{reply: reply}
+	server := httptest.NewServer(NewRouter(&Server{Store: st, AI: provider}))
+	t.Cleanup(server.Close)
+
+	res := postJSON(t, server.URL+"/api/reminders/ai", `{"text":"anything"}`)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusCreated {
+		t.Fatalf("reminder status = %d", res.StatusCode)
+	}
+	var reminder store.Reminder
+	if err := json.NewDecoder(res.Body).Decode(&reminder); err != nil {
+		t.Fatal(err)
+	}
+	stored, err := st.GetReminder(context.Background(), reminder.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return stored, provider
+}
+
+func TestAIReminderCreatesRepeatingReminder(t *testing.T) {
+	reminder, provider := createAIReminder(t, `{"title":"Send the report","remind_at":"2099-01-05T09:00:00Z","repeat":{"freq":"weekly","interval":2}}`)
+	state := reminder.RepeatState()
+	if state == nil || state.Rule.Freq != "weekly" || state.Rule.Interval != 2 {
+		t.Fatalf("repeat = %#v", reminder.Repeat)
+	}
+	if state.Anchor.UTC().Format(time.RFC3339) != "2099-01-05T09:00:00Z" {
+		t.Errorf("anchor = %s", state.Anchor)
+	}
+	if !strings.Contains(provider.messages[0].Content, "every weekday") {
+		t.Errorf("prompt does not name unsupported patterns: %q", provider.messages[0].Content)
+	}
+}
+
+func TestAIReminderWithoutRepeatIsOneOff(t *testing.T) {
+	reminder, _ := createAIReminder(t, `{"title":"Call Sam","remind_at":"2099-01-05T09:00:00Z","repeat":null}`)
+	if reminder.Repeat != nil {
+		t.Fatalf("repeat = %#v", reminder.Repeat)
+	}
+}
+
+func TestAIReminderIgnoresInvalidRepeat(t *testing.T) {
+	for _, repeat := range []string{
+		`{"freq":"hourly","interval":1}`,
+		`{"freq":"weekly","interval":0}`,
+		`{"freq":"weekly","interval":9999}`,
+		`"every monday"`,
+	} {
+		reminder, _ := createAIReminder(t, `{"title":"Send the report","remind_at":"2099-01-05T09:00:00Z","repeat":`+repeat+`}`)
+		if reminder.Repeat != nil {
+			t.Errorf("repeat %s created %#v", repeat, reminder.Repeat)
+		}
+	}
+}

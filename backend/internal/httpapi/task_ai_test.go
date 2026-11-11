@@ -45,11 +45,36 @@ func TestAITaskCreatesTaskFromNaturalLanguage(t *testing.T) {
 }
 
 func TestAITaskFallsBackToMediumPriority(t *testing.T) {
-	title, due, priority, err := parseAITask(`{"title":"Write the report","due_date":"","priority":"urgent"}`)
+	title, due, priority, repeat, err := parseAITask(`{"title":"Write the report","due_date":"","priority":"urgent"}`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if title != "Write the report" || due != nil || priority != "medium" {
+	if title != "Write the report" || due != nil || priority != "medium" || repeat != nil {
 		t.Fatalf("parsed = %q, %v, %q", title, due, priority)
+	}
+}
+
+func TestParseAITaskRepeat(t *testing.T) {
+	cases := []struct {
+		name  string
+		reply string
+		want  bool
+	}{
+		{"valid with due date", `{"title":"Water plants","due_date":"2026-11-02","repeat":{"freq":"weekly","interval":1}}`, true},
+		{"no due date", `{"title":"Water plants","due_date":"","repeat":{"freq":"weekly","interval":1}}`, false},
+		{"invalid rule", `{"title":"Water plants","due_date":"2026-11-02","repeat":{"freq":"hourly","interval":1}}`, false},
+		{"absent", `{"title":"Water plants","due_date":"2026-11-02"}`, false},
+	}
+	for _, tc := range cases {
+		_, _, _, repeat, err := parseAITask(tc.reply)
+		if err != nil {
+			t.Fatalf("%s: %v", tc.name, err)
+		}
+		if (repeat != nil) != tc.want {
+			t.Errorf("%s: repeat = %#v", tc.name, repeat)
+		}
+		if repeat != nil && (repeat.Anchor != "2026-11-02" || repeat.Rule.Freq != "weekly") {
+			t.Errorf("%s: repeat = %#v", tc.name, repeat)
+		}
 	}
 }
