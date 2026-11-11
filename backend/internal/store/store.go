@@ -132,6 +132,7 @@ type Store interface {
 	StopEntryForTask(ctx context.Context, taskID int64) (TaskTimeEntry, error)
 	GetRunningEntry(ctx context.Context) (*TaskTimeEntry, error)
 	ListEntriesForTask(ctx context.Context, taskID int64) ([]TaskTimeEntry, error)
+	LogTimeEntry(ctx context.Context, taskID int64, startedAt, endedAt time.Time) (TaskTimeEntry, error)
 
 	// Reminders
 	ListReminders(ctx context.Context, workspaceID *int64) ([]Reminder, error)

@@ -25,3 +25,7 @@ WHERE ended_at IS NOT NULL
   AND started_at::date BETWEEN sqlc.arg(from_date)::date AND sqlc.arg(to_date)::date
 GROUP BY started_at::date
 ORDER BY started_at::date;
+
+-- name: LogEntry :one
+INSERT INTO task_time_entries (task_id, started_at, ended_at) VALUES ($1, $2, $3)
+RETURNING id, task_id, started_at, ended_at, duration_seconds;

@@ -435,3 +435,67 @@ ACTION: {"type":"create_task","title":"Watch the next episode"}`}
 		t.Fatalf("created task missing: %#v", tasks)
 	}
 }
+
+func TestChatAddStepsToExistingTask(t *testing.T) {
+	st := actionTestStore(t)
+	ctx := context.Background()
+	task, err := st.CreateTask(ctx, store.CreateTaskParams{
+		BoardID: 1, ColumnID: columnID(t, st, "To Do"), Title: "Renew the domain", Priority: "medium", Position: 1024,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	arc, err := st.CreateTask(ctx, store.CreateTaskParams{
+		BoardID: 1, ColumnID: columnID(t, st, "To Do"), Title: "Homelab", Priority: "medium", Position: 2048, Kind: "arc",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	provider := &fakeAI{reply: `ACTION: {"type":"add_steps","task":"@` + task.Ref + `","steps":["Check the price"," ","Pay the invoice"]}
+ACTION: {"type":"add_steps","task":"@` + arc.Ref + `","steps":["Update Cilium"]}`}
+	server := &Server{Store: st, AI: provider}
+	outcome, err := server.RunChat(ctx, []ai.ChatMessage{{Role: "user", Content: "add steps"}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if outcome.Pending == nil {
+		t.Fatalf("pending = nil, reply = %q", outcome.Reply)
+	}
+	if !strings.Contains(outcome.Reply, "Add 2 steps to @"+task.Ref) || !strings.Contains(outcome.Reply, "Add 1 task to @"+arc.Ref) {
+		t.Errorf("reply = %q", outcome.Reply)
+	}
+	if steps, _ := st.ListSubtasks(ctx, task.ID); len(steps) != 0 {
+		t.Fatalf("steps created before confirmation: %d", len(steps))
+	}
+
+	if _, err := server.ConfirmChatAction(ctx, *outcome.Pending); err != nil {
+		t.Fatal(err)
+	}
+	steps, err := st.ListSubtasks(ctx, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(steps) != 2 || steps[0].Kind != "step" || steps[0].Title != "Check the price" {
+		t.Fatalf("steps = %#v", steps)
+	}
+	children, err := st.ListSubtasks(ctx, arc.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(children) != 1 || children[0].Kind != "task" {
+		t.Fatalf("arc children = %#v", children)
+	}
+}
+
+func TestChatAddStepsUnknownTaskAsks(t *testing.T) {
+	st := actionTestStore(t)
+	server := &Server{Store: st, AI: &fakeAI{reply: `ACTION: {"type":"add_steps","task":"@FAI-999","steps":["One"]}`}}
+	outcome, err := server.RunChat(context.Background(), []ai.ChatMessage{{Role: "user", Content: "add a step"}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if outcome.Pending != nil || !strings.Contains(outcome.Reply, "could not find") {
+		t.Fatalf("outcome = %#v", outcome)
+	}
+}

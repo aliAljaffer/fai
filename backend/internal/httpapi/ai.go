@@ -2,7 +2,6 @@ package httpapi
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -227,81 +226,10 @@ type aiChatBody struct {
 	WorkspaceID int64            `json:"workspace_id"`
 }
 
-const chatActionInstructions = `You can also create or change things for the owner. When you do, add one final line to your reply for each change:
-ACTION: {"type":"create_task","title":"...","due_date":"YYYY-MM-DD","steps":["...","..."]}
-ACTION: {"type":"create_arc","title":"...","tasks":[{"title":"...","due_date":"YYYY-MM-DD","steps":["...","..."]}]}
-ACTION: {"type":"create_reminder","title":"...","remind_at":"RFC3339 with the local offset"}
-ACTION: {"type":"find_task","task":"@TAG-123"}
-ACTION: {"type":"move_task","task":"@TAG-123","column":"Column name"}
-Use create_task for work to do. When the owner asks for steps or subtasks under one task, put their titles in steps instead of separate create_task actions. Use create_arc when the owner asks for an arc or epic, or for a group of tasks that each have steps. Use create_reminder only when the owner asks to be reminded or names a time of day for a nudge.
-Use find_task when the owner asks about an existing task. Use move_task to change the column of an existing task. Always copy the @ref from the task context for task actions. Never guess a task or a column.
-Resolve relative dates (today, tomorrow, Monday, in 10 minutes) against the current local time given below. A weekday alone means the next such day, or today when it is that day. Set a due date when the owner gives one and omit due_date when they do not.
-Write each ACTION line as strict JSON on its own line. Never claim you changed something unless you add the ACTION line.`
-
-type chatAction struct {
-	Type      string         `json:"type"`
-	Title     string         `json:"title"`
-	DueDate   *string        `json:"due_date"`
-	RemindAt  string         `json:"remind_at"`
-	Task      string         `json:"task"`
-	TaskID    int64          `json:"task_id"`
-	Column    string         `json:"column"`
-	ColumnID  int64          `json:"column_id,omitempty"`
-	TaskRef   string         `json:"task_ref,omitempty"`
-	TaskTitle string         `json:"task_title,omitempty"`
-	Steps     []string       `json:"steps"`
-	Tasks     []chatTaskSpec `json:"tasks"`
-}
-
-type chatTaskSpec struct {
-	Title   string   `json:"title"`
-	DueDate *string  `json:"due_date"`
-	Steps   []string `json:"steps"`
-}
-
-type ChatCreated struct {
-	Type  string `json:"type"`
-	ID    int64  `json:"id"`
-	Title string `json:"title"`
-}
-
-type PendingChatAction struct {
-	Type       string       `json:"type"`
-	Summary    string       `json:"summary,omitempty"`
-	Actions    []chatAction `json:"actions,omitempty"`
-	TaskID     int64        `json:"task_id,omitempty"`
-	TaskRef    string       `json:"task_ref,omitempty"`
-	TaskTitle  string       `json:"task_title,omitempty"`
-	ColumnID   int64        `json:"column_id,omitempty"`
-	ColumnName string       `json:"column_name,omitempty"`
-}
-
 type ChatOutcome struct {
 	Reply   string
 	Created []ChatCreated
 	Pending *PendingChatAction
-}
-
-// splitChatActions separates the model's prose from its action lines. A
-// malformed action line stays in the reply so the owner sees what went wrong.
-func splitChatActions(reply string) (string, []chatAction) {
-	lines := strings.Split(reply, "\n")
-	kept := make([]string, 0, len(lines))
-	var actions []chatAction
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if !strings.HasPrefix(trimmed, "ACTION:") {
-			kept = append(kept, line)
-			continue
-		}
-		var action chatAction
-		if err := json.Unmarshal([]byte(strings.TrimSpace(strings.TrimPrefix(trimmed, "ACTION:"))), &action); err != nil {
-			kept = append(kept, line)
-			continue
-		}
-		actions = append(actions, action)
-	}
-	return strings.TrimSpace(strings.Join(kept, "\n")), actions
 }
 
 func (s *Server) RunChat(ctx context.Context, messages []ai.ChatMessage, tzOffset *int) (ChatOutcome, error) {
@@ -322,7 +250,7 @@ func (s *Server) RunChat(ctx context.Context, messages []ai.ChatMessage, tzOffse
 	now := localNow(tzOffset)
 	system := ai.StepSystem + "\n\nCurrent local time: " + now.Format("Monday, 2006-01-02 15:04 -07:00") + ".\n" + chatActionInstructions
 	if context := s.faiContext(ctx); context != "" {
-		system += "\n\nOpen task refs, task titles, board columns, and note titles from Fai. Use them only when relevant, and do not invent anything that is not listed:\n" + context
+		system += "\n\nOpen tasks with their steps, board columns, open reminders, and note titles from Fai. Use them only when relevant, and do not invent anything that is not listed:\n" + context
 	}
 
 	reply, err := provider.Chat(ctx, system, messages)
@@ -333,492 +261,7 @@ func (s *Server) RunChat(ctx context.Context, messages []ai.ChatMessage, tzOffse
 	if reply == "" {
 		return ChatOutcome{}, fmt.Errorf("the model did not answer")
 	}
-	return s.finishChat(ctx, reply)
-}
-
-func (s *Server) finishChat(ctx context.Context, rawReply string) (ChatOutcome, error) {
-	reply, actions := splitChatActions(rawReply)
-	if reply == "" {
-		reply = "Done."
-	}
-	outcome := ChatOutcome{Reply: reply}
-
-	var pending []chatAction
-	var summaries []string
-	for _, action := range actions {
-		switch action.Type {
-		case "find_task":
-			text, err := s.findChatTask(ctx, action)
-			if err != nil {
-				return ChatOutcome{}, err
-			}
-			outcome.Reply = text
-		case "move_task":
-			prepared, text, ok, err := s.prepareChatMoveAction(ctx, action)
-			if err != nil {
-				return ChatOutcome{}, err
-			}
-			if !ok {
-				outcome.Reply = text
-				return outcome, nil
-			}
-			pending = append(pending, prepared)
-			summaries = append(summaries, text)
-		case "create_task", "create_arc", "create_reminder":
-			prepared, text, err := s.prepareChatCreate(ctx, action)
-			if err != nil {
-				return ChatOutcome{}, err
-			}
-			pending = append(pending, prepared)
-			summaries = append(summaries, text)
-		default:
-			return ChatOutcome{}, fmt.Errorf("unknown action %q", action.Type)
-		}
-	}
-	if len(pending) == 0 {
-		return outcome, nil
-	}
-
-	outcome.Reply = confirmationText(reply, summaries)
-	pendingAction := &PendingChatAction{
-		Type:    "batch",
-		Summary: outcome.Reply,
-		Actions: pending,
-	}
-	if len(pending) == 1 && pending[0].Type == "move_task" {
-		action := pending[0]
-		pendingAction.Type = "move_task"
-		pendingAction.TaskID = action.TaskID
-		pendingAction.TaskRef = action.TaskRef
-		pendingAction.TaskTitle = action.TaskTitle
-		pendingAction.ColumnID = action.ColumnID
-		pendingAction.ColumnName = action.Column
-	}
-	outcome.Pending = pendingAction
-	return outcome, nil
-}
-
-func confirmationText(prose string, summaries []string) string {
-	var out strings.Builder
-	if strings.TrimSpace(prose) != "" {
-		out.WriteString(strings.TrimSpace(prose))
-	}
-	if len(summaries) == 1 {
-		if out.Len() > 0 {
-			out.WriteString("\n\n")
-		}
-		out.WriteString(summaries[0])
-		return out.String()
-	}
-	if out.Len() > 0 {
-		out.WriteString("\n\n")
-	}
-	out.WriteString("Confirm these changes:")
-	for _, summary := range summaries {
-		out.WriteString("\n- ")
-		out.WriteString(strings.TrimSuffix(strings.TrimSpace(summary), "?"))
-	}
-	return out.String()
-}
-
-func (s *Server) applyChatAction(ctx context.Context, action chatAction) (ChatCreated, error) {
-	title := strings.TrimSpace(action.Title)
-	if title == "" {
-		return ChatCreated{}, fmt.Errorf("the action has no title")
-	}
-	switch action.Type {
-	case "create_task":
-		due, err := chatDueDate(action.DueDate)
-		if err != nil {
-			return ChatCreated{}, err
-		}
-		boardID, columnID, err := s.defaultBoardColumn(ctx)
-		if err != nil {
-			return ChatCreated{}, err
-		}
-		task, err := s.createChatTask(ctx, boardID, columnID, title, due, nil, "", action.Steps)
-		if err != nil {
-			return ChatCreated{}, err
-		}
-		return ChatCreated{Type: "task", ID: task.ID, Title: task.Title}, nil
-	case "create_arc":
-		boardID, columnID, err := s.defaultBoardColumn(ctx)
-		if err != nil {
-			return ChatCreated{}, err
-		}
-		arc, err := s.createChatTask(ctx, boardID, columnID, title, nil, nil, "arc", nil)
-		if err != nil {
-			return ChatCreated{}, err
-		}
-		for _, spec := range action.Tasks {
-			taskTitle := strings.TrimSpace(spec.Title)
-			if taskTitle == "" {
-				continue
-			}
-			due, err := chatDueDate(spec.DueDate)
-			if err != nil {
-				return ChatCreated{}, err
-			}
-			if _, err := s.createChatTask(ctx, boardID, columnID, taskTitle, due, &arc.ID, "task", spec.Steps); err != nil {
-				return ChatCreated{}, err
-			}
-		}
-		return ChatCreated{Type: "arc", ID: arc.ID, Title: arc.Title}, nil
-	case "create_reminder":
-		remindAt, err := time.Parse(time.RFC3339, action.RemindAt)
-		if err != nil {
-			return ChatCreated{}, fmt.Errorf("invalid remind_at")
-		}
-		reminder, err := s.Store.CreateReminder(ctx, title, remindAt, nil, 0)
-		if err != nil {
-			return ChatCreated{}, err
-		}
-		return ChatCreated{Type: "reminder", ID: reminder.ID, Title: reminder.Title}, nil
-	default:
-		return ChatCreated{}, fmt.Errorf("unknown action %q", action.Type)
-	}
-}
-
-func chatDueDate(raw *string) (*string, error) {
-	if raw == nil || strings.TrimSpace(*raw) == "" {
-		return nil, nil
-	}
-	value := strings.TrimSpace(*raw)
-	if _, err := time.Parse("2006-01-02", value); err != nil {
-		return nil, fmt.Errorf("invalid due date %q", value)
-	}
-	return &value, nil
-}
-
-func (s *Server) createChatTask(ctx context.Context, boardID, columnID int64, title string, due *string, parentID *int64, kind string, steps []string) (store.Task, error) {
-	position, err := s.appendPosition(ctx, columnID)
-	if err != nil {
-		return store.Task{}, err
-	}
-	task, err := s.Store.CreateTask(ctx, store.CreateTaskParams{
-		BoardID: boardID, ColumnID: columnID, Title: title, Priority: "medium",
-		DueDate: due, Position: position, ParentTaskID: parentID, Kind: kind, CreatedByFai: true,
-	})
-	if err != nil {
-		return store.Task{}, err
-	}
-	for _, raw := range steps {
-		stepTitle := strings.TrimSpace(raw)
-		if stepTitle == "" {
-			continue
-		}
-		stepPosition, err := s.appendPosition(ctx, columnID)
-		if err != nil {
-			return store.Task{}, err
-		}
-		if _, err := s.Store.CreateTask(ctx, store.CreateTaskParams{
-			BoardID: boardID, ColumnID: columnID, Title: stepTitle, Priority: "medium",
-			Position: stepPosition, ParentTaskID: &task.ID, CreatedByFai: true,
-		}); err != nil {
-			return store.Task{}, err
-		}
-	}
-	return task, nil
-}
-
-func (s *Server) resolveChatActionTask(ctx context.Context, action chatAction) (store.Task, []store.TaskRef, error) {
-	if action.TaskID != 0 {
-		task, err := s.Store.GetTask(ctx, action.TaskID)
-		if err != nil {
-			return store.Task{}, nil, nil
-		}
-		return task, nil, nil
-	}
-	query := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(action.Task), "@"))
-	if query == "" {
-		return store.Task{}, nil, nil
-	}
-	if id, err := strconv.ParseInt(query, 10, 64); err == nil {
-		if task, err := s.Store.GetTask(ctx, id); err == nil {
-			return task, nil, nil
-		}
-	}
-	refs, err := s.Store.ResolveRefs(ctx, query, nil)
-	if err != nil {
-		return store.Task{}, nil, err
-	}
-	if len(refs) > 1 {
-		exact := make([]store.TaskRef, 0, len(refs))
-		for _, ref := range refs {
-			if strings.EqualFold(strings.TrimSpace(ref.Title), query) {
-				exact = append(exact, ref)
-			}
-		}
-		if len(exact) == 1 {
-			refs = exact
-		}
-	}
-	if len(refs) == 0 {
-		return store.Task{}, nil, nil
-	}
-	if len(refs) > 1 {
-		return store.Task{}, refs, nil
-	}
-	task, err := s.Store.GetTask(ctx, refs[0].ID)
-	if err != nil {
-		return store.Task{}, nil, err
-	}
-	return task, nil, nil
-}
-
-func chatTaskCandidates(action string, refs []store.TaskRef) string {
-	var out strings.Builder
-	if len(refs) == 0 {
-		out.WriteString("I could not find that task. Use an @ref from the task list.")
-		return out.String()
-	}
-	out.WriteString("Which task should I ")
-	out.WriteString(action)
-	out.WriteString("?")
-	for i, ref := range refs {
-		if i == 5 {
-			break
-		}
-		out.WriteString("\n- @")
-		out.WriteString(ref.Ref)
-		out.WriteString(" ")
-		out.WriteString(ref.Title)
-	}
-	return out.String()
-}
-
-func (s *Server) findChatTask(ctx context.Context, action chatAction) (string, error) {
-	task, refs, err := s.resolveChatActionTask(ctx, action)
-	if err != nil {
-		return "", err
-	}
-	if task.ID == 0 {
-		return chatTaskCandidates("look up", refs), nil
-	}
-	var out strings.Builder
-	out.WriteString("@" + task.Ref + " " + task.Title)
-	columns, err := s.Store.ListColumnsByBoard(ctx, task.BoardID)
-	if err == nil {
-		for _, column := range columns {
-			if column.ID == task.ColumnID {
-				out.WriteString("\nColumn: " + column.Name)
-				break
-			}
-		}
-	}
-	if task.DueDate != nil {
-		out.WriteString("\nDue: " + *task.DueDate)
-	}
-	if task.Priority != "" && task.Priority != "medium" {
-		out.WriteString("\nPriority: " + task.Priority)
-	}
-	return out.String(), nil
-}
-
-func (s *Server) prepareChatMoveAction(ctx context.Context, action chatAction) (chatAction, string, bool, error) {
-	task, refs, err := s.resolveChatActionTask(ctx, action)
-	if err != nil {
-		return chatAction{}, "", false, err
-	}
-	if task.ID == 0 {
-		return chatAction{}, chatTaskCandidates("move", refs), false, nil
-	}
-
-	column, available, found, err := s.resolveChatColumn(ctx, task.BoardID, action.Column)
-	if err != nil {
-		return chatAction{}, "", false, err
-	}
-	if !found {
-		name := strings.TrimSpace(action.Column)
-		if name == "" {
-			return chatAction{}, "Which column should I move @" + task.Ref + " to? Available columns: " + columnNames(available) + ".", false, nil
-		}
-		return chatAction{}, "I could not find a column named " + name + ". Available columns: " + columnNames(available) + ".", false, nil
-	}
-
-	action.TaskID = task.ID
-	action.TaskRef = task.Ref
-	action.TaskTitle = task.Title
-	action.ColumnID = column.ID
-	action.Column = column.Name
-	return action, "Move @" + task.Ref + " (" + task.Title + ") to " + column.Name + "?", true, nil
-}
-
-func (s *Server) prepareChatCreate(ctx context.Context, action chatAction) (chatAction, string, error) {
-	title := strings.TrimSpace(action.Title)
-	if title == "" {
-		return chatAction{}, "", fmt.Errorf("the action has no title")
-	}
-	action.Title = title
-
-	switch action.Type {
-	case "create_task":
-		if _, _, err := s.defaultBoardColumn(ctx); err != nil {
-			return chatAction{}, "", err
-		}
-		due, err := chatDueDate(action.DueDate)
-		if err != nil {
-			return chatAction{}, "", err
-		}
-		action.DueDate = due
-		text := "Create task \"" + title + "\""
-		if due != nil {
-			text += " due " + *due
-		}
-		steps := 0
-		for _, step := range action.Steps {
-			if strings.TrimSpace(step) != "" {
-				steps++
-			}
-		}
-		if steps > 0 {
-			text += fmt.Sprintf(" with %d steps", steps)
-		}
-		return action, text + "?", nil
-	case "create_arc":
-		if _, _, err := s.defaultBoardColumn(ctx); err != nil {
-			return chatAction{}, "", err
-		}
-		if len(action.Tasks) == 0 {
-			return chatAction{}, "", fmt.Errorf("the arc has no tasks")
-		}
-		for i := range action.Tasks {
-			taskTitle := strings.TrimSpace(action.Tasks[i].Title)
-			if taskTitle == "" {
-				return chatAction{}, "", fmt.Errorf("the arc has a task with no title")
-			}
-			action.Tasks[i].Title = taskTitle
-			due, err := chatDueDate(action.Tasks[i].DueDate)
-			if err != nil {
-				return chatAction{}, "", err
-			}
-			action.Tasks[i].DueDate = due
-		}
-		return action, fmt.Sprintf("Create arc \"%s\" with %d tasks?", title, len(action.Tasks)), nil
-	case "create_reminder":
-		remindAt, err := time.Parse(time.RFC3339, action.RemindAt)
-		if err != nil {
-			return chatAction{}, "", fmt.Errorf("invalid remind_at")
-		}
-		action.RemindAt = remindAt.Format(time.RFC3339)
-		return action, "Create reminder \"" + title + "\" at " + remindAt.Format("Mon 2006-01-02 15:04") + "?", nil
-	default:
-		return chatAction{}, "", fmt.Errorf("unknown action %q", action.Type)
-	}
-}
-
-func (s *Server) resolveChatColumn(ctx context.Context, boardID int64, name string) (store.BoardColumn, []store.BoardColumn, bool, error) {
-	columns, err := s.Store.ListColumnsByBoard(ctx, boardID)
-	if err != nil {
-		return store.BoardColumn{}, nil, false, err
-	}
-	name = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(name), "#"))
-	if name == "" {
-		return store.BoardColumn{}, columns, false, nil
-	}
-	matches := make([]store.BoardColumn, 0, 1)
-	for _, column := range columns {
-		if strings.EqualFold(strings.TrimSpace(column.Name), name) {
-			matches = append(matches, column)
-		}
-	}
-	if len(matches) == 1 {
-		return matches[0], nil, true, nil
-	}
-	if len(matches) > 1 {
-		return store.BoardColumn{}, matches, false, nil
-	}
-	return store.BoardColumn{}, columns, false, nil
-}
-
-func columnNames(columns []store.BoardColumn) string {
-	names := make([]string, 0, len(columns))
-	for _, column := range columns {
-		names = append(names, column.Name)
-	}
-	return strings.Join(names, ", ")
-}
-
-func (s *Server) ConfirmChatAction(ctx context.Context, pending PendingChatAction) (string, error) {
-	actions := pending.Actions
-	if len(actions) == 0 && pending.Type == "move_task" {
-		actions = []chatAction{{
-			Type: "move_task", TaskID: pending.TaskID, TaskRef: pending.TaskRef,
-			TaskTitle: pending.TaskTitle, ColumnID: pending.ColumnID, Column: pending.ColumnName,
-		}}
-	}
-	if len(actions) == 0 {
-		return "", fmt.Errorf("unknown pending action")
-	}
-
-	replies := make([]string, 0, len(actions))
-	for _, action := range actions {
-		switch action.Type {
-		case "move_task":
-			reply, err := s.confirmChatMove(ctx, action)
-			if err != nil {
-				return "", err
-			}
-			replies = append(replies, reply)
-		case "create_task", "create_arc", "create_reminder":
-			created, err := s.applyChatAction(ctx, action)
-			if err != nil {
-				return "", err
-			}
-			if created.Type == "reminder" {
-				s.broadcast("reminders")
-			} else {
-				s.broadcast("tasks")
-			}
-			replies = append(replies, describeChatCreated(created))
-		default:
-			return "", fmt.Errorf("unknown pending action %q", action.Type)
-		}
-	}
-	return strings.Join(replies, "\n"), nil
-}
-
-func (s *Server) confirmChatMove(ctx context.Context, action chatAction) (string, error) {
-	task, err := s.Store.GetTask(ctx, action.TaskID)
-	if err != nil {
-		return "", fmt.Errorf("the task no longer exists")
-	}
-	columns, err := s.Store.ListColumnsByBoard(ctx, task.BoardID)
-	if err != nil {
-		return "", err
-	}
-	columnName := ""
-	for _, column := range columns {
-		if column.ID == action.ColumnID {
-			columnName = column.Name
-			break
-		}
-	}
-	if columnName == "" {
-		return "", fmt.Errorf("the column no longer exists")
-	}
-	position, err := s.appendPosition(ctx, action.ColumnID)
-	if err != nil {
-		return "", err
-	}
-	if _, err := s.Store.MoveTask(ctx, action.TaskID, action.ColumnID, position); err != nil {
-		return "", err
-	}
-	s.broadcast("tasks")
-	return "Moved @" + task.Ref + " to " + columnName + ".", nil
-}
-
-func describeChatCreated(created ChatCreated) string {
-	switch created.Type {
-	case "task":
-		return "Created task \"" + created.Title + "\"."
-	case "arc":
-		return "Created arc \"" + created.Title + "\"."
-	case "reminder":
-		return "Created reminder \"" + created.Title + "\"."
-	default:
-		return "Created " + created.Type + " \"" + created.Title + "\"."
-	}
+	return s.finishChat(ctx, reply, now)
 }
 
 func (s *Server) Transcribe(ctx context.Context, audio []byte, format string) (string, error) {
@@ -830,29 +273,6 @@ func (s *Server) Transcribe(ctx context.Context, audio []byte, format string) (s
 		return "", fmt.Errorf("AI is not configured")
 	}
 	return provider.Transcribe(ctx, audio, format)
-}
-
-func (s *Server) defaultBoardColumn(ctx context.Context) (int64, int64, error) {
-	boards, err := s.Store.ListBoards(ctx, nil)
-	if err != nil {
-		return 0, 0, err
-	}
-	if len(boards) == 0 {
-		return 0, 0, fmt.Errorf("no board exists yet")
-	}
-	columns, err := s.Store.ListColumnsByBoard(ctx, boards[0].ID)
-	if err != nil {
-		return 0, 0, err
-	}
-	if len(columns) == 0 {
-		return 0, 0, fmt.Errorf("board %q has no columns", boards[0].Name)
-	}
-	for _, column := range columns {
-		if !column.IsDone {
-			return boards[0].ID, column.ID, nil
-		}
-	}
-	return boards[0].ID, columns[0].ID, nil
 }
 
 func (s *Server) aiChat(w http.ResponseWriter, r *http.Request) {
@@ -950,13 +370,19 @@ func (s *Server) confirmChatAction(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"reply": reply})
 }
 
+const (
+	maxContextTaskLines = 200
+	maxContextTaskDepth = 3
+)
+
 // faiContext gives the chat a small, bounded picture of the owner's work. Task
 // bodies and note bodies stay out of the prompt.
 func (s *Server) faiContext(ctx context.Context) string {
 	var boards []store.Board
 	var tasks []store.Task
 	var notes []store.Note
-	var boardsErr, tasksErr, notesErr error
+	var reminders []store.Reminder
+	var boardsErr, tasksErr, notesErr, remindersErr error
 	var load errgroup.Group
 	load.Go(func() error {
 		boards, boardsErr = s.Store.ListBoards(ctx, nil)
@@ -970,6 +396,10 @@ func (s *Server) faiContext(ctx context.Context) string {
 		notes, notesErr = s.Store.ListNotes(ctx, nil)
 		return nil
 	})
+	load.Go(func() error {
+		reminders, remindersErr = s.Store.ListReminders(ctx, nil)
+		return nil
+	})
 	_ = load.Wait()
 	if boardsErr != nil || tasksErr != nil {
 		return ""
@@ -980,16 +410,23 @@ func (s *Server) faiContext(ctx context.Context) string {
 		boardName[board.ID] = board.Name
 	}
 
-	var out strings.Builder
-	out.WriteString("Tasks:\n")
-	count := 0
+	open := func(task store.Task) bool { return !task.Archived && task.CompletedAt == nil }
+	children := make(map[int64][]store.Task)
 	for _, task := range tasks {
-		if task.Archived || task.CompletedAt != nil || task.ParentTaskID != nil {
-			continue
+		if task.ParentTaskID != nil && open(task) {
+			children[*task.ParentTaskID] = append(children[*task.ParentTaskID], task)
 		}
-		if count == 80 {
-			break
+	}
+
+	var out strings.Builder
+	out.WriteString("Tasks (children are indented under their parent):\n")
+	lines, topLevel := 0, 0
+	var writeTask func(task store.Task, depth int)
+	writeTask = func(task store.Task, depth int) {
+		if lines == maxContextTaskLines {
+			return
 		}
+		out.WriteString(strings.Repeat("  ", depth))
 		out.WriteString("- ")
 		if task.Ref != "" {
 			out.WriteString("@")
@@ -997,7 +434,10 @@ func (s *Server) faiContext(ctx context.Context) string {
 			out.WriteString(" ")
 		}
 		out.WriteString(task.Title)
-		if board := boardName[task.BoardID]; board != "" {
+		if task.Kind == "arc" {
+			out.WriteString(" (arc)")
+		}
+		if board := boardName[task.BoardID]; board != "" && depth == 0 {
 			out.WriteString(" [")
 			out.WriteString(board)
 			out.WriteString("]")
@@ -1012,9 +452,24 @@ func (s *Server) faiContext(ctx context.Context) string {
 			out.WriteString(" priority")
 		}
 		out.WriteString("\n")
-		count++
+		lines++
+		if depth < maxContextTaskDepth {
+			for _, child := range children[task.ID] {
+				writeTask(child, depth+1)
+			}
+		}
 	}
-	if count == 0 {
+	for _, task := range tasks {
+		if task.ParentTaskID != nil || !open(task) {
+			continue
+		}
+		if topLevel == 80 || lines == maxContextTaskLines {
+			break
+		}
+		writeTask(task, 0)
+		topLevel++
+	}
+	if lines == 0 {
 		out.WriteString("No open tasks.\n")
 	}
 
@@ -1036,6 +491,24 @@ func (s *Server) faiContext(ctx context.Context) string {
 	_ = loadColumns.Wait()
 	for _, line := range columnLines {
 		out.WriteString(line)
+	}
+
+	if remindersErr == nil {
+		out.WriteString("\nOpen reminders:\n")
+		listed := 0
+		for _, reminder := range reminders {
+			if reminder.CompletedAt != nil {
+				continue
+			}
+			if listed == 30 {
+				break
+			}
+			out.WriteString(fmt.Sprintf("- reminder_id %d: %s at %s\n", reminder.ID, reminder.Title, reminder.RemindAt.Format(time.RFC3339)))
+			listed++
+		}
+		if listed == 0 {
+			out.WriteString("No open reminders.\n")
+		}
 	}
 
 	if notesErr == nil {

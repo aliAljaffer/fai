@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"time"
 
 	"github.com/alialjaffer/fai/backend/internal/db/sqlitedb"
 	"github.com/alialjaffer/fai/backend/internal/store"
@@ -73,4 +74,11 @@ func (s *Store) ListEntriesForTask(ctx context.Context, taskID int64) ([]store.T
 		out[i] = toEntry(e)
 	}
 	return out, nil
+}
+
+func (s *Store) LogTimeEntry(ctx context.Context, taskID int64, startedAt, endedAt time.Time) (store.TaskTimeEntry, error) {
+	e, err := s.q.LogEntry(ctx, sqlitedb.LogEntryParams{
+		TaskID: taskID, StartedAt: formatTime(startedAt), EndedAt: sql.NullString{String: formatTime(endedAt), Valid: true},
+	})
+	return toEntry(e), err
 }
