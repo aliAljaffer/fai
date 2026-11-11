@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -16,7 +17,7 @@ import (
 
 const (
 	historyLimit     = 10
-	maxVoiceSeconds  = 90
+	maxVoiceSeconds  = 600
 	pendingTTL       = 5 * time.Minute
 	pollTimeout      = 50
 	confirmPrefix    = "confirm:"
@@ -175,16 +176,11 @@ func (b *Bot) handleVoice(ctx context.Context, message *Message) {
 		b.sendText(ctx, chatID, "Could not download that voice note.")
 		return
 	}
-	format := audioFormat(message.Voice.MimeType)
-	transcript, err := b.runner.Transcribe(ctx, audio, format)
-	if err != nil && format == "ogg" {
-		converted, convErr := transcodeToMP3(ctx, audio)
-		switch {
-		case convErr != nil:
-			log.Printf("telegram: transcode: %v", convErr)
-		default:
-			transcript, err = b.runner.Transcribe(ctx, converted, "mp3")
-		}
+	var transcript string
+	if message.Voice.Duration > chunkSeconds {
+		transcript, err = b.transcribeChunks(ctx, audio, message.Voice.Duration)
+	} else {
+		transcript, err = b.transcribe(ctx, audio, audioFormat(message.Voice.MimeType))
 	}
 	if err != nil || strings.TrimSpace(transcript) == "" {
 		if err != nil {
@@ -195,6 +191,47 @@ func (b *Bot) handleVoice(ctx context.Context, message *Message) {
 	}
 	transcript = strings.TrimSpace(transcript)
 	b.respond(ctx, chatID, transcript, "Heard: "+transcript)
+}
+
+func (b *Bot) transcribe(ctx context.Context, audio []byte, format string) (string, error) {
+	transcript, err := b.runner.Transcribe(ctx, audio, format)
+	if err != nil && format == "ogg" {
+		converted, convErr := transcodeToMP3(ctx, audio)
+		if convErr != nil {
+			log.Printf("telegram: transcode: %v", convErr)
+			return "", err
+		}
+		return b.runner.Transcribe(ctx, converted, "mp3")
+	}
+	return transcript, err
+}
+
+// transcribeChunks keeps each speech-to-text request short enough to finish
+// within the provider timeout.
+func (b *Bot) transcribeChunks(ctx context.Context, audio []byte, duration int) (string, error) {
+	count := (duration + chunkSeconds - 1) / chunkSeconds
+	parts := make([]string, count)
+	errs := make([]error, count)
+	var wg sync.WaitGroup
+	// Four parallel requests keep a 10-minute note fast without flooding the provider.
+	slots := make(chan struct{}, 4)
+	for i := range count {
+		wg.Go(func() {
+			slots <- struct{}{}
+			defer func() { <-slots }()
+			// ponytail: hard 60s cuts can split a word, cut on silence if transcripts suffer.
+			chunk, err := transcodeSegment(ctx, audio, i*chunkSeconds, chunkSeconds)
+			if err == nil {
+				parts[i], err = b.runner.Transcribe(ctx, chunk, "mp3")
+			}
+			errs[i] = err
+		})
+	}
+	wg.Wait()
+	if err := errors.Join(errs...); err != nil {
+		return "", err
+	}
+	return strings.Join(strings.Fields(strings.Join(parts, " ")), " "), nil
 }
 
 func audioFormat(mimeType string) string {

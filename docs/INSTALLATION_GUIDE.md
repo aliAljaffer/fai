@@ -217,7 +217,8 @@ process and needs an AI key. Confirmations expire after five minutes, and a new
 message clears earlier confirmations; an expired action is not applied.
 
 Set an owner allowlist. Only private chats are accepted. Voice notes are
-transcribed and echoed as text. `STT_BASE_URL` handles transcription when set;
+transcribed and echoed as text. The limit is 10 minutes, and notes over
+60 seconds are transcribed in 60-second parts. `STT_BASE_URL` handles transcription when set;
 otherwise `ELEVENLABS_API_KEY` does. Without either, the chat provider must
 accept audio, and Anthropic does not.
 
