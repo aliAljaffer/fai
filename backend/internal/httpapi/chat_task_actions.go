@@ -63,7 +63,7 @@ func (s *Server) prepareChatCreate(ctx context.Context, action chatAction, _ tim
 			}
 			action.Tasks[i].DueDate = due
 		}
-		return action, fmt.Sprintf("Create arc \"%s\" with %d tasks?", title, len(action.Tasks)), true, nil
+		return action, arcSummary(title, action.Tasks), true, nil
 	}
 
 	due, err := chatDueDate(action.DueDate)
@@ -123,6 +123,18 @@ func (s *Server) confirmChatCreate(ctx context.Context, action chatAction) (stri
 	}
 	s.broadcast("tasks")
 	return "Created task \"" + task.Title + "\".", nil
+}
+
+func arcSummary(title string, tasks []chatTaskSpec) string {
+	var out strings.Builder
+	fmt.Fprintf(&out, "Create arc \"%s\" with these %d tasks?", title, len(tasks))
+	for i, task := range tasks {
+		fmt.Fprintf(&out, "\n%d. %s", i+1, task.Title)
+		if steps := len(nonEmptyTitles(task.Steps)); steps > 0 {
+			fmt.Fprintf(&out, " (%d steps)", steps)
+		}
+	}
+	return out.String()
 }
 
 func chatDueDate(raw *string) (*string, error) {
