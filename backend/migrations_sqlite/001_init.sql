@@ -76,7 +76,10 @@ CREATE TABLE tasks (
   completed_at TEXT,
   archived BOOLEAN NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  repeat_freq TEXT CHECK (repeat_freq IN ('daily', 'weekly', 'monthly', 'yearly')),
+  repeat_interval INTEGER CHECK (repeat_interval BETWEEN 1 AND 365),
+  repeat_anchor TEXT
 );
 CREATE INDEX idx_tasks_board_column_pos ON tasks(board_id, column_id, position);
 CREATE INDEX idx_tasks_completed_at ON tasks(completed_at) WHERE completed_at IS NOT NULL;
@@ -165,7 +168,10 @@ CREATE TABLE reminders (
   workspace_id INTEGER NOT NULL REFERENCES workspaces(id),
   sent BOOLEAN NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-  completed_at TEXT
+  completed_at TEXT,
+  repeat_freq TEXT CHECK (repeat_freq IN ('daily', 'weekly', 'monthly', 'yearly')),
+  repeat_interval INTEGER CHECK (repeat_interval BETWEEN 1 AND 365),
+  repeat_anchor TEXT
 );
 CREATE INDEX idx_reminders_due_unsent ON reminders(remind_at) WHERE sent = 0;
 CREATE INDEX idx_reminders_completed_at ON reminders(completed_at) WHERE completed_at IS NOT NULL;

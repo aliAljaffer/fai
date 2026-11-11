@@ -80,7 +80,7 @@ func TestFullBackupRestore(t *testing.T) {
 	if _, err := source.CreateNote(ctx, "Backup note", "mentions @FAI-1", &parent.ID, workspace.ID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := source.CreateReminder(ctx, "Backup reminder", time.Now().Add(time.Hour), &parent.ID, workspace.ID); err != nil {
+	if _, err := source.CreateReminder(ctx, "Backup reminder", time.Now().Add(time.Hour), &parent.ID, workspace.ID, nil); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := source.StartTimer(ctx, parent.ID); err != nil {

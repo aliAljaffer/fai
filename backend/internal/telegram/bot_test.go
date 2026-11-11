@@ -1,8 +1,11 @@
 package telegram
 
 import (
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/alialjaffer/fai/backend/internal/httpapi"
 )
 
 func TestAllowedRequiresPrivateMatchingUserAndChat(t *testing.T) {
@@ -85,5 +88,19 @@ func TestWithTZOffsetSetsOffset(t *testing.T) {
 	bot.WithTZOffset(180)
 	if bot.tzOffset == nil || *bot.tzOffset != 180 {
 		t.Fatalf("tzOffset = %v", bot.tzOffset)
+	}
+}
+
+func TestHelpTextListsEveryCapability(t *testing.T) {
+	text := helpText()
+	for _, summary := range httpapi.ChatCapabilities() {
+		if !strings.Contains(text, "- "+summary) {
+			t.Errorf("help text is missing %q", summary)
+		}
+	}
+	for _, want := range []string{"voice note", "confirm every change"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("help text is missing %q", want)
+		}
 	}
 }

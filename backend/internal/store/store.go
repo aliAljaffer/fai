@@ -27,9 +27,18 @@ type CreateTaskParams struct {
 	Kind             string
 	MeetingOutcomeID *int64
 	CreatedByFai     bool
+	Repeat           *TaskRepeat
 	// RefNum, when set, reuses an imported task number instead of allocating the
 	// next one. The workspace counter is raised to at least this value.
 	RefNum *int64
+}
+
+type RollTaskParams struct {
+	TaskID   int64
+	BoardID  int64
+	ColumnID int64
+	Position float64
+	DueDate  string
 }
 
 type ListTasksParams struct {
@@ -85,6 +94,8 @@ type Store interface {
 	SetTaskCompletedAt(ctx context.Context, id int64, at time.Time) error
 	SetTaskTimestamps(ctx context.Context, id int64, createdAt, updatedAt time.Time) error
 	MoveTask(ctx context.Context, id, columnID int64, position float64) (Task, error)
+	// RollRepeatingTask returns ErrNotFound when the task no longer repeats.
+	RollRepeatingTask(ctx context.Context, p RollTaskParams) (Task, error)
 	ListTasksByColumnOrdered(ctx context.Context, columnID int64) ([]Task, error)
 	SetTaskPosition(ctx context.Context, id int64, position float64) error
 	ArchiveTask(ctx context.Context, id int64) error
@@ -136,8 +147,10 @@ type Store interface {
 
 	// Reminders
 	ListReminders(ctx context.Context, workspaceID *int64) ([]Reminder, error)
-	CreateReminder(ctx context.Context, title string, remindAt time.Time, taskID *int64, workspaceID int64) (Reminder, error)
-	UpdateReminder(ctx context.Context, id int64, title string, remindAt time.Time, taskID *int64) (Reminder, error)
+	GetReminder(ctx context.Context, id int64) (Reminder, error)
+	CreateReminder(ctx context.Context, title string, remindAt time.Time, taskID *int64, workspaceID int64, repeat *ReminderRepeat) (Reminder, error)
+	UpdateReminder(ctx context.Context, id int64, title string, remindAt time.Time, taskID *int64, repeat *ReminderRepeat) (Reminder, error)
+	AdvanceReminder(ctx context.Context, id int64, remindAt time.Time) (Reminder, error)
 	SetReminderCompleted(ctx context.Context, id int64, completed bool) (Reminder, error)
 	DeleteReminder(ctx context.Context, id int64) error
 	ListDueUnsentReminders(ctx context.Context) ([]Reminder, error)

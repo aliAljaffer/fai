@@ -12,19 +12,21 @@ import (
 )
 
 const chatActionInstructions = `You can also create or change things for the owner. When you do, add one final line to your reply for each change:
-ACTION: {"type":"create_task","title":"...","due_date":"YYYY-MM-DD","steps":["...","..."]}
+ACTION: {"type":"create_task","title":"...","due_date":"YYYY-MM-DD","repeat":{"freq":"weekly","interval":1},"steps":["...","..."]}
 ACTION: {"type":"create_arc","title":"...","tasks":[{"title":"...","due_date":"YYYY-MM-DD","steps":["...","..."]}]}
-ACTION: {"type":"create_reminder","title":"...","remind_at":"RFC3339 with the local offset"}
+ACTION: {"type":"create_reminder","title":"...","remind_at":"RFC3339 with the local offset","repeat":{"freq":"daily","interval":1}}
 ACTION: {"type":"find_task","task":"@TAG-123"}
 ACTION: {"type":"move_task","task":"@TAG-123","column":"Column name"}
 ACTION: {"type":"add_steps","task":"@TAG-123","steps":["...","..."]}
-ACTION: {"type":"update_task","task":"@TAG-123","title":"...","description":"...","priority":"low|medium|high","due_date":"YYYY-MM-DD"}
+ACTION: {"type":"update_task","task":"@TAG-123","title":"...","description":"...","priority":"low|medium|high","due_date":"YYYY-MM-DD","repeat":{"freq":"weekly","interval":1}}
 ACTION: {"type":"complete_task","task":"@TAG-123"}
 ACTION: {"type":"delete_task","task":"@TAG-123"}
 ACTION: {"type":"tag_task","task":"@TAG-123","add":["..."],"remove":["..."]}
 ACTION: {"type":"comment_task","task":"@TAG-123","body":"..."}
 ACTION: {"type":"log_time","task":"@TAG-123","minutes":90,"started_at":"RFC3339","ended_at":"RFC3339"}
-ACTION: {"type":"update_reminder","reminder_id":12,"title":"...","remind_at":"RFC3339 with the local offset"}
+ACTION: {"type":"start_timer","task":"@TAG-123"}
+ACTION: {"type":"stop_timer","task":"@TAG-123"}
+ACTION: {"type":"update_reminder","reminder_id":12,"title":"...","remind_at":"RFC3339 with the local offset","repeat":{"freq":"monthly","interval":1}}
 ACTION: {"type":"complete_reminder","reminder_id":12}
 ACTION: {"type":"delete_reminder","reminder_id":12}
 ACTION: {"type":"create_note","title":"...","body":"Markdown"}
@@ -34,36 +36,39 @@ Use find_task when the owner asks about an existing task. Use move_task to chang
 In update_task, include only the fields the owner wants to change. Set "due_date":"" to clear a due date. The description replaces the whole description.
 In tag_task, list tag names without #. A new tag name creates the tag.
 In log_time, send started_at and ended_at when the owner gives both times. When the owner gives only how long it took, send minutes, and add ended_at only when they say when it ended.
+Use start_timer when the owner starts working on a task now. Use stop_timer when they stop; omit "task" to stop whichever timer is running. Only one timer runs at a time.
 In update_reminder, include only the fields the owner wants to change. Copy reminder_id from the reminders list.
+Add "repeat" to create_reminder, update_reminder, create_task, or update_task when the owner wants something to repeat. freq is daily, weekly, monthly, or yearly. interval is how many of that unit between repeats (every 2 weeks is weekly with interval 2). A repeating task needs a due date, and an arc cannot repeat. In update_reminder and update_task, omit "repeat" to keep the current rule and send "repeat":null to stop repeating. Completing a repeating reminder moves it to its next time. Completing a repeating task creates the next one.
 append_note adds text to the end of an existing note. Copy the note title exactly from the notes list.
 Always copy the @ref from the task context for task actions. Never guess a task, a column, a reminder, or a note.
 Resolve relative dates (today, tomorrow, Monday, in 10 minutes) against the current local time given below. A weekday alone means the next such day, or today when it is that day. Set a due date when the owner gives one and omit due_date when they do not.
 Write each ACTION line as strict JSON on its own line. Never claim you changed something unless you add the ACTION line.`
 
 type chatAction struct {
-	Type        string         `json:"type"`
-	Title       string         `json:"title"`
-	DueDate     *string        `json:"due_date"`
-	RemindAt    string         `json:"remind_at"`
-	Task        string         `json:"task"`
-	TaskID      int64          `json:"task_id"`
-	Column      string         `json:"column"`
-	ColumnID    int64          `json:"column_id,omitempty"`
-	TaskRef     string         `json:"task_ref,omitempty"`
-	TaskTitle   string         `json:"task_title,omitempty"`
-	Steps       []string       `json:"steps"`
-	Tasks       []chatTaskSpec `json:"tasks"`
-	Description *string        `json:"description,omitempty"`
-	Priority    *string        `json:"priority,omitempty"`
-	Add         []string       `json:"add,omitempty"`
-	Remove      []string       `json:"remove,omitempty"`
-	Body        string         `json:"body,omitempty"`
-	Minutes     int            `json:"minutes,omitempty"`
-	StartedAt   string         `json:"started_at,omitempty"`
-	EndedAt     string         `json:"ended_at,omitempty"`
-	ReminderID  int64          `json:"reminder_id,omitempty"`
-	Note        string         `json:"note,omitempty"`
-	NoteID      int64          `json:"note_id,omitempty"`
+	Type        string          `json:"type"`
+	Title       string          `json:"title"`
+	DueDate     *string         `json:"due_date"`
+	RemindAt    string          `json:"remind_at"`
+	Task        string          `json:"task"`
+	TaskID      int64           `json:"task_id"`
+	Column      string          `json:"column"`
+	ColumnID    int64           `json:"column_id,omitempty"`
+	TaskRef     string          `json:"task_ref,omitempty"`
+	TaskTitle   string          `json:"task_title,omitempty"`
+	Steps       []string        `json:"steps"`
+	Tasks       []chatTaskSpec  `json:"tasks"`
+	Description *string         `json:"description,omitempty"`
+	Priority    *string         `json:"priority,omitempty"`
+	Add         []string        `json:"add,omitempty"`
+	Remove      []string        `json:"remove,omitempty"`
+	Body        string          `json:"body,omitempty"`
+	Minutes     int             `json:"minutes,omitempty"`
+	StartedAt   string          `json:"started_at,omitempty"`
+	EndedAt     string          `json:"ended_at,omitempty"`
+	ReminderID  int64           `json:"reminder_id,omitempty"`
+	Note        string          `json:"note,omitempty"`
+	NoteID      int64           `json:"note_id,omitempty"`
+	Repeat      json.RawMessage `json:"repeat,omitempty"`
 }
 
 type chatTaskSpec struct {
@@ -110,6 +115,8 @@ var chatActionHandlers = map[string]chatActionHandler{
 	"tag_task":          {prepare: (*Server).prepareChatTagTask, confirm: (*Server).confirmChatTagTask},
 	"comment_task":      {prepare: (*Server).prepareChatComment, confirm: (*Server).confirmChatComment},
 	"log_time":          {prepare: (*Server).prepareChatLogTime, confirm: (*Server).confirmChatLogTime},
+	"start_timer":       {prepare: (*Server).prepareChatStartTimer, confirm: (*Server).confirmChatStartTimer},
+	"stop_timer":        {prepare: (*Server).prepareChatStopTimer, confirm: (*Server).confirmChatStopTimer},
 	"update_reminder":   {prepare: (*Server).prepareChatUpdateReminder, confirm: (*Server).confirmChatUpdateReminder},
 	"complete_reminder": {prepare: (*Server).prepareChatCompleteReminder, confirm: (*Server).confirmChatCompleteReminder},
 	"delete_reminder":   {prepare: (*Server).prepareChatDeleteReminder, confirm: (*Server).confirmChatDeleteReminder},

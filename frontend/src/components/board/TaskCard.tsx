@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils'
 import { formatDueDate, isPastDue } from '../../lib/format'
 import { FaiTaskIcon } from '../FaiTaskIcon'
 import { TagChip } from '../TagChip'
+import { RepeatIndicator } from './RepeatPicker'
 import { TaskTypeIcon } from '../TaskTypeIcon'
 import { normalizeKind, taskStatus } from '../../lib/taskType'
 import type { BoardColumn, Task } from '../../api/types'
@@ -87,6 +88,7 @@ function TaskCardBody({
               {overdue ? 'Overdue' : 'Due'} {dueLabel}
             </span>
           )}
+          {dueLabel && task.repeat && <RepeatIndicator repeat={task.repeat} />}
         </div>
       )}
     </div>

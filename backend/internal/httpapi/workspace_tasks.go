@@ -12,6 +12,7 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
+	"github.com/alialjaffer/fai/backend/internal/recurrence"
 	"github.com/alialjaffer/fai/backend/internal/store"
 )
 
@@ -46,6 +47,8 @@ type workspaceTaskExport struct {
 	CompletedAt    *time.Time           `json:"completed_at"`
 	Archived       bool                 `json:"archived"`
 	Tags           []workspaceTagExport `json:"tags"`
+	Repeat         *recurrence.Rule     `json:"repeat"`
+	RepeatAnchor   *string              `json:"repeat_anchor"`
 }
 
 type workspaceTagExport struct {
@@ -170,6 +173,8 @@ func (s *Server) exportWorkspaceTasks(w http.ResponseWriter, r *http.Request) {
 			CompletedAt:    item.task.CompletedAt,
 			Archived:       item.task.Archived,
 			Tags:           tags,
+			Repeat:         item.task.Repeat,
+			RepeatAnchor:   item.task.RepeatAnchor,
 		})
 	}
 
@@ -202,11 +207,18 @@ func (s *Server) importWorkspaceTasks(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "unsupported export version")
 		return
 	}
+	repeats := make([]*store.TaskRepeat, len(body.Tasks))
 	for i, item := range body.Tasks {
 		if strings.TrimSpace(item.Title) == "" {
 			writeError(w, http.StatusBadRequest, fmt.Sprintf("task %d has no title", i+1))
 			return
 		}
+		repeat, err := importedTaskRepeat(item)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, fmt.Sprintf("task %d: %v", i+1, err))
+			return
+		}
+		repeats[i] = repeat
 	}
 
 	boards, err := s.Store.ListBoards(r.Context(), &workspaceID)
@@ -363,6 +375,7 @@ func (s *Server) importWorkspaceTasks(w http.ResponseWriter, r *http.Request) {
 			Position:      item.Position,
 			Kind:          item.Kind,
 			RefNum:        refNum,
+			Repeat:        repeats[i],
 		})
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, fmt.Sprintf("task %d: %v", i+1, err))

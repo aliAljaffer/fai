@@ -17,6 +17,7 @@ import {
 import { Sheet, SheetContent, SheetFooter, SheetHeader } from '@/components/ui/sheet'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { AttachmentsPanel } from '../AttachmentsPanel'
+import { RepeatPicker } from './RepeatPicker'
 import { RefPicker } from '../refs/RefPicker'
 import { useRefPicker } from '../refs/useRefPicker'
 import { AIPanel } from './AIPanel'
@@ -43,8 +44,10 @@ import {
   useTags,
   useTaskReferences,
   useTaskTimeEntries,
+  useUpdateTask,
 } from '../../api/hooks'
 import { formatDuration } from '../../lib/format'
+import { repeatBlocker } from '../../lib/repeat'
 import type { Task, TaskBacklink } from '../../api/types'
 
 export function TaskDetail({
@@ -84,6 +87,8 @@ export function TaskDetail({
   )
   const setType = useSetTaskType(task.id, task.board_id)
   const moveTask = useMoveTask(task.board_id)
+  const updateTask = useUpdateTask(task.board_id)
+  const repeatHint = repeatBlocker(task)
   const kind = normalizeKind(task.kind)
   const canBeStep = task.parent_task_id !== null || kind === 'step'
   const startTime = useStartTime()
@@ -254,6 +259,26 @@ export function TaskDetail({
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-baseline justify-between gap-2">
+                <label htmlFor={`detail-repeat-${task.id}`} className="text-xs font-medium text-muted-foreground">
+                  Repeat
+                </label>
+                {repeatHint && <span className="text-xs text-muted-foreground">{repeatHint}</span>}
+              </div>
+              <RepeatPicker
+                id={`detail-repeat-${task.id}`}
+                value={task.repeat}
+                disabled={Boolean(repeatHint)}
+                className="max-w-xs"
+                onChange={(repeat) =>
+                  updateTask.mutate(
+                    { id: task.id, repeat },
+                    { onError: (error) => toast.error(error.message) },
+                  )
+                }
+              />
             </div>
             <JiraPanel taskId={task.id} />
           </TabsContent>

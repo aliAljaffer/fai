@@ -1,4 +1,5 @@
 import { Bell, Check, MoreHorizontal, RotateCcw, Trash2 } from 'lucide-react'
+import { useState } from 'react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -10,9 +11,10 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 import { useCompleteReminder, useDeleteReminder, useUpdateReminder } from '../../api/hooks'
-import type { Reminder } from '../../api/types'
+import type { Reminder, Repeat } from '../../api/types'
 import { formatDueIn, formatTimestamp } from '../../lib/format'
 import { TaskRefText } from '../MarkdownRenderer'
+import { RepeatIndicator, RepeatPicker } from './RepeatPicker'
 
 const SNOOZE_OPTIONS = [
   { label: '+1 hour', ms: 60 * 60 * 1000 },
@@ -30,6 +32,7 @@ export function ReminderCard({
   const updateReminder = useUpdateReminder()
   const completeReminder = useCompleteReminder()
   const deleteReminder = useDeleteReminder()
+  const [editingRepeat, setEditingRepeat] = useState(false)
   const dueIn = formatDueIn(reminder.remind_at)
   const overdue = dueIn.startsWith('overdue')
 
@@ -49,7 +52,27 @@ export function ReminderCard({
       toast.error('Add a Done column to complete reminders.')
       return
     }
-    completeReminder.mutate({ id: reminder.id, completed: true })
+    completeReminder.mutate(
+      { id: reminder.id, completed: true },
+      {
+        onSuccess: (next) => {
+          if (next.repeat) toast.success(`Next reminder: ${formatTimestamp(next.remind_at)}`)
+        },
+      },
+    )
+  }
+
+  function changeRepeat(repeat: Repeat | null) {
+    updateReminder.mutate(
+      {
+        id: reminder.id,
+        title: reminder.title,
+        remind_at: reminder.remind_at,
+        task_id: reminder.task_id ?? undefined,
+        repeat,
+      },
+      { onError: (error) => toast.error(error.message) },
+    )
   }
 
   return (
@@ -89,6 +112,9 @@ export function ReminderCard({
           {dueIn}
         </Badge>
         <div className="flex items-center gap-1">
+          {reminder.repeat && (
+            <RepeatIndicator repeat={reminder.repeat} className="text-muted-foreground" />
+          )}
           <span className="text-[0.65rem] text-muted-foreground">
             {new Date(reminder.remind_at).toLocaleString(undefined, {
               month: 'short',
@@ -97,6 +123,15 @@ export function ReminderCard({
               minute: '2-digit',
             })}
           </span>
+          <Button
+            variant="ghost"
+            size="xs"
+            className="text-muted-foreground"
+            aria-expanded={editingRepeat}
+            onClick={() => setEditingRepeat((open) => !open)}
+          >
+            Repeat
+          </Button>
           <DropdownMenu>
             <DropdownMenuTrigger
               render={
@@ -115,6 +150,13 @@ export function ReminderCard({
           </DropdownMenu>
         </div>
       </div>
+      {editingRepeat && (
+        <RepeatPicker
+          className="pt-1"
+          value={reminder.repeat}
+          onChange={changeRepeat}
+        />
+      )}
     </div>
   )
 }

@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -47,7 +48,15 @@ func (s *Server) prepareChatCreate(ctx context.Context, action chatAction, _ tim
 		return chatAction{}, "", false, err
 	}
 
+	change, err := decodeRepeat(action.Repeat)
+	if err != nil {
+		return chatAction{}, "", false, err
+	}
+
 	if action.Type == "create_arc" {
+		if change.rule != nil {
+			return chatAction{}, "An arc cannot repeat. Which of its tasks should repeat?", false, nil
+		}
 		if len(action.Tasks) == 0 {
 			return chatAction{}, "", false, fmt.Errorf("the arc has no tasks")
 		}
@@ -71,9 +80,15 @@ func (s *Server) prepareChatCreate(ctx context.Context, action chatAction, _ tim
 		return chatAction{}, "", false, err
 	}
 	action.DueDate = due
+	if _, err := taskCreateRepeat(change, "task", due); err != nil {
+		return chatAction{}, chatRepeatQuestion(err), false, nil
+	}
 	text := "Create task \"" + title + "\""
 	if due != nil {
 		text += " due " + *due
+	}
+	if change.rule != nil {
+		text += ", repeats " + change.rule.Describe()
 	}
 	if steps := len(nonEmptyTitles(action.Steps)); steps > 0 {
 		text += fmt.Sprintf(" with %d steps", steps)
@@ -91,7 +106,7 @@ func (s *Server) confirmChatCreate(ctx context.Context, action chatAction) (stri
 		return "", err
 	}
 	if action.Type == "create_arc" {
-		arc, err := s.createChatTask(ctx, boardID, columnID, title, nil, nil, "arc", nil)
+		arc, err := s.createChatTask(ctx, boardID, columnID, title, nil, nil, "arc", nil, nil)
 		if err != nil {
 			return "", err
 		}
@@ -106,7 +121,7 @@ func (s *Server) confirmChatCreate(ctx context.Context, action chatAction) (stri
 			if err != nil {
 				return "", err
 			}
-			if _, err := s.createChatTask(ctx, boardID, columnID, taskTitle, due, &arc.ID, "task", spec.Steps); err != nil {
+			if _, err := s.createChatTask(ctx, boardID, columnID, taskTitle, due, &arc.ID, "task", spec.Steps, nil); err != nil {
 				return "", err
 			}
 		}
@@ -117,7 +132,15 @@ func (s *Server) confirmChatCreate(ctx context.Context, action chatAction) (stri
 	if err != nil {
 		return "", err
 	}
-	task, err := s.createChatTask(ctx, boardID, columnID, title, due, nil, "", action.Steps)
+	change, err := decodeRepeat(action.Repeat)
+	if err != nil {
+		return "", err
+	}
+	repeat, err := taskCreateRepeat(change, "task", due)
+	if err != nil {
+		return "", err
+	}
+	task, err := s.createChatTask(ctx, boardID, columnID, title, due, nil, "", action.Steps, repeat)
 	if err != nil {
 		return "", err
 	}
@@ -148,14 +171,14 @@ func chatDueDate(raw *string) (*string, error) {
 	return &value, nil
 }
 
-func (s *Server) createChatTask(ctx context.Context, boardID, columnID int64, title string, due *string, parentID *int64, kind string, steps []string) (store.Task, error) {
+func (s *Server) createChatTask(ctx context.Context, boardID, columnID int64, title string, due *string, parentID *int64, kind string, steps []string, repeat *store.TaskRepeat) (store.Task, error) {
 	position, err := s.appendPosition(ctx, columnID)
 	if err != nil {
 		return store.Task{}, err
 	}
 	task, err := s.Store.CreateTask(ctx, store.CreateTaskParams{
 		BoardID: boardID, ColumnID: columnID, Title: title, Priority: "medium",
-		DueDate: due, Position: position, ParentTaskID: parentID, Kind: kind, CreatedByFai: true,
+		DueDate: due, Position: position, ParentTaskID: parentID, Kind: kind, CreatedByFai: true, Repeat: repeat,
 	})
 	if err != nil {
 		return store.Task{}, err
@@ -284,7 +307,7 @@ func (s *Server) moveChatTask(ctx context.Context, task store.Task, column store
 	if err != nil {
 		return err
 	}
-	if _, err := s.Store.MoveTask(ctx, task.ID, column.ID, position); err != nil {
+	if _, err := s.moveTaskItem(ctx, task, column.ID, position, time.Now()); err != nil {
 		return err
 	}
 	s.broadcast("tasks")
@@ -359,7 +382,7 @@ func (s *Server) defaultBoardColumn(ctx context.Context) (int64, int64, error) {
 	return boards[0].ID, columns[0].ID, nil
 }
 
-func chatTaskPatch(action chatAction) (store.TaskPatch, []string, error) {
+func chatTaskPatch(action chatAction, task store.Task) (store.TaskPatch, []string, error) {
 	var patch store.TaskPatch
 	var changes []string
 	if title := strings.TrimSpace(action.Title); title != "" {
@@ -392,7 +415,29 @@ func chatTaskPatch(action chatAction) (store.TaskPatch, []string, error) {
 			changes = append(changes, "due date to "+*due)
 		}
 	}
+	change, err := decodeRepeat(action.Repeat)
+	if err != nil {
+		return store.TaskPatch{}, nil, err
+	}
+	if err := applyTaskRepeat(task, &patch, change); err != nil {
+		return store.TaskPatch{}, nil, chatRepeatError{err}
+	}
+	if change.set {
+		changes = append(changes, repeatChangeText(change))
+	} else if patch.RepeatSet && patch.Repeat == nil {
+		changes = append(changes, "no repeat")
+	}
 	return patch, changes, nil
+}
+
+type chatRepeatError struct{ error }
+
+func chatRepeatQuestion(err error) string {
+	if errors.Is(err, errRepeatNeedsDueDate) {
+		return "Which due date should the repeating task start on?"
+	}
+	message := err.Error()
+	return strings.ToUpper(message[:1]) + message[1:] + "."
 }
 
 func (s *Server) prepareChatUpdateTask(ctx context.Context, action chatAction, _ time.Time) (chatAction, string, bool, error) {
@@ -400,7 +445,11 @@ func (s *Server) prepareChatUpdateTask(ctx context.Context, action chatAction, _
 	if err != nil || question != "" {
 		return chatAction{}, question, false, err
 	}
-	_, changes, err := chatTaskPatch(action)
+	_, changes, err := chatTaskPatch(action, task)
+	var repeatErr chatRepeatError
+	if errors.As(err, &repeatErr) {
+		return chatAction{}, chatRepeatQuestion(repeatErr.error), false, nil
+	}
 	if err != nil {
 		return chatAction{}, "", false, err
 	}
@@ -415,7 +464,7 @@ func (s *Server) confirmChatUpdateTask(ctx context.Context, action chatAction) (
 	if err != nil {
 		return "", err
 	}
-	patch, changes, err := chatTaskPatch(action)
+	patch, changes, err := chatTaskPatch(action, task)
 	if err != nil {
 		return "", err
 	}
@@ -621,13 +670,17 @@ func chatTimeSpan(action chatAction, now time.Time) (time.Time, time.Time, error
 	return start, end, nil
 }
 
-func formatSpan(start, end time.Time) string {
-	duration := end.Sub(start).Round(time.Minute)
+func formatLength(duration time.Duration) string {
+	duration = duration.Round(time.Minute)
 	hours, minutes := int(duration.Hours()), int(duration.Minutes())%60
-	length := fmt.Sprintf("%dm", minutes)
 	if hours > 0 {
-		length = fmt.Sprintf("%dh %dm", hours, minutes)
+		return fmt.Sprintf("%dh %dm", hours, minutes)
 	}
+	return fmt.Sprintf("%dm", minutes)
+}
+
+func formatSpan(start, end time.Time) string {
+	length := formatLength(end.Sub(start))
 	endLayout := "15:04"
 	if end.Format("2006-01-02") != start.Format("2006-01-02") {
 		endLayout = "Mon 2006-01-02 15:04"
@@ -667,4 +720,86 @@ func (s *Server) confirmChatLogTime(ctx context.Context, action chatAction) (str
 	}
 	s.broadcast("tasks")
 	return "Logged " + formatSpan(start, end) + " on @" + task.Ref + ".", nil
+}
+
+func (s *Server) prepareChatStartTimer(ctx context.Context, action chatAction, _ time.Time) (chatAction, string, bool, error) {
+	task, question, err := s.targetChatTask(ctx, &action, "start the timer on")
+	if err != nil || question != "" {
+		return chatAction{}, question, false, err
+	}
+	running, err := s.Store.GetRunningEntry(ctx)
+	if err != nil {
+		return chatAction{}, "", false, err
+	}
+	if running == nil {
+		return action, "Start the timer on " + chatTaskLabel(task) + "?", true, nil
+	}
+	if running.TaskID == task.ID {
+		return chatAction{}, "The timer is already running on " + chatTaskLabel(task) + ".", false, nil
+	}
+	other, err := s.Store.GetTask(ctx, running.TaskID)
+	if err != nil {
+		return chatAction{}, "", false, err
+	}
+	return action, "Start the timer on " + chatTaskLabel(task) + "? This stops the timer on " + chatTaskLabel(other) + ".", true, nil
+}
+
+func (s *Server) confirmChatStartTimer(ctx context.Context, action chatAction) (string, error) {
+	task, err := s.confirmedChatTask(ctx, action)
+	if err != nil {
+		return "", err
+	}
+	if _, err := s.Store.StartTimer(ctx, task.ID); err != nil {
+		return "", err
+	}
+	s.broadcast("tasks")
+	return "Started the timer on @" + task.Ref + ".", nil
+}
+
+func (s *Server) prepareChatStopTimer(ctx context.Context, action chatAction, _ time.Time) (chatAction, string, bool, error) {
+	var task store.Task
+	if action.Task != "" || action.TaskID != 0 {
+		var question string
+		var err error
+		task, question, err = s.targetChatTask(ctx, &action, "stop the timer on")
+		if err != nil || question != "" {
+			return chatAction{}, question, false, err
+		}
+	}
+	running, err := s.Store.GetRunningEntry(ctx)
+	if err != nil {
+		return chatAction{}, "", false, err
+	}
+	if running == nil {
+		return chatAction{}, "No timer is running.", false, nil
+	}
+	if task.ID == 0 {
+		if task, err = s.Store.GetTask(ctx, running.TaskID); err != nil {
+			return chatAction{}, "", false, err
+		}
+		action.TaskID, action.TaskRef, action.TaskTitle = task.ID, task.Ref, task.Title
+	} else if running.TaskID != task.ID {
+		return chatAction{}, "No timer is running on " + chatTaskLabel(task) + ".", false, nil
+	}
+	return action, "Stop the timer on " + chatTaskLabel(task) + "?", true, nil
+}
+
+func (s *Server) confirmChatStopTimer(ctx context.Context, action chatAction) (string, error) {
+	task, err := s.confirmedChatTask(ctx, action)
+	if err != nil {
+		return "", err
+	}
+	entry, err := s.Store.StopEntryForTask(ctx, task.ID)
+	if errors.Is(err, store.ErrNotFound) {
+		return "", fmt.Errorf("no timer is running on that task")
+	}
+	if err != nil {
+		return "", err
+	}
+	s.broadcast("tasks")
+	elapsed := time.Duration(0)
+	if entry.DurationSeconds != nil {
+		elapsed = time.Duration(*entry.DurationSeconds) * time.Second
+	}
+	return "Stopped the timer on @" + task.Ref + " after " + formatLength(elapsed) + ".", nil
 }

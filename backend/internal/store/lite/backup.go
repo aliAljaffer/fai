@@ -112,25 +112,30 @@ func (s *Store) DumpBackup(ctx context.Context) (store.BackupData, error) {
 
 	rows, err = s.db.QueryContext(ctx, `
 		SELECT id, board_id, column_id, workspace_id, ref_num, title, description_md, priority, due_date,
-		       position, parent_task_id, kind, meeting_outcome_id, created_by_fai, completed_at, archived, created_at, updated_at
+		       position, parent_task_id, kind, meeting_outcome_id, created_by_fai, completed_at, archived, created_at, updated_at,
+		       repeat_freq, repeat_interval, repeat_anchor
 		FROM tasks ORDER BY id`)
 	if err != nil {
 		return out, err
 	}
 	for rows.Next() {
 		var item store.BackupTask
-		var dueDate, completedAt sql.NullString
+		var dueDate, completedAt, repeatFreq, repeatAnchor sql.NullString
+		var repeatInterval sql.NullInt64
 		var createdAt, updatedAt string
 		if err := rows.Scan(
 			&item.ID, &item.BoardID, &item.ColumnID, &item.WorkspaceID, &item.RefNum, &item.Title,
 			&item.DescriptionMd, &item.Priority, &dueDate, &item.Position, &item.ParentTaskID, &item.Kind,
 			&item.MeetingOutcomeID, &item.CreatedByFai, &completedAt, &item.Archived, &createdAt, &updatedAt,
+			&repeatFreq, &repeatInterval, &repeatAnchor,
 		); err != nil {
 			rows.Close()
 			return out, err
 		}
 		item.DueDate = nullStringToPtr(dueDate)
 		item.CompletedAt = nullTimeToPtr(completedAt)
+		item.Repeat = repeatRule(repeatFreq, repeatInterval)
+		item.RepeatAnchor = nullStringToPtr(repeatAnchor)
 		item.CreatedAt, _ = parseTime(createdAt)
 		item.UpdatedAt, _ = parseTime(updatedAt)
 		out.Tasks = append(out.Tasks, item)
@@ -198,21 +203,25 @@ func (s *Store) DumpBackup(ctx context.Context) (store.BackupData, error) {
 	}
 	rows.Close()
 
-	rows, err = s.db.QueryContext(ctx, `SELECT id, title, remind_at, task_id, workspace_id, sent, created_at, completed_at FROM reminders ORDER BY id`)
+	rows, err = s.db.QueryContext(ctx, `SELECT id, title, remind_at, task_id, workspace_id, sent, created_at, completed_at, repeat_freq, repeat_interval, repeat_anchor FROM reminders ORDER BY id`)
 	if err != nil {
 		return out, err
 	}
 	for rows.Next() {
 		var item store.BackupReminder
 		var remindAt, createdAt string
-		var completedAt sql.NullString
-		if err := rows.Scan(&item.ID, &item.Title, &remindAt, &item.TaskID, &item.WorkspaceID, &item.Sent, &createdAt, &completedAt); err != nil {
+		var completedAt, repeatFreq, repeatAnchor sql.NullString
+		var repeatInterval sql.NullInt64
+		if err := rows.Scan(&item.ID, &item.Title, &remindAt, &item.TaskID, &item.WorkspaceID, &item.Sent, &createdAt, &completedAt,
+			&repeatFreq, &repeatInterval, &repeatAnchor); err != nil {
 			rows.Close()
 			return out, err
 		}
 		item.RemindAt, _ = parseTime(remindAt)
 		item.CreatedAt, _ = parseTime(createdAt)
 		item.CompletedAt = nullTimeToPtr(completedAt)
+		item.Repeat = repeatRule(repeatFreq, repeatInterval)
+		item.RepeatAnchor = nullTimeToPtr(repeatAnchor)
 		out.Reminders = append(out.Reminders, item)
 	}
 	if err := rows.Err(); err != nil {
@@ -460,13 +469,16 @@ func (s *Store) RestoreBackup(ctx context.Context, data store.BackupData) error 
 		}
 	}
 	for _, item := range data.Tasks {
+		taskFreq, taskInterval := repeatColumns(item.Repeat)
 		if _, err := tx.ExecContext(ctx, `
 			INSERT INTO tasks (id, board_id, column_id, workspace_id, ref_num, title, description_md, priority, due_date,
-				position, parent_task_id, kind, meeting_outcome_id, created_by_fai, completed_at, archived, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?)`,
+				position, parent_task_id, kind, meeting_outcome_id, created_by_fai, completed_at, archived, created_at, updated_at,
+				repeat_freq, repeat_interval, repeat_anchor)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			item.ID, item.BoardID, item.ColumnID, item.WorkspaceID, item.RefNum, item.Title, item.DescriptionMd,
 			item.Priority, ptrToNullString(item.DueDate), item.Position, item.Kind, ptrToNullInt64(item.MeetingOutcomeID), item.CreatedByFai,
-			ptrTimeToNull(item.CompletedAt), item.Archived, formatTime(item.CreatedAt), formatTime(item.UpdatedAt)); err != nil {
+			ptrTimeToNull(item.CompletedAt), item.Archived, formatTime(item.CreatedAt), formatTime(item.UpdatedAt),
+			taskFreq, taskInterval, ptrToNullString(item.RepeatAnchor)); err != nil {
 			return err
 		}
 	}
@@ -497,10 +509,13 @@ func (s *Store) RestoreBackup(ctx context.Context, data store.BackupData) error 
 		}
 	}
 	for _, item := range data.Reminders {
+		reminderFreq, reminderInterval := repeatColumns(item.Repeat)
 		if _, err := tx.ExecContext(ctx,
-			`INSERT INTO reminders (id, title, remind_at, task_id, workspace_id, sent, created_at, completed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+			`INSERT INTO reminders (id, title, remind_at, task_id, workspace_id, sent, created_at, completed_at, repeat_freq, repeat_interval, repeat_anchor)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			item.ID, item.Title, formatTime(item.RemindAt), ptrToNullInt64(item.TaskID), item.WorkspaceID,
-			item.Sent, formatTime(item.CreatedAt), ptrTimeToNull(item.CompletedAt)); err != nil {
+			item.Sent, formatTime(item.CreatedAt), ptrTimeToNull(item.CompletedAt),
+			reminderFreq, reminderInterval, ptrTimeToNull(item.RepeatAnchor)); err != nil {
 			return err
 		}
 	}

@@ -7,7 +7,11 @@
 // nullable date keeps the exact "YYYY-MM-DD" shape pgtype.Date already produced).
 package store
 
-import "time"
+import (
+	"time"
+
+	"github.com/alialjaffer/fai/backend/internal/recurrence"
+)
 
 type Workspace struct {
 	ID        int64     `json:"id"`
@@ -73,29 +77,50 @@ type TaskPatch struct {
 	Priority      *string
 	DueDate       *string
 	DueDateSet    bool
+	RepeatSet     bool
+	Repeat        *TaskRepeat
+}
+
+type TaskRepeat struct {
+	Rule   recurrence.Rule
+	Anchor string
+}
+
+type ReminderRepeat struct {
+	Rule   recurrence.Rule
+	Anchor time.Time
 }
 
 type Task struct {
-	ID               int64      `json:"id"`
-	BoardID          int64      `json:"board_id"`
-	ColumnID         int64      `json:"column_id"`
-	WorkspaceID      int64      `json:"workspace_id"`
-	RefNum           int64      `json:"ref_num"`
-	Ref              string     `json:"ref"`
-	Title            string     `json:"title"`
-	DescriptionMd    string     `json:"description_md"`
-	Priority         string     `json:"priority"`
-	DueDate          *string    `json:"due_date"`
-	Position         float64    `json:"position"`
-	ParentTaskID     *int64     `json:"parent_task_id"`
-	Kind             string     `json:"kind"`
-	MeetingOutcomeID *int64     `json:"meeting_outcome_id"`
-	CreatedByFai     bool       `json:"created_by_fai"`
-	CompletedAt      *time.Time `json:"completed_at"`
-	Archived         bool       `json:"archived"`
-	Tags             []Tag      `json:"tags"`
-	CreatedAt        time.Time  `json:"created_at"`
-	UpdatedAt        time.Time  `json:"updated_at"`
+	ID               int64            `json:"id"`
+	BoardID          int64            `json:"board_id"`
+	ColumnID         int64            `json:"column_id"`
+	WorkspaceID      int64            `json:"workspace_id"`
+	RefNum           int64            `json:"ref_num"`
+	Ref              string           `json:"ref"`
+	Title            string           `json:"title"`
+	DescriptionMd    string           `json:"description_md"`
+	Priority         string           `json:"priority"`
+	DueDate          *string          `json:"due_date"`
+	Position         float64          `json:"position"`
+	ParentTaskID     *int64           `json:"parent_task_id"`
+	Kind             string           `json:"kind"`
+	MeetingOutcomeID *int64           `json:"meeting_outcome_id"`
+	CreatedByFai     bool             `json:"created_by_fai"`
+	CompletedAt      *time.Time       `json:"completed_at"`
+	Archived         bool             `json:"archived"`
+	Tags             []Tag            `json:"tags"`
+	CreatedAt        time.Time        `json:"created_at"`
+	UpdatedAt        time.Time        `json:"updated_at"`
+	Repeat           *recurrence.Rule `json:"repeat"`
+	RepeatAnchor     *string          `json:"-"`
+}
+
+func (t Task) RepeatState() *TaskRepeat {
+	if t.Repeat == nil || t.RepeatAnchor == nil {
+		return nil
+	}
+	return &TaskRepeat{Rule: *t.Repeat, Anchor: *t.RepeatAnchor}
 }
 
 type TaskComment struct {
@@ -158,14 +183,23 @@ type JiraLink struct {
 }
 
 type Reminder struct {
-	ID          int64      `json:"id"`
-	Title       string     `json:"title"`
-	RemindAt    time.Time  `json:"remind_at"`
-	TaskID      *int64     `json:"task_id"`
-	WorkspaceID int64      `json:"workspace_id"`
-	Sent        bool       `json:"sent"`
-	CreatedAt   time.Time  `json:"created_at"`
-	CompletedAt *time.Time `json:"completed_at"`
+	ID           int64            `json:"id"`
+	Title        string           `json:"title"`
+	RemindAt     time.Time        `json:"remind_at"`
+	TaskID       *int64           `json:"task_id"`
+	WorkspaceID  int64            `json:"workspace_id"`
+	Sent         bool             `json:"sent"`
+	CreatedAt    time.Time        `json:"created_at"`
+	CompletedAt  *time.Time       `json:"completed_at"`
+	Repeat       *recurrence.Rule `json:"repeat"`
+	RepeatAnchor *time.Time       `json:"-"`
+}
+
+func (r Reminder) RepeatState() *ReminderRepeat {
+	if r.Repeat == nil || r.RepeatAnchor == nil {
+		return nil
+	}
+	return &ReminderRepeat{Rule: *r.Repeat, Anchor: *r.RepeatAnchor}
 }
 
 type MeetingOutcome struct {

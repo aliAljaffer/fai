@@ -19,6 +19,7 @@ func (s *Store) SearchTasks(ctx context.Context, query string, workspaceID *int6
 			DescriptionMd: t.DescriptionMd, Priority: t.Priority, DueDate: dateToPtr(t.DueDate),
 			Position: t.Position, ParentTaskID: int8ToPtr(t.ParentTaskID), Kind: t.Kind, MeetingOutcomeID: int8ToPtr(t.MeetingOutcomeID), CreatedByFai: t.CreatedByFai,
 			CompletedAt: tsToPtr(t.CompletedAt), Archived: t.Archived, Tags: []store.Tag{}, CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt,
+			Repeat: repeatRule(t.RepeatFreq, t.RepeatInterval), RepeatAnchor: dateToPtr(t.RepeatAnchor),
 		}
 	}
 	if err := s.attachTags(ctx, out); err != nil {

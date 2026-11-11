@@ -157,10 +157,10 @@ func TestWorkspaceScopingOnLists(t *testing.T) {
 	if _, err := st.CreateNote(ctx, "Dev note", "body", nil, dev.ID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := st.CreateReminder(ctx, "Personal reminder", time.Now().Add(time.Hour), nil, 0); err != nil {
+	if _, err := st.CreateReminder(ctx, "Personal reminder", time.Now().Add(time.Hour), nil, 0, nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := st.CreateReminder(ctx, "Dev reminder", time.Now().Add(time.Hour), nil, dev.ID); err != nil {
+	if _, err := st.CreateReminder(ctx, "Dev reminder", time.Now().Add(time.Hour), nil, dev.ID, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -247,7 +247,7 @@ func TestTaskReferencesScan(t *testing.T) {
 	if _, err := st.CreateNote(ctx, "Title mention @FAI-1", "no ref here", nil, 0); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := st.CreateReminder(ctx, "Follow up on @FAI-1", time.Now().Add(time.Hour), nil, 0); err != nil {
+	if _, err := st.CreateReminder(ctx, "Follow up on @FAI-1", time.Now().Add(time.Hour), nil, 0, nil); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := st.CreateNote(ctx, "Unrelated", "nothing", nil, 0); err != nil {

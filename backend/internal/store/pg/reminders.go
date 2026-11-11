@@ -9,7 +9,8 @@ import (
 )
 
 func toReminder(r sqlc.Reminder) store.Reminder {
-	return store.Reminder{ID: r.ID, Title: r.Title, RemindAt: r.RemindAt, TaskID: int8ToPtr(r.TaskID), WorkspaceID: r.WorkspaceID, Sent: r.Sent, CreatedAt: r.CreatedAt, CompletedAt: tsToPtr(r.CompletedAt)}
+	return store.Reminder{ID: r.ID, Title: r.Title, RemindAt: r.RemindAt, TaskID: int8ToPtr(r.TaskID), WorkspaceID: r.WorkspaceID, Sent: r.Sent, CreatedAt: r.CreatedAt, CompletedAt: tsToPtr(r.CompletedAt),
+		Repeat: repeatRule(r.RepeatFreq, r.RepeatInterval), RepeatAnchor: tsToPtr(r.RepeatAnchor)}
 }
 
 func (s *Store) ListReminders(ctx context.Context, workspaceID *int64) ([]store.Reminder, error) {
@@ -24,13 +25,31 @@ func (s *Store) ListReminders(ctx context.Context, workspaceID *int64) ([]store.
 	return out, nil
 }
 
-func (s *Store) CreateReminder(ctx context.Context, title string, remindAt time.Time, taskID *int64, workspaceID int64) (store.Reminder, error) {
-	r, err := s.q.CreateReminder(ctx, sqlc.CreateReminderParams{Title: title, RemindAt: remindAt, TaskID: ptrToInt8(taskID), WorkspaceID: workspaceID})
+func (s *Store) GetReminder(ctx context.Context, id int64) (store.Reminder, error) {
+	r, err := s.q.GetReminder(ctx, id)
 	return toReminder(r), err
 }
 
-func (s *Store) UpdateReminder(ctx context.Context, id int64, title string, remindAt time.Time, taskID *int64) (store.Reminder, error) {
-	r, err := s.q.UpdateReminder(ctx, sqlc.UpdateReminderParams{ID: id, Title: title, RemindAt: remindAt, TaskID: ptrToInt8(taskID)})
+func (s *Store) CreateReminder(ctx context.Context, title string, remindAt time.Time, taskID *int64, workspaceID int64, repeat *store.ReminderRepeat) (store.Reminder, error) {
+	freq, interval, anchor := reminderRepeatColumns(repeat)
+	r, err := s.q.CreateReminder(ctx, sqlc.CreateReminderParams{
+		Title: title, RemindAt: remindAt, TaskID: ptrToInt8(taskID), WorkspaceID: workspaceID,
+		RepeatFreq: freq, RepeatInterval: interval, RepeatAnchor: anchor,
+	})
+	return toReminder(r), err
+}
+
+func (s *Store) UpdateReminder(ctx context.Context, id int64, title string, remindAt time.Time, taskID *int64, repeat *store.ReminderRepeat) (store.Reminder, error) {
+	freq, interval, anchor := reminderRepeatColumns(repeat)
+	r, err := s.q.UpdateReminder(ctx, sqlc.UpdateReminderParams{
+		ID: id, Title: title, RemindAt: remindAt, TaskID: ptrToInt8(taskID),
+		RepeatFreq: freq, RepeatInterval: interval, RepeatAnchor: anchor,
+	})
+	return toReminder(r), err
+}
+
+func (s *Store) AdvanceReminder(ctx context.Context, id int64, remindAt time.Time) (store.Reminder, error) {
+	r, err := s.q.AdvanceReminder(ctx, sqlc.AdvanceReminderParams{ID: id, RemindAt: remindAt})
 	return toReminder(r), err
 }
 

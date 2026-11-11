@@ -21,12 +21,111 @@ func (q *Queries) ArchiveTask(ctx context.Context, id int64) error {
 	return err
 }
 
+const clearTaskRepeat = `-- name: ClearTaskRepeat :exec
+UPDATE tasks SET repeat_freq = NULL, repeat_interval = NULL, repeat_anchor = NULL, updated_at = now() WHERE id = $1
+`
+
+func (q *Queries) ClearTaskRepeat(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, clearTaskRepeat, id)
+	return err
+}
+
+const copyTaskTags = `-- name: CopyTaskTags :exec
+INSERT INTO task_tags (task_id, tag_id)
+SELECT $1, tt.tag_id FROM task_tags tt WHERE tt.task_id = $2
+`
+
+type CopyTaskTagsParams struct {
+	NewTaskID    int64 `json:"new_task_id"`
+	SourceTaskID int64 `json:"source_task_id"`
+}
+
+func (q *Queries) CopyTaskTags(ctx context.Context, arg CopyTaskTagsParams) error {
+	_, err := q.db.Exec(ctx, copyTaskTags, arg.NewTaskID, arg.SourceTaskID)
+	return err
+}
+
+const createNextRepeatTask = `-- name: CreateNextRepeatTask :one
+INSERT INTO tasks (board_id, column_id, workspace_id, ref_num, title, description_md, priority, due_date, position, parent_task_id, kind, repeat_freq, repeat_interval, repeat_anchor)
+SELECT src.board_id, $1, src.workspace_id, $2, src.title, src.description_md, src.priority, $3::date, $4, src.parent_task_id, src.kind, src.repeat_freq, src.repeat_interval, src.repeat_anchor
+FROM tasks src WHERE src.id = $5 AND src.repeat_freq IS NOT NULL
+RETURNING id, board_id, column_id, title, description_md, priority, due_date, position, completed_at, archived, created_at, updated_at, parent_task_id, kind, meeting_outcome_id, workspace_id, ref_num, created_by_fai, repeat_freq, repeat_interval, repeat_anchor
+`
+
+type CreateNextRepeatTaskParams struct {
+	ColumnID int64       `json:"column_id"`
+	RefNum   int64       `json:"ref_num"`
+	DueDate  pgtype.Date `json:"due_date"`
+	Position float64     `json:"position"`
+	SourceID int64       `json:"source_id"`
+}
+
+type CreateNextRepeatTaskRow struct {
+	ID               int64              `json:"id"`
+	BoardID          int64              `json:"board_id"`
+	ColumnID         int64              `json:"column_id"`
+	Title            string             `json:"title"`
+	DescriptionMd    string             `json:"description_md"`
+	Priority         string             `json:"priority"`
+	DueDate          pgtype.Date        `json:"due_date"`
+	Position         float64            `json:"position"`
+	CompletedAt      pgtype.Timestamptz `json:"completed_at"`
+	Archived         bool               `json:"archived"`
+	CreatedAt        time.Time          `json:"created_at"`
+	UpdatedAt        time.Time          `json:"updated_at"`
+	ParentTaskID     pgtype.Int8        `json:"parent_task_id"`
+	Kind             string             `json:"kind"`
+	MeetingOutcomeID pgtype.Int8        `json:"meeting_outcome_id"`
+	WorkspaceID      int64              `json:"workspace_id"`
+	RefNum           int64              `json:"ref_num"`
+	CreatedByFai     bool               `json:"created_by_fai"`
+	RepeatFreq       pgtype.Text        `json:"repeat_freq"`
+	RepeatInterval   pgtype.Int4        `json:"repeat_interval"`
+	RepeatAnchor     pgtype.Date        `json:"repeat_anchor"`
+}
+
+func (q *Queries) CreateNextRepeatTask(ctx context.Context, arg CreateNextRepeatTaskParams) (CreateNextRepeatTaskRow, error) {
+	row := q.db.QueryRow(ctx, createNextRepeatTask,
+		arg.ColumnID,
+		arg.RefNum,
+		arg.DueDate,
+		arg.Position,
+		arg.SourceID,
+	)
+	var i CreateNextRepeatTaskRow
+	err := row.Scan(
+		&i.ID,
+		&i.BoardID,
+		&i.ColumnID,
+		&i.Title,
+		&i.DescriptionMd,
+		&i.Priority,
+		&i.DueDate,
+		&i.Position,
+		&i.CompletedAt,
+		&i.Archived,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.ParentTaskID,
+		&i.Kind,
+		&i.MeetingOutcomeID,
+		&i.WorkspaceID,
+		&i.RefNum,
+		&i.CreatedByFai,
+		&i.RepeatFreq,
+		&i.RepeatInterval,
+		&i.RepeatAnchor,
+	)
+	return i, err
+}
+
 const createTask = `-- name: CreateTask :one
-INSERT INTO tasks (board_id, column_id, workspace_id, ref_num, title, description_md, priority, due_date, position, parent_task_id, kind, meeting_outcome_id, completed_at, created_by_fai)
+INSERT INTO tasks (board_id, column_id, workspace_id, ref_num, title, description_md, priority, due_date, position, parent_task_id, kind, meeting_outcome_id, completed_at, created_by_fai, repeat_freq, repeat_interval, repeat_anchor)
 SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
-  CASE WHEN col.is_done THEN now() ELSE NULL END, $13
+  CASE WHEN col.is_done THEN now() ELSE NULL END, $13,
+  $14, $15, $16
 FROM (SELECT is_done FROM board_columns WHERE id = $2) col
-RETURNING id, board_id, column_id, title, description_md, priority, due_date, position, completed_at, archived, created_at, updated_at, parent_task_id, kind, meeting_outcome_id, workspace_id, ref_num, created_by_fai
+RETURNING id, board_id, column_id, title, description_md, priority, due_date, position, completed_at, archived, created_at, updated_at, parent_task_id, kind, meeting_outcome_id, workspace_id, ref_num, created_by_fai, repeat_freq, repeat_interval, repeat_anchor
 `
 
 type CreateTaskParams struct {
@@ -43,6 +142,9 @@ type CreateTaskParams struct {
 	Kind             string      `json:"kind"`
 	MeetingOutcomeID pgtype.Int8 `json:"meeting_outcome_id"`
 	CreatedByFai     bool        `json:"created_by_fai"`
+	RepeatFreq       pgtype.Text `json:"repeat_freq"`
+	RepeatInterval   pgtype.Int4 `json:"repeat_interval"`
+	RepeatAnchor     pgtype.Date `json:"repeat_anchor"`
 }
 
 type CreateTaskRow struct {
@@ -64,6 +166,9 @@ type CreateTaskRow struct {
 	WorkspaceID      int64              `json:"workspace_id"`
 	RefNum           int64              `json:"ref_num"`
 	CreatedByFai     bool               `json:"created_by_fai"`
+	RepeatFreq       pgtype.Text        `json:"repeat_freq"`
+	RepeatInterval   pgtype.Int4        `json:"repeat_interval"`
+	RepeatAnchor     pgtype.Date        `json:"repeat_anchor"`
 }
 
 func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (CreateTaskRow, error) {
@@ -81,6 +186,9 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (CreateT
 		arg.Kind,
 		arg.MeetingOutcomeID,
 		arg.CreatedByFai,
+		arg.RepeatFreq,
+		arg.RepeatInterval,
+		arg.RepeatAnchor,
 	)
 	var i CreateTaskRow
 	err := row.Scan(
@@ -102,6 +210,9 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (CreateT
 		&i.WorkspaceID,
 		&i.RefNum,
 		&i.CreatedByFai,
+		&i.RepeatFreq,
+		&i.RepeatInterval,
+		&i.RepeatAnchor,
 	)
 	return i, err
 }
@@ -116,7 +227,7 @@ func (q *Queries) DeleteTask(ctx context.Context, id int64) error {
 }
 
 const getTask = `-- name: GetTask :one
-SELECT id, board_id, column_id, title, description_md, priority, due_date, position, completed_at, archived, created_at, updated_at, parent_task_id, kind, meeting_outcome_id, workspace_id, ref_num, created_by_fai
+SELECT id, board_id, column_id, title, description_md, priority, due_date, position, completed_at, archived, created_at, updated_at, parent_task_id, kind, meeting_outcome_id, workspace_id, ref_num, created_by_fai, repeat_freq, repeat_interval, repeat_anchor
 FROM tasks WHERE id = $1 AND archived = false
 `
 
@@ -139,6 +250,9 @@ type GetTaskRow struct {
 	WorkspaceID      int64              `json:"workspace_id"`
 	RefNum           int64              `json:"ref_num"`
 	CreatedByFai     bool               `json:"created_by_fai"`
+	RepeatFreq       pgtype.Text        `json:"repeat_freq"`
+	RepeatInterval   pgtype.Int4        `json:"repeat_interval"`
+	RepeatAnchor     pgtype.Date        `json:"repeat_anchor"`
 }
 
 func (q *Queries) GetTask(ctx context.Context, id int64) (GetTaskRow, error) {
@@ -163,12 +277,15 @@ func (q *Queries) GetTask(ctx context.Context, id int64) (GetTaskRow, error) {
 		&i.WorkspaceID,
 		&i.RefNum,
 		&i.CreatedByFai,
+		&i.RepeatFreq,
+		&i.RepeatInterval,
+		&i.RepeatAnchor,
 	)
 	return i, err
 }
 
 const listSubtasks = `-- name: ListSubtasks :many
-SELECT id, board_id, column_id, title, description_md, priority, due_date, position, completed_at, archived, created_at, updated_at, parent_task_id, kind, meeting_outcome_id, workspace_id, ref_num, created_by_fai
+SELECT id, board_id, column_id, title, description_md, priority, due_date, position, completed_at, archived, created_at, updated_at, parent_task_id, kind, meeting_outcome_id, workspace_id, ref_num, created_by_fai, repeat_freq, repeat_interval, repeat_anchor
 FROM tasks WHERE parent_task_id = $1 AND archived = false ORDER BY created_at
 `
 
@@ -191,6 +308,9 @@ type ListSubtasksRow struct {
 	WorkspaceID      int64              `json:"workspace_id"`
 	RefNum           int64              `json:"ref_num"`
 	CreatedByFai     bool               `json:"created_by_fai"`
+	RepeatFreq       pgtype.Text        `json:"repeat_freq"`
+	RepeatInterval   pgtype.Int4        `json:"repeat_interval"`
+	RepeatAnchor     pgtype.Date        `json:"repeat_anchor"`
 }
 
 func (q *Queries) ListSubtasks(ctx context.Context, parentTaskID pgtype.Int8) ([]ListSubtasksRow, error) {
@@ -221,6 +341,9 @@ func (q *Queries) ListSubtasks(ctx context.Context, parentTaskID pgtype.Int8) ([
 			&i.WorkspaceID,
 			&i.RefNum,
 			&i.CreatedByFai,
+			&i.RepeatFreq,
+			&i.RepeatInterval,
+			&i.RepeatAnchor,
 		); err != nil {
 			return nil, err
 		}
@@ -233,7 +356,7 @@ func (q *Queries) ListSubtasks(ctx context.Context, parentTaskID pgtype.Int8) ([
 }
 
 const listTasks = `-- name: ListTasks :many
-SELECT DISTINCT t.id, t.board_id, t.column_id, t.title, t.description_md, t.priority, t.due_date, t.position, t.completed_at, t.archived, t.created_at, t.updated_at, t.parent_task_id, t.kind, t.meeting_outcome_id, t.workspace_id, t.ref_num, t.created_by_fai
+SELECT DISTINCT t.id, t.board_id, t.column_id, t.title, t.description_md, t.priority, t.due_date, t.position, t.completed_at, t.archived, t.created_at, t.updated_at, t.parent_task_id, t.kind, t.meeting_outcome_id, t.workspace_id, t.ref_num, t.created_by_fai, t.repeat_freq, t.repeat_interval, t.repeat_anchor
 FROM tasks t
 LEFT JOIN task_tags tt ON tt.task_id = t.id
 LEFT JOIN tags tg ON tg.id = tt.tag_id
@@ -273,6 +396,9 @@ type ListTasksRow struct {
 	WorkspaceID      int64              `json:"workspace_id"`
 	RefNum           int64              `json:"ref_num"`
 	CreatedByFai     bool               `json:"created_by_fai"`
+	RepeatFreq       pgtype.Text        `json:"repeat_freq"`
+	RepeatInterval   pgtype.Int4        `json:"repeat_interval"`
+	RepeatAnchor     pgtype.Date        `json:"repeat_anchor"`
 }
 
 func (q *Queries) ListTasks(ctx context.Context, arg ListTasksParams) ([]ListTasksRow, error) {
@@ -308,6 +434,9 @@ func (q *Queries) ListTasks(ctx context.Context, arg ListTasksParams) ([]ListTas
 			&i.WorkspaceID,
 			&i.RefNum,
 			&i.CreatedByFai,
+			&i.RepeatFreq,
+			&i.RepeatInterval,
+			&i.RepeatAnchor,
 		); err != nil {
 			return nil, err
 		}
@@ -320,7 +449,7 @@ func (q *Queries) ListTasks(ctx context.Context, arg ListTasksParams) ([]ListTas
 }
 
 const listTasksByColumnOrdered = `-- name: ListTasksByColumnOrdered :many
-SELECT id, board_id, column_id, title, description_md, priority, due_date, position, completed_at, archived, created_at, updated_at, parent_task_id, kind, meeting_outcome_id, workspace_id, ref_num, created_by_fai
+SELECT id, board_id, column_id, title, description_md, priority, due_date, position, completed_at, archived, created_at, updated_at, parent_task_id, kind, meeting_outcome_id, workspace_id, ref_num, created_by_fai, repeat_freq, repeat_interval, repeat_anchor
 FROM tasks WHERE column_id = $1 AND archived = false ORDER BY position
 `
 
@@ -343,6 +472,9 @@ type ListTasksByColumnOrderedRow struct {
 	WorkspaceID      int64              `json:"workspace_id"`
 	RefNum           int64              `json:"ref_num"`
 	CreatedByFai     bool               `json:"created_by_fai"`
+	RepeatFreq       pgtype.Text        `json:"repeat_freq"`
+	RepeatInterval   pgtype.Int4        `json:"repeat_interval"`
+	RepeatAnchor     pgtype.Date        `json:"repeat_anchor"`
 }
 
 func (q *Queries) ListTasksByColumnOrdered(ctx context.Context, columnID int64) ([]ListTasksByColumnOrderedRow, error) {
@@ -373,6 +505,9 @@ func (q *Queries) ListTasksByColumnOrdered(ctx context.Context, columnID int64) 
 			&i.WorkspaceID,
 			&i.RefNum,
 			&i.CreatedByFai,
+			&i.RepeatFreq,
+			&i.RepeatInterval,
+			&i.RepeatAnchor,
 		); err != nil {
 			return nil, err
 		}
@@ -394,7 +529,7 @@ UPDATE tasks t SET
   END,
   updated_at = now()
 WHERE t.id = $1
-RETURNING id, board_id, column_id, title, description_md, priority, due_date, position, completed_at, archived, created_at, updated_at, parent_task_id, kind, meeting_outcome_id, workspace_id, ref_num, created_by_fai
+RETURNING id, board_id, column_id, title, description_md, priority, due_date, position, completed_at, archived, created_at, updated_at, parent_task_id, kind, meeting_outcome_id, workspace_id, ref_num, created_by_fai, repeat_freq, repeat_interval, repeat_anchor
 `
 
 type MoveTaskParams struct {
@@ -422,6 +557,9 @@ type MoveTaskRow struct {
 	WorkspaceID      int64              `json:"workspace_id"`
 	RefNum           int64              `json:"ref_num"`
 	CreatedByFai     bool               `json:"created_by_fai"`
+	RepeatFreq       pgtype.Text        `json:"repeat_freq"`
+	RepeatInterval   pgtype.Int4        `json:"repeat_interval"`
+	RepeatAnchor     pgtype.Date        `json:"repeat_anchor"`
 }
 
 func (q *Queries) MoveTask(ctx context.Context, arg MoveTaskParams) (MoveTaskRow, error) {
@@ -446,6 +584,9 @@ func (q *Queries) MoveTask(ctx context.Context, arg MoveTaskParams) (MoveTaskRow
 		&i.WorkspaceID,
 		&i.RefNum,
 		&i.CreatedByFai,
+		&i.RepeatFreq,
+		&i.RepeatInterval,
+		&i.RepeatAnchor,
 	)
 	return i, err
 }
@@ -456,18 +597,25 @@ UPDATE tasks SET
   description_md = COALESCE($2, description_md),
   priority = COALESCE($3, priority),
   due_date = CASE WHEN $4::boolean THEN $5 ELSE due_date END,
+  repeat_freq = CASE WHEN $6::boolean THEN $7 ELSE repeat_freq END,
+  repeat_interval = CASE WHEN $6::boolean THEN $8 ELSE repeat_interval END,
+  repeat_anchor = CASE WHEN $6::boolean THEN $9 ELSE repeat_anchor END,
   updated_at = now()
-WHERE id = $6 AND archived = false
-RETURNING id, board_id, column_id, title, description_md, priority, due_date, position, completed_at, archived, created_at, updated_at, search_vector, parent_task_id, meeting_outcome_id, workspace_id, ref_num, kind, created_by_fai
+WHERE id = $10 AND archived = false
+RETURNING id, board_id, column_id, title, description_md, priority, due_date, position, completed_at, archived, created_at, updated_at, search_vector, parent_task_id, meeting_outcome_id, workspace_id, ref_num, kind, created_by_fai, repeat_freq, repeat_interval, repeat_anchor
 `
 
 type PatchTaskParams struct {
-	Title         pgtype.Text `json:"title"`
-	DescriptionMd pgtype.Text `json:"description_md"`
-	Priority      pgtype.Text `json:"priority"`
-	DueDateSet    bool        `json:"due_date_set"`
-	DueDate       pgtype.Date `json:"due_date"`
-	ID            int64       `json:"id"`
+	Title          pgtype.Text `json:"title"`
+	DescriptionMd  pgtype.Text `json:"description_md"`
+	Priority       pgtype.Text `json:"priority"`
+	DueDateSet     bool        `json:"due_date_set"`
+	DueDate        pgtype.Date `json:"due_date"`
+	RepeatSet      bool        `json:"repeat_set"`
+	RepeatFreq     pgtype.Text `json:"repeat_freq"`
+	RepeatInterval pgtype.Int4 `json:"repeat_interval"`
+	RepeatAnchor   pgtype.Date `json:"repeat_anchor"`
+	ID             int64       `json:"id"`
 }
 
 func (q *Queries) PatchTask(ctx context.Context, arg PatchTaskParams) (Task, error) {
@@ -477,6 +625,10 @@ func (q *Queries) PatchTask(ctx context.Context, arg PatchTaskParams) (Task, err
 		arg.Priority,
 		arg.DueDateSet,
 		arg.DueDate,
+		arg.RepeatSet,
+		arg.RepeatFreq,
+		arg.RepeatInterval,
+		arg.RepeatAnchor,
 		arg.ID,
 	)
 	var i Task
@@ -500,6 +652,9 @@ func (q *Queries) PatchTask(ctx context.Context, arg PatchTaskParams) (Task, err
 		&i.RefNum,
 		&i.Kind,
 		&i.CreatedByFai,
+		&i.RepeatFreq,
+		&i.RepeatInterval,
+		&i.RepeatAnchor,
 	)
 	return i, err
 }
@@ -563,7 +718,7 @@ UPDATE tasks SET
   due_date = $5,
   updated_at = now()
 WHERE id = $1 AND archived = false
-RETURNING id, board_id, column_id, title, description_md, priority, due_date, position, completed_at, archived, created_at, updated_at, parent_task_id, kind, meeting_outcome_id, workspace_id, ref_num, created_by_fai
+RETURNING id, board_id, column_id, title, description_md, priority, due_date, position, completed_at, archived, created_at, updated_at, parent_task_id, kind, meeting_outcome_id, workspace_id, ref_num, created_by_fai, repeat_freq, repeat_interval, repeat_anchor
 `
 
 type UpdateTaskParams struct {
@@ -593,6 +748,9 @@ type UpdateTaskRow struct {
 	WorkspaceID      int64              `json:"workspace_id"`
 	RefNum           int64              `json:"ref_num"`
 	CreatedByFai     bool               `json:"created_by_fai"`
+	RepeatFreq       pgtype.Text        `json:"repeat_freq"`
+	RepeatInterval   pgtype.Int4        `json:"repeat_interval"`
+	RepeatAnchor     pgtype.Date        `json:"repeat_anchor"`
 }
 
 func (q *Queries) UpdateTask(ctx context.Context, arg UpdateTaskParams) (UpdateTaskRow, error) {
@@ -623,6 +781,9 @@ func (q *Queries) UpdateTask(ctx context.Context, arg UpdateTaskParams) (UpdateT
 		&i.WorkspaceID,
 		&i.RefNum,
 		&i.CreatedByFai,
+		&i.RepeatFreq,
+		&i.RepeatInterval,
+		&i.RepeatAnchor,
 	)
 	return i, err
 }

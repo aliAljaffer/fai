@@ -18,6 +18,11 @@ func (s *Store) CreateTask(ctx context.Context, p store.CreateTaskParams) (store
 		return store.Task{}, err
 	}
 
+	repeatFreq, repeatInterval, repeatAnchor, err := taskRepeatColumns(p.Repeat)
+	if err != nil {
+		return store.Task{}, err
+	}
+
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return store.Task{}, err
@@ -34,6 +39,7 @@ func (s *Store) CreateTask(ctx context.Context, p store.CreateTaskParams) (store
 		Title:         p.Title,
 		DescriptionMd: p.DescriptionMd, Priority: p.Priority, DueDate: dueDate,
 		Position: p.Position, ParentTaskID: ptrToInt8(p.ParentTaskID), Kind: p.Kind, MeetingOutcomeID: ptrToInt8(p.MeetingOutcomeID), CreatedByFai: p.CreatedByFai,
+		RepeatFreq: repeatFreq, RepeatInterval: repeatInterval, RepeatAnchor: repeatAnchor,
 	})
 	if err != nil {
 		return store.Task{}, err
@@ -50,6 +56,7 @@ func (s *Store) CreateTask(ctx context.Context, p store.CreateTaskParams) (store
 		DescriptionMd: t.DescriptionMd, Priority: t.Priority, DueDate: dateToPtr(t.DueDate),
 		Position: t.Position, ParentTaskID: int8ToPtr(t.ParentTaskID), Kind: t.Kind, MeetingOutcomeID: int8ToPtr(t.MeetingOutcomeID), CreatedByFai: t.CreatedByFai,
 		CompletedAt: tsToPtr(t.CompletedAt), Archived: t.Archived, Tags: []store.Tag{}, CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt,
+		Repeat: repeatRule(t.RepeatFreq, t.RepeatInterval), RepeatAnchor: dateToPtr(t.RepeatAnchor),
 	}}
 	if err := s.attachTags(ctx, tasks); err != nil {
 		return store.Task{}, err
@@ -93,6 +100,7 @@ func (s *Store) GetTask(ctx context.Context, id int64) (store.Task, error) {
 		DescriptionMd: t.DescriptionMd, Priority: t.Priority, DueDate: dateToPtr(t.DueDate),
 		Position: t.Position, ParentTaskID: int8ToPtr(t.ParentTaskID), Kind: t.Kind, MeetingOutcomeID: int8ToPtr(t.MeetingOutcomeID), CreatedByFai: t.CreatedByFai,
 		CompletedAt: tsToPtr(t.CompletedAt), Archived: t.Archived, Tags: []store.Tag{}, CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt,
+		Repeat: repeatRule(t.RepeatFreq, t.RepeatInterval), RepeatAnchor: dateToPtr(t.RepeatAnchor),
 	}}
 	if err := s.attachTags(ctx, tasks); err != nil {
 		return store.Task{}, err
@@ -114,6 +122,7 @@ func (s *Store) ListTasks(ctx context.Context, p store.ListTasksParams) ([]store
 			DescriptionMd: t.DescriptionMd, Priority: t.Priority, DueDate: dateToPtr(t.DueDate),
 			Position: t.Position, ParentTaskID: int8ToPtr(t.ParentTaskID), Kind: t.Kind, MeetingOutcomeID: int8ToPtr(t.MeetingOutcomeID), CreatedByFai: t.CreatedByFai,
 			CompletedAt: tsToPtr(t.CompletedAt), Archived: t.Archived, Tags: []store.Tag{}, CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt,
+			Repeat: repeatRule(t.RepeatFreq, t.RepeatInterval), RepeatAnchor: dateToPtr(t.RepeatAnchor),
 		}
 	}
 	if err := s.attachTags(ctx, out); err != nil {
@@ -134,6 +143,7 @@ func (s *Store) ListSubtasks(ctx context.Context, parentTaskID int64) ([]store.T
 			DescriptionMd: t.DescriptionMd, Priority: t.Priority, DueDate: dateToPtr(t.DueDate),
 			Position: t.Position, ParentTaskID: int8ToPtr(t.ParentTaskID), Kind: t.Kind, MeetingOutcomeID: int8ToPtr(t.MeetingOutcomeID), CreatedByFai: t.CreatedByFai,
 			CompletedAt: tsToPtr(t.CompletedAt), Archived: t.Archived, Tags: []store.Tag{}, CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt,
+			Repeat: repeatRule(t.RepeatFreq, t.RepeatInterval), RepeatAnchor: dateToPtr(t.RepeatAnchor),
 		}
 	}
 	if err := s.attachTags(ctx, out); err != nil {
@@ -161,6 +171,7 @@ func (s *Store) UpdateTask(ctx context.Context, id int64, title, descriptionMd, 
 		DescriptionMd: t.DescriptionMd, Priority: t.Priority, DueDate: dateToPtr(t.DueDate),
 		Position: t.Position, ParentTaskID: int8ToPtr(t.ParentTaskID), Kind: t.Kind, MeetingOutcomeID: int8ToPtr(t.MeetingOutcomeID), CreatedByFai: t.CreatedByFai,
 		CompletedAt: tsToPtr(t.CompletedAt), Archived: t.Archived, Tags: []store.Tag{}, CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt,
+		Repeat: repeatRule(t.RepeatFreq, t.RepeatInterval), RepeatAnchor: dateToPtr(t.RepeatAnchor),
 	}}
 	if err := s.attachTags(ctx, tasks); err != nil {
 		return store.Task{}, err
@@ -173,7 +184,12 @@ func (s *Store) PatchTask(ctx context.Context, id int64, patch store.TaskPatch) 
 	if err != nil {
 		return store.Task{}, err
 	}
+	repeatFreq, repeatInterval, repeatAnchor, err := taskRepeatColumns(patch.Repeat)
+	if err != nil {
+		return store.Task{}, err
+	}
 	t, err := s.q.PatchTask(ctx, sqlc.PatchTaskParams{
+		RepeatSet: patch.RepeatSet, RepeatFreq: repeatFreq, RepeatInterval: repeatInterval, RepeatAnchor: repeatAnchor,
 		ID:            id,
 		Title:         ptrToText(patch.Title),
 		DescriptionMd: ptrToText(patch.DescriptionMd),
@@ -194,6 +210,7 @@ func (s *Store) PatchTask(ctx context.Context, id int64, patch store.TaskPatch) 
 		DescriptionMd: t.DescriptionMd, Priority: t.Priority, DueDate: dateToPtr(t.DueDate),
 		Position: t.Position, ParentTaskID: int8ToPtr(t.ParentTaskID), Kind: t.Kind, MeetingOutcomeID: int8ToPtr(t.MeetingOutcomeID), CreatedByFai: t.CreatedByFai,
 		CompletedAt: tsToPtr(t.CompletedAt), Archived: t.Archived, Tags: []store.Tag{}, CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt,
+		Repeat: repeatRule(t.RepeatFreq, t.RepeatInterval), RepeatAnchor: dateToPtr(t.RepeatAnchor),
 	}}
 	if err := s.attachTags(ctx, tasks); err != nil {
 		return store.Task{}, err
@@ -237,6 +254,55 @@ func (s *Store) MoveTask(ctx context.Context, id, columnID int64, position float
 		DescriptionMd: t.DescriptionMd, Priority: t.Priority, DueDate: dateToPtr(t.DueDate),
 		Position: t.Position, ParentTaskID: int8ToPtr(t.ParentTaskID), Kind: t.Kind, MeetingOutcomeID: int8ToPtr(t.MeetingOutcomeID), CreatedByFai: t.CreatedByFai,
 		CompletedAt: tsToPtr(t.CompletedAt), Archived: t.Archived, Tags: []store.Tag{}, CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt,
+		Repeat: repeatRule(t.RepeatFreq, t.RepeatInterval), RepeatAnchor: dateToPtr(t.RepeatAnchor),
+	}}
+	if err := s.attachTags(ctx, tasks); err != nil {
+		return store.Task{}, err
+	}
+	return tasks[0], nil
+}
+
+func (s *Store) RollRepeatingTask(ctx context.Context, p store.RollTaskParams) (store.Task, error) {
+	dueDate, err := ptrToDate(&p.DueDate)
+	if err != nil {
+		return store.Task{}, err
+	}
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return store.Task{}, err
+	}
+	defer tx.Rollback(ctx)
+
+	_, refNum, err := s.allocateRef(ctx, tx, p.BoardID, nil)
+	if err != nil {
+		return store.Task{}, err
+	}
+	qtx := s.q.WithTx(tx)
+	next, err := qtx.CreateNextRepeatTask(ctx, sqlc.CreateNextRepeatTaskParams{
+		ColumnID: p.ColumnID, RefNum: refNum, DueDate: dueDate, Position: p.Position, SourceID: p.TaskID,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return store.Task{}, store.ErrNotFound
+	}
+	if err != nil {
+		return store.Task{}, err
+	}
+	if err := qtx.CopyTaskTags(ctx, sqlc.CopyTaskTagsParams{NewTaskID: next.ID, SourceTaskID: p.TaskID}); err != nil {
+		return store.Task{}, err
+	}
+	if err := qtx.ClearTaskRepeat(ctx, p.TaskID); err != nil {
+		return store.Task{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return store.Task{}, err
+	}
+
+	tasks := []store.Task{{
+		ID: next.ID, BoardID: next.BoardID, ColumnID: next.ColumnID, WorkspaceID: next.WorkspaceID, RefNum: next.RefNum, Title: next.Title,
+		DescriptionMd: next.DescriptionMd, Priority: next.Priority, DueDate: dateToPtr(next.DueDate),
+		Position: next.Position, ParentTaskID: int8ToPtr(next.ParentTaskID), Kind: next.Kind, MeetingOutcomeID: int8ToPtr(next.MeetingOutcomeID), CreatedByFai: next.CreatedByFai,
+		CompletedAt: tsToPtr(next.CompletedAt), Archived: next.Archived, Tags: []store.Tag{}, CreatedAt: next.CreatedAt, UpdatedAt: next.UpdatedAt,
+		Repeat: repeatRule(next.RepeatFreq, next.RepeatInterval), RepeatAnchor: dateToPtr(next.RepeatAnchor),
 	}}
 	if err := s.attachTags(ctx, tasks); err != nil {
 		return store.Task{}, err
@@ -256,6 +322,7 @@ func (s *Store) ListTasksByColumnOrdered(ctx context.Context, columnID int64) ([
 			DescriptionMd: t.DescriptionMd, Priority: t.Priority, DueDate: dateToPtr(t.DueDate),
 			Position: t.Position, ParentTaskID: int8ToPtr(t.ParentTaskID), Kind: t.Kind, MeetingOutcomeID: int8ToPtr(t.MeetingOutcomeID), CreatedByFai: t.CreatedByFai,
 			CompletedAt: tsToPtr(t.CompletedAt), Archived: t.Archived, Tags: []store.Tag{}, CreatedAt: t.CreatedAt, UpdatedAt: t.UpdatedAt,
+			Repeat: repeatRule(t.RepeatFreq, t.RepeatInterval), RepeatAnchor: dateToPtr(t.RepeatAnchor),
 		}
 	}
 	if err := s.attachTags(ctx, out); err != nil {

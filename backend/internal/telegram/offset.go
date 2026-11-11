@@ -33,18 +33,22 @@ func (s FileOffsetStore) Load() (int64, error) {
 }
 
 func (s FileOffsetStore) Save(offset int64) error {
-	dir := filepath.Dir(s.Path)
+	return writeFileAtomic(s.Path, ".telegram-offset-*", []byte(strconv.FormatInt(offset, 10)))
+}
+
+func writeFileAtomic(path, tempPattern string, data []byte) error {
+	dir := filepath.Dir(path)
 	if dir != "." && dir != "" {
 		if err := os.MkdirAll(dir, 0o700); err != nil {
 			return err
 		}
 	}
-	tmp, err := os.CreateTemp(dir, ".telegram-offset-*")
+	tmp, err := os.CreateTemp(dir, tempPattern)
 	if err != nil {
 		return err
 	}
 	name := tmp.Name()
-	if _, err := tmp.WriteString(strconv.FormatInt(offset, 10)); err != nil {
+	if _, err := tmp.Write(data); err != nil {
 		tmp.Close()
 		os.Remove(name)
 		return err
@@ -58,5 +62,5 @@ func (s FileOffsetStore) Save(offset int64) error {
 		os.Remove(name)
 		return err
 	}
-	return os.Rename(name, s.Path)
+	return os.Rename(name, path)
 }

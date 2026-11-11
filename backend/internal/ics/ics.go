@@ -1,4 +1,4 @@
-// Package ics renders all-day events as an RFC 5545 calendar feed.
+// Package ics renders all-day and timed events as an RFC 5545 calendar feed.
 package ics
 
 import (
@@ -10,7 +10,8 @@ import (
 
 type Event struct {
 	UID         string
-	Date        time.Time
+	Start       time.Time
+	AllDay      bool
 	Summary     string
 	Description string
 	URL         string
@@ -36,10 +37,7 @@ func Calendar(name string, events []Event, now time.Time) string {
 		line(&b, "BEGIN:VEVENT")
 		line(&b, "UID:"+escape(e.UID))
 		line(&b, "DTSTAMP:"+now.UTC().Format("20060102T150405Z"))
-		line(&b, "DTSTART;VALUE=DATE:"+e.Date.Format("20060102"))
-		// DTEND is exclusive for all-day events, so a task due on the 27th
-		// occupies only the 27th.
-		line(&b, "DTEND;VALUE=DATE:"+e.Date.AddDate(0, 0, 1).Format("20060102"))
+		writeWhen(&b, e)
 		line(&b, "SUMMARY:"+escape(e.Summary))
 		if e.Description != "" {
 			line(&b, "DESCRIPTION:"+escape(e.Description))
@@ -60,6 +58,17 @@ func Calendar(name string, events []Event, now time.Time) string {
 
 	line(&b, "END:VCALENDAR")
 	return b.String()
+}
+
+func writeWhen(b *strings.Builder, e Event) {
+	if !e.AllDay {
+		line(b, "DTSTART:"+e.Start.UTC().Format("20060102T150405Z"))
+		return
+	}
+	line(b, "DTSTART;VALUE=DATE:"+e.Start.Format("20060102"))
+	// DTEND is exclusive for all-day events, so a task due on the 27th
+	// occupies only the 27th.
+	line(b, "DTEND;VALUE=DATE:"+e.Start.AddDate(0, 0, 1).Format("20060102"))
 }
 
 func line(b *strings.Builder, s string) {

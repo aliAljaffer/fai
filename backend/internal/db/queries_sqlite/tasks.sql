@@ -1,5 +1,5 @@
 -- name: CreateTask :one
-INSERT INTO tasks (board_id, column_id, workspace_id, ref_num, title, description_md, priority, due_date, position, parent_task_id, kind, meeting_outcome_id, completed_at, created_by_fai)
+INSERT INTO tasks (board_id, column_id, workspace_id, ref_num, title, description_md, priority, due_date, position, parent_task_id, kind, meeting_outcome_id, completed_at, created_by_fai, repeat_freq, repeat_interval, repeat_anchor)
 VALUES (
   sqlc.arg(board_id), sqlc.arg(column_id), sqlc.arg(workspace_id), sqlc.arg(ref_num),
   sqlc.arg(title), sqlc.arg(description_md), sqlc.arg(priority),
@@ -7,7 +7,8 @@ VALUES (
   CAST(sqlc.narg('parent_task_id') AS INTEGER), sqlc.arg(kind), CAST(sqlc.narg('meeting_outcome_id') AS INTEGER),
   CASE WHEN (SELECT board_columns.is_done FROM board_columns WHERE board_columns.id = sqlc.arg(column_id))
     THEN strftime('%Y-%m-%dT%H:%M:%fZ', 'now') ELSE NULL END,
-  sqlc.arg(created_by_fai)
+  sqlc.arg(created_by_fai),
+  CAST(sqlc.narg('repeat_freq') AS TEXT), CAST(sqlc.narg('repeat_interval') AS INTEGER), CAST(sqlc.narg('repeat_anchor') AS TEXT)
 )
 RETURNING *;
 
@@ -37,6 +38,9 @@ UPDATE tasks SET
   description_md = COALESCE(sqlc.narg('description_md'), description_md),
   priority = COALESCE(sqlc.narg('priority'), priority),
   due_date = CASE WHEN sqlc.arg('due_date_set') = 1 THEN sqlc.narg('due_date') ELSE due_date END,
+  repeat_freq = CASE WHEN sqlc.arg('repeat_set') = 1 THEN CAST(sqlc.narg('repeat_freq') AS TEXT) ELSE repeat_freq END,
+  repeat_interval = CASE WHEN sqlc.arg('repeat_set') = 1 THEN CAST(sqlc.narg('repeat_interval') AS INTEGER) ELSE repeat_interval END,
+  repeat_anchor = CASE WHEN sqlc.arg('repeat_set') = 1 THEN CAST(sqlc.narg('repeat_anchor') AS TEXT) ELSE repeat_anchor END,
   updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 WHERE tasks.id = sqlc.arg('id') AND archived = 0
 RETURNING *;
@@ -87,3 +91,16 @@ UPDATE tasks SET parent_task_id = CAST(sqlc.narg('parent_task_id') AS INTEGER), 
 
 -- name: SetTaskKind :exec
 UPDATE tasks SET kind = sqlc.arg(kind), updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = sqlc.arg(id);
+
+-- name: CreateNextRepeatTask :one
+INSERT INTO tasks (board_id, column_id, workspace_id, ref_num, title, description_md, priority, due_date, position, parent_task_id, kind, repeat_freq, repeat_interval, repeat_anchor)
+SELECT src.board_id, sqlc.arg(column_id), src.workspace_id, sqlc.arg(ref_num), src.title, src.description_md, src.priority, CAST(sqlc.arg(due_date) AS TEXT), sqlc.arg(position), src.parent_task_id, src.kind, src.repeat_freq, src.repeat_interval, src.repeat_anchor
+FROM tasks src WHERE src.id = sqlc.arg(source_id) AND src.repeat_freq IS NOT NULL
+RETURNING *;
+
+-- name: CopyTaskTags :exec
+INSERT INTO task_tags (task_id, tag_id)
+SELECT sqlc.arg(new_task_id), tt.tag_id FROM task_tags tt WHERE tt.task_id = sqlc.arg(source_task_id);
+
+-- name: ClearTaskRepeat :exec
+UPDATE tasks SET repeat_freq = NULL, repeat_interval = NULL, repeat_anchor = NULL, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?;

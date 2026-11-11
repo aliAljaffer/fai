@@ -77,6 +77,12 @@ func New(path string) (*Store, error) {
 		{"tasks", "ref_num", "INTEGER"},
 		{"tasks", "kind", "TEXT NOT NULL DEFAULT 'task'"},
 		{"tasks", "created_by_fai", "BOOLEAN NOT NULL DEFAULT 0"},
+		{"reminders", "repeat_freq", "TEXT CHECK (repeat_freq IN ('daily', 'weekly', 'monthly', 'yearly'))"},
+		{"reminders", "repeat_interval", "INTEGER CHECK (repeat_interval BETWEEN 1 AND 365)"},
+		{"reminders", "repeat_anchor", "TEXT"},
+		{"tasks", "repeat_freq", "TEXT CHECK (repeat_freq IN ('daily', 'weekly', 'monthly', 'yearly'))"},
+		{"tasks", "repeat_interval", "INTEGER CHECK (repeat_interval BETWEEN 1 AND 365)"},
+		{"tasks", "repeat_anchor", "TEXT"},
 	}
 	kindAdded := false
 	for _, c := range columns {

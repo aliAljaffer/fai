@@ -12,7 +12,8 @@ func TestCalendarShape(t *testing.T) {
 	updated := time.Date(2026, 10, 26, 18, 0, 0, 0, time.UTC)
 	out := Calendar("fai tasks", []Event{{
 		UID:         "task-7@fai",
-		Date:        date,
+		Start:       date,
+		AllDay:      true,
 		Summary:     "Buy milk",
 		Description: "Priority: high",
 		URL:         "https://fai.example/?task=7",
@@ -40,10 +41,26 @@ func TestCalendarShape(t *testing.T) {
 	}
 }
 
+func TestCalendarTimedEvent(t *testing.T) {
+	zone := time.FixedZone("AST", 3*3600)
+	out := Calendar("x", []Event{{
+		UID:     "reminder-3@fai",
+		Start:   time.Date(2026, 11, 12, 9, 30, 0, 0, zone),
+		Summary: "Call the dentist",
+	}}, time.Date(2026, 11, 11, 12, 0, 0, 0, time.UTC))
+	if !strings.Contains(out, "DTSTART:20261112T063000Z\r\n") {
+		t.Errorf("missing UTC DTSTART:\n%s", out)
+	}
+	if strings.Contains(out, "DTEND") || strings.Contains(out, "VALUE=DATE") {
+		t.Errorf("timed event has date-only fields:\n%s", out)
+	}
+}
+
 func TestCalendarEscapesText(t *testing.T) {
 	out := Calendar("x", []Event{{
 		UID:     "u",
-		Date:    time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC),
+		Start:   time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC),
+		AllDay:  true,
 		Summary: `a,b;c\d` + "\n" + "next",
 	}}, time.Now())
 	if !strings.Contains(out, `SUMMARY:a\,b\;c\\d\nnext`) {
@@ -55,7 +72,8 @@ func TestFoldKeepsLinesWithinLimitAndRunesIntact(t *testing.T) {
 	long := strings.Repeat("hello, ", 40) + strings.Repeat("مرحبا ", 30)
 	out := Calendar("x", []Event{{
 		UID:     "u",
-		Date:    time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC),
+		Start:   time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC),
+		AllDay:  true,
 		Summary: long,
 	}}, time.Now())
 

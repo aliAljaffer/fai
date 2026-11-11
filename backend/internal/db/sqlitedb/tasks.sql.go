@@ -19,51 +19,52 @@ func (q *Queries) ArchiveTask(ctx context.Context, id int64) error {
 	return err
 }
 
-const createTask = `-- name: CreateTask :one
-INSERT INTO tasks (board_id, column_id, workspace_id, ref_num, title, description_md, priority, due_date, position, parent_task_id, kind, meeting_outcome_id, completed_at, created_by_fai)
-VALUES (
-  ?1, ?2, ?3, ?4,
-  ?5, ?6, ?7,
-  CAST(?8 AS TEXT), ?9,
-  CAST(?10 AS INTEGER), ?11, CAST(?12 AS INTEGER),
-  CASE WHEN (SELECT board_columns.is_done FROM board_columns WHERE board_columns.id = ?2)
-    THEN strftime('%Y-%m-%dT%H:%M:%fZ', 'now') ELSE NULL END,
-  ?13
-)
-RETURNING id, board_id, column_id, parent_task_id, kind, meeting_outcome_id, created_by_fai, workspace_id, ref_num, title, description_md, priority, due_date, position, completed_at, archived, created_at, updated_at
+const clearTaskRepeat = `-- name: ClearTaskRepeat :exec
+UPDATE tasks SET repeat_freq = NULL, repeat_interval = NULL, repeat_anchor = NULL, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?
 `
 
-type CreateTaskParams struct {
-	BoardID          int64          `json:"board_id"`
-	ColumnID         int64          `json:"column_id"`
-	WorkspaceID      int64          `json:"workspace_id"`
-	RefNum           int64          `json:"ref_num"`
-	Title            string         `json:"title"`
-	DescriptionMd    string         `json:"description_md"`
-	Priority         string         `json:"priority"`
-	DueDate          sql.NullString `json:"due_date"`
-	Position         float64        `json:"position"`
-	ParentTaskID     sql.NullInt64  `json:"parent_task_id"`
-	Kind             string         `json:"kind"`
-	MeetingOutcomeID sql.NullInt64  `json:"meeting_outcome_id"`
-	CreatedByFai     bool           `json:"created_by_fai"`
+func (q *Queries) ClearTaskRepeat(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, clearTaskRepeat, id)
+	return err
 }
 
-func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (Task, error) {
-	row := q.db.QueryRowContext(ctx, createTask,
-		arg.BoardID,
+const copyTaskTags = `-- name: CopyTaskTags :exec
+INSERT INTO task_tags (task_id, tag_id)
+SELECT ?1, tt.tag_id FROM task_tags tt WHERE tt.task_id = ?2
+`
+
+type CopyTaskTagsParams struct {
+	NewTaskID    int64 `json:"new_task_id"`
+	SourceTaskID int64 `json:"source_task_id"`
+}
+
+func (q *Queries) CopyTaskTags(ctx context.Context, arg CopyTaskTagsParams) error {
+	_, err := q.db.ExecContext(ctx, copyTaskTags, arg.NewTaskID, arg.SourceTaskID)
+	return err
+}
+
+const createNextRepeatTask = `-- name: CreateNextRepeatTask :one
+INSERT INTO tasks (board_id, column_id, workspace_id, ref_num, title, description_md, priority, due_date, position, parent_task_id, kind, repeat_freq, repeat_interval, repeat_anchor)
+SELECT src.board_id, ?1, src.workspace_id, ?2, src.title, src.description_md, src.priority, CAST(?3 AS TEXT), ?4, src.parent_task_id, src.kind, src.repeat_freq, src.repeat_interval, src.repeat_anchor
+FROM tasks src WHERE src.id = ?5 AND src.repeat_freq IS NOT NULL
+RETURNING id, board_id, column_id, parent_task_id, kind, meeting_outcome_id, created_by_fai, workspace_id, ref_num, title, description_md, priority, due_date, position, completed_at, archived, created_at, updated_at, repeat_freq, repeat_interval, repeat_anchor
+`
+
+type CreateNextRepeatTaskParams struct {
+	ColumnID int64   `json:"column_id"`
+	RefNum   int64   `json:"ref_num"`
+	DueDate  string  `json:"due_date"`
+	Position float64 `json:"position"`
+	SourceID int64   `json:"source_id"`
+}
+
+func (q *Queries) CreateNextRepeatTask(ctx context.Context, arg CreateNextRepeatTaskParams) (Task, error) {
+	row := q.db.QueryRowContext(ctx, createNextRepeatTask,
 		arg.ColumnID,
-		arg.WorkspaceID,
 		arg.RefNum,
-		arg.Title,
-		arg.DescriptionMd,
-		arg.Priority,
 		arg.DueDate,
 		arg.Position,
-		arg.ParentTaskID,
-		arg.Kind,
-		arg.MeetingOutcomeID,
-		arg.CreatedByFai,
+		arg.SourceID,
 	)
 	var i Task
 	err := row.Scan(
@@ -85,6 +86,89 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (Task, e
 		&i.Archived,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.RepeatFreq,
+		&i.RepeatInterval,
+		&i.RepeatAnchor,
+	)
+	return i, err
+}
+
+const createTask = `-- name: CreateTask :one
+INSERT INTO tasks (board_id, column_id, workspace_id, ref_num, title, description_md, priority, due_date, position, parent_task_id, kind, meeting_outcome_id, completed_at, created_by_fai, repeat_freq, repeat_interval, repeat_anchor)
+VALUES (
+  ?1, ?2, ?3, ?4,
+  ?5, ?6, ?7,
+  CAST(?8 AS TEXT), ?9,
+  CAST(?10 AS INTEGER), ?11, CAST(?12 AS INTEGER),
+  CASE WHEN (SELECT board_columns.is_done FROM board_columns WHERE board_columns.id = ?2)
+    THEN strftime('%Y-%m-%dT%H:%M:%fZ', 'now') ELSE NULL END,
+  ?13,
+  CAST(?14 AS TEXT), CAST(?15 AS INTEGER), CAST(?16 AS TEXT)
+)
+RETURNING id, board_id, column_id, parent_task_id, kind, meeting_outcome_id, created_by_fai, workspace_id, ref_num, title, description_md, priority, due_date, position, completed_at, archived, created_at, updated_at, repeat_freq, repeat_interval, repeat_anchor
+`
+
+type CreateTaskParams struct {
+	BoardID          int64          `json:"board_id"`
+	ColumnID         int64          `json:"column_id"`
+	WorkspaceID      int64          `json:"workspace_id"`
+	RefNum           int64          `json:"ref_num"`
+	Title            string         `json:"title"`
+	DescriptionMd    string         `json:"description_md"`
+	Priority         string         `json:"priority"`
+	DueDate          sql.NullString `json:"due_date"`
+	Position         float64        `json:"position"`
+	ParentTaskID     sql.NullInt64  `json:"parent_task_id"`
+	Kind             string         `json:"kind"`
+	MeetingOutcomeID sql.NullInt64  `json:"meeting_outcome_id"`
+	CreatedByFai     bool           `json:"created_by_fai"`
+	RepeatFreq       sql.NullString `json:"repeat_freq"`
+	RepeatInterval   sql.NullInt64  `json:"repeat_interval"`
+	RepeatAnchor     sql.NullString `json:"repeat_anchor"`
+}
+
+func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (Task, error) {
+	row := q.db.QueryRowContext(ctx, createTask,
+		arg.BoardID,
+		arg.ColumnID,
+		arg.WorkspaceID,
+		arg.RefNum,
+		arg.Title,
+		arg.DescriptionMd,
+		arg.Priority,
+		arg.DueDate,
+		arg.Position,
+		arg.ParentTaskID,
+		arg.Kind,
+		arg.MeetingOutcomeID,
+		arg.CreatedByFai,
+		arg.RepeatFreq,
+		arg.RepeatInterval,
+		arg.RepeatAnchor,
+	)
+	var i Task
+	err := row.Scan(
+		&i.ID,
+		&i.BoardID,
+		&i.ColumnID,
+		&i.ParentTaskID,
+		&i.Kind,
+		&i.MeetingOutcomeID,
+		&i.CreatedByFai,
+		&i.WorkspaceID,
+		&i.RefNum,
+		&i.Title,
+		&i.DescriptionMd,
+		&i.Priority,
+		&i.DueDate,
+		&i.Position,
+		&i.CompletedAt,
+		&i.Archived,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.RepeatFreq,
+		&i.RepeatInterval,
+		&i.RepeatAnchor,
 	)
 	return i, err
 }
@@ -99,7 +183,7 @@ func (q *Queries) DeleteTask(ctx context.Context, id int64) error {
 }
 
 const getTask = `-- name: GetTask :one
-SELECT id, board_id, column_id, parent_task_id, kind, meeting_outcome_id, created_by_fai, workspace_id, ref_num, title, description_md, priority, due_date, position, completed_at, archived, created_at, updated_at FROM tasks WHERE id = ? AND archived = 0
+SELECT id, board_id, column_id, parent_task_id, kind, meeting_outcome_id, created_by_fai, workspace_id, ref_num, title, description_md, priority, due_date, position, completed_at, archived, created_at, updated_at, repeat_freq, repeat_interval, repeat_anchor FROM tasks WHERE id = ? AND archived = 0
 `
 
 func (q *Queries) GetTask(ctx context.Context, id int64) (Task, error) {
@@ -124,12 +208,15 @@ func (q *Queries) GetTask(ctx context.Context, id int64) (Task, error) {
 		&i.Archived,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.RepeatFreq,
+		&i.RepeatInterval,
+		&i.RepeatAnchor,
 	)
 	return i, err
 }
 
 const listSubtasks = `-- name: ListSubtasks :many
-SELECT id, board_id, column_id, parent_task_id, kind, meeting_outcome_id, created_by_fai, workspace_id, ref_num, title, description_md, priority, due_date, position, completed_at, archived, created_at, updated_at FROM tasks WHERE parent_task_id = ? AND archived = 0 ORDER BY created_at
+SELECT id, board_id, column_id, parent_task_id, kind, meeting_outcome_id, created_by_fai, workspace_id, ref_num, title, description_md, priority, due_date, position, completed_at, archived, created_at, updated_at, repeat_freq, repeat_interval, repeat_anchor FROM tasks WHERE parent_task_id = ? AND archived = 0 ORDER BY created_at
 `
 
 func (q *Queries) ListSubtasks(ctx context.Context, parentTaskID sql.NullInt64) ([]Task, error) {
@@ -160,6 +247,9 @@ func (q *Queries) ListSubtasks(ctx context.Context, parentTaskID sql.NullInt64) 
 			&i.Archived,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.RepeatFreq,
+			&i.RepeatInterval,
+			&i.RepeatAnchor,
 		); err != nil {
 			return nil, err
 		}
@@ -175,7 +265,7 @@ func (q *Queries) ListSubtasks(ctx context.Context, parentTaskID sql.NullInt64) 
 }
 
 const listTasks = `-- name: ListTasks :many
-SELECT DISTINCT t.id, t.board_id, t.column_id, t.parent_task_id, t.kind, t.meeting_outcome_id, t.created_by_fai, t.workspace_id, t.ref_num, t.title, t.description_md, t.priority, t.due_date, t.position, t.completed_at, t.archived, t.created_at, t.updated_at FROM tasks t
+SELECT DISTINCT t.id, t.board_id, t.column_id, t.parent_task_id, t.kind, t.meeting_outcome_id, t.created_by_fai, t.workspace_id, t.ref_num, t.title, t.description_md, t.priority, t.due_date, t.position, t.completed_at, t.archived, t.created_at, t.updated_at, t.repeat_freq, t.repeat_interval, t.repeat_anchor FROM tasks t
 LEFT JOIN task_tags tt ON tt.task_id = t.id
 LEFT JOIN tags tg ON tg.id = tt.tag_id
 WHERE t.archived = 0
@@ -228,6 +318,9 @@ func (q *Queries) ListTasks(ctx context.Context, arg ListTasksParams) ([]Task, e
 			&i.Archived,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.RepeatFreq,
+			&i.RepeatInterval,
+			&i.RepeatAnchor,
 		); err != nil {
 			return nil, err
 		}
@@ -243,7 +336,7 @@ func (q *Queries) ListTasks(ctx context.Context, arg ListTasksParams) ([]Task, e
 }
 
 const listTasksByColumnOrdered = `-- name: ListTasksByColumnOrdered :many
-SELECT id, board_id, column_id, parent_task_id, kind, meeting_outcome_id, created_by_fai, workspace_id, ref_num, title, description_md, priority, due_date, position, completed_at, archived, created_at, updated_at FROM tasks WHERE column_id = ? AND archived = 0 ORDER BY position
+SELECT id, board_id, column_id, parent_task_id, kind, meeting_outcome_id, created_by_fai, workspace_id, ref_num, title, description_md, priority, due_date, position, completed_at, archived, created_at, updated_at, repeat_freq, repeat_interval, repeat_anchor FROM tasks WHERE column_id = ? AND archived = 0 ORDER BY position
 `
 
 func (q *Queries) ListTasksByColumnOrdered(ctx context.Context, columnID int64) ([]Task, error) {
@@ -274,6 +367,9 @@ func (q *Queries) ListTasksByColumnOrdered(ctx context.Context, columnID int64) 
 			&i.Archived,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.RepeatFreq,
+			&i.RepeatInterval,
+			&i.RepeatAnchor,
 		); err != nil {
 			return nil, err
 		}
@@ -299,7 +395,7 @@ UPDATE tasks SET
   END,
   updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 WHERE tasks.id = ?3
-RETURNING id, board_id, column_id, parent_task_id, kind, meeting_outcome_id, created_by_fai, workspace_id, ref_num, title, description_md, priority, due_date, position, completed_at, archived, created_at, updated_at
+RETURNING id, board_id, column_id, parent_task_id, kind, meeting_outcome_id, created_by_fai, workspace_id, ref_num, title, description_md, priority, due_date, position, completed_at, archived, created_at, updated_at, repeat_freq, repeat_interval, repeat_anchor
 `
 
 type MoveTaskParams struct {
@@ -330,6 +426,9 @@ func (q *Queries) MoveTask(ctx context.Context, arg MoveTaskParams) (Task, error
 		&i.Archived,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.RepeatFreq,
+		&i.RepeatInterval,
+		&i.RepeatAnchor,
 	)
 	return i, err
 }
@@ -340,18 +439,25 @@ UPDATE tasks SET
   description_md = COALESCE(?2, description_md),
   priority = COALESCE(?3, priority),
   due_date = CASE WHEN ?4 = 1 THEN ?5 ELSE due_date END,
+  repeat_freq = CASE WHEN ?6 = 1 THEN CAST(?7 AS TEXT) ELSE repeat_freq END,
+  repeat_interval = CASE WHEN ?6 = 1 THEN CAST(?8 AS INTEGER) ELSE repeat_interval END,
+  repeat_anchor = CASE WHEN ?6 = 1 THEN CAST(?9 AS TEXT) ELSE repeat_anchor END,
   updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-WHERE tasks.id = ?6 AND archived = 0
-RETURNING id, board_id, column_id, parent_task_id, kind, meeting_outcome_id, created_by_fai, workspace_id, ref_num, title, description_md, priority, due_date, position, completed_at, archived, created_at, updated_at
+WHERE tasks.id = ?10 AND archived = 0
+RETURNING id, board_id, column_id, parent_task_id, kind, meeting_outcome_id, created_by_fai, workspace_id, ref_num, title, description_md, priority, due_date, position, completed_at, archived, created_at, updated_at, repeat_freq, repeat_interval, repeat_anchor
 `
 
 type PatchTaskParams struct {
-	Title         sql.NullString `json:"title"`
-	DescriptionMd sql.NullString `json:"description_md"`
-	Priority      sql.NullString `json:"priority"`
-	DueDateSet    interface{}    `json:"due_date_set"`
-	DueDate       sql.NullString `json:"due_date"`
-	ID            int64          `json:"id"`
+	Title          sql.NullString `json:"title"`
+	DescriptionMd  sql.NullString `json:"description_md"`
+	Priority       sql.NullString `json:"priority"`
+	DueDateSet     interface{}    `json:"due_date_set"`
+	DueDate        sql.NullString `json:"due_date"`
+	RepeatSet      interface{}    `json:"repeat_set"`
+	RepeatFreq     sql.NullString `json:"repeat_freq"`
+	RepeatInterval sql.NullInt64  `json:"repeat_interval"`
+	RepeatAnchor   sql.NullString `json:"repeat_anchor"`
+	ID             int64          `json:"id"`
 }
 
 func (q *Queries) PatchTask(ctx context.Context, arg PatchTaskParams) (Task, error) {
@@ -361,6 +467,10 @@ func (q *Queries) PatchTask(ctx context.Context, arg PatchTaskParams) (Task, err
 		arg.Priority,
 		arg.DueDateSet,
 		arg.DueDate,
+		arg.RepeatSet,
+		arg.RepeatFreq,
+		arg.RepeatInterval,
+		arg.RepeatAnchor,
 		arg.ID,
 	)
 	var i Task
@@ -383,6 +493,9 @@ func (q *Queries) PatchTask(ctx context.Context, arg PatchTaskParams) (Task, err
 		&i.Archived,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.RepeatFreq,
+		&i.RepeatInterval,
+		&i.RepeatAnchor,
 	)
 	return i, err
 }
@@ -446,7 +559,7 @@ UPDATE tasks SET
   due_date = CAST(?4 AS TEXT),
   updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 WHERE tasks.id = ?5 AND archived = 0
-RETURNING id, board_id, column_id, parent_task_id, kind, meeting_outcome_id, created_by_fai, workspace_id, ref_num, title, description_md, priority, due_date, position, completed_at, archived, created_at, updated_at
+RETURNING id, board_id, column_id, parent_task_id, kind, meeting_outcome_id, created_by_fai, workspace_id, ref_num, title, description_md, priority, due_date, position, completed_at, archived, created_at, updated_at, repeat_freq, repeat_interval, repeat_anchor
 `
 
 type UpdateTaskParams struct {
@@ -485,6 +598,9 @@ func (q *Queries) UpdateTask(ctx context.Context, arg UpdateTaskParams) (Task, e
 		&i.Archived,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.RepeatFreq,
+		&i.RepeatInterval,
+		&i.RepeatAnchor,
 	)
 	return i, err
 }

@@ -446,6 +446,10 @@ func (s *Server) faiContext(ctx context.Context) string {
 			out.WriteString(" due ")
 			out.WriteString(*task.DueDate)
 		}
+		if task.Repeat != nil {
+			out.WriteString(", repeats ")
+			out.WriteString(task.Repeat.Describe())
+		}
 		if task.Priority != "medium" {
 			out.WriteString(", ")
 			out.WriteString(task.Priority)
@@ -503,7 +507,11 @@ func (s *Server) faiContext(ctx context.Context) string {
 			if listed == 30 {
 				break
 			}
-			out.WriteString(fmt.Sprintf("- reminder_id %d: %s at %s\n", reminder.ID, reminder.Title, reminder.RemindAt.Format(time.RFC3339)))
+			out.WriteString(fmt.Sprintf("- reminder_id %d: %s at %s", reminder.ID, reminder.Title, reminder.RemindAt.Format(time.RFC3339)))
+			if reminder.Repeat != nil {
+				out.WriteString(", repeats " + reminder.Repeat.Describe())
+			}
+			out.WriteString("\n")
 			listed++
 		}
 		if listed == 0 {

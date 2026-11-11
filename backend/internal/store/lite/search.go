@@ -17,7 +17,8 @@ const searchTasksSQL = `
 SELECT tasks.id, tasks.board_id, tasks.column_id, tasks.parent_task_id, tasks.kind, tasks.meeting_outcome_id,
        tasks.workspace_id, tasks.ref_num,
        tasks.title, tasks.description_md, tasks.priority, tasks.due_date, tasks.position,
-       tasks.completed_at, tasks.archived, tasks.created_at, tasks.updated_at
+       tasks.completed_at, tasks.archived, tasks.created_at, tasks.updated_at,
+       tasks.repeat_freq, tasks.repeat_interval, tasks.repeat_anchor
 FROM tasks_fts
 JOIN tasks ON tasks.id = tasks_fts.rowid
 WHERE tasks_fts MATCH ? AND tasks.archived = 0
@@ -41,6 +42,7 @@ func (s *Store) SearchTasks(ctx context.Context, query string, workspaceID *int6
 			&t.WorkspaceID, &t.RefNum,
 			&t.Title, &t.DescriptionMd, &t.Priority, &t.DueDate, &t.Position,
 			&t.CompletedAt, &t.Archived, &t.CreatedAt, &t.UpdatedAt,
+			&t.RepeatFreq, &t.RepeatInterval, &t.RepeatAnchor,
 		); err != nil {
 			return nil, err
 		}
