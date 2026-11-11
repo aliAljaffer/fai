@@ -232,3 +232,11 @@ func TestChatNoteActions(t *testing.T) {
 		t.Fatalf("outcome = %#v", outcome)
 	}
 }
+
+func TestArcSummaryListsEveryTask(t *testing.T) {
+	got := arcSummary("Arc", []chatTaskSpec{{Title: "A", Steps: []string{"x", " ", "y"}}, {Title: "B"}})
+	want := "Create arc \"Arc\" with these 2 tasks?\n1. A (2 steps)\n2. B"
+	if got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
