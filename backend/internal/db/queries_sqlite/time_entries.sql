@@ -25,3 +25,7 @@ WHERE ended_at IS NOT NULL
   AND date(started_at) BETWEEN CAST(sqlc.arg(from_date) AS TEXT) AND CAST(sqlc.arg(to_date) AS TEXT)
 GROUP BY date(started_at)
 ORDER BY date(started_at);
+
+-- name: LogEntry :one
+INSERT INTO task_time_entries (task_id, started_at, ended_at) VALUES (sqlc.arg(task_id), sqlc.arg(started_at), sqlc.arg(ended_at))
+RETURNING id, task_id, started_at, ended_at, duration_seconds;

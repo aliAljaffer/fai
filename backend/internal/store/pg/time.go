@@ -3,8 +3,10 @@ package pg
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/alialjaffer/fai/backend/internal/db/sqlc"
 	"github.com/alialjaffer/fai/backend/internal/store"
@@ -68,4 +70,11 @@ func (s *Store) ListEntriesForTask(ctx context.Context, taskID int64) ([]store.T
 		out[i] = toEntry(e)
 	}
 	return out, nil
+}
+
+func (s *Store) LogTimeEntry(ctx context.Context, taskID int64, startedAt, endedAt time.Time) (store.TaskTimeEntry, error) {
+	e, err := s.q.LogEntry(ctx, sqlc.LogEntryParams{
+		TaskID: taskID, StartedAt: startedAt, EndedAt: pgtype.Timestamptz{Time: endedAt, Valid: true},
+	})
+	return toEntry(e), err
 }

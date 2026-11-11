@@ -7,6 +7,7 @@ package sqlitedb
 
 import (
 	"context"
+	"database/sql"
 )
 
 const getRunningEntry = `-- name: GetRunningEntry :one
@@ -59,6 +60,30 @@ func (q *Queries) ListEntriesForTask(ctx context.Context, taskID int64) ([]TaskT
 		return nil, err
 	}
 	return items, nil
+}
+
+const logEntry = `-- name: LogEntry :one
+INSERT INTO task_time_entries (task_id, started_at, ended_at) VALUES (?1, ?2, ?3)
+RETURNING id, task_id, started_at, ended_at, duration_seconds
+`
+
+type LogEntryParams struct {
+	TaskID    int64          `json:"task_id"`
+	StartedAt string         `json:"started_at"`
+	EndedAt   sql.NullString `json:"ended_at"`
+}
+
+func (q *Queries) LogEntry(ctx context.Context, arg LogEntryParams) (TaskTimeEntry, error) {
+	row := q.db.QueryRowContext(ctx, logEntry, arg.TaskID, arg.StartedAt, arg.EndedAt)
+	var i TaskTimeEntry
+	err := row.Scan(
+		&i.ID,
+		&i.TaskID,
+		&i.StartedAt,
+		&i.EndedAt,
+		&i.DurationSeconds,
+	)
+	return i, err
 }
 
 const startEntry = `-- name: StartEntry :one

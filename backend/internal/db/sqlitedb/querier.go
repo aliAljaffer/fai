@@ -63,6 +63,7 @@ type Querier interface {
 	ListTaskComments(ctx context.Context, taskID int64) ([]TaskComment, error)
 	ListTasks(ctx context.Context, arg ListTasksParams) ([]Task, error)
 	ListTasksByColumnOrdered(ctx context.Context, columnID int64) ([]Task, error)
+	LogEntry(ctx context.Context, arg LogEntryParams) (TaskTimeEntry, error)
 	MarkMeetingOutcomePromptSent(ctx context.Context, id int64) error
 	MarkReminderSent(ctx context.Context, id int64) error
 	MoveTask(ctx context.Context, arg MoveTaskParams) (Task, error)
