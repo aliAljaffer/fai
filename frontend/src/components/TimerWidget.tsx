@@ -2,12 +2,13 @@ import { Clock, Square } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { cn } from '@/lib/utils'
 import { useBoards, useRunningTime, useStartTime, useStopTime, useTasks } from '../api/hooks'
 import { useUIStore } from '../store/ui'
 import { useWorkspaceStore } from '../store/workspace'
-import { formatDuration } from '../lib/format'
+import { formatClock, formatDuration } from '../lib/format'
 
-export function TimerWidget() {
+export function TimerWidget({ variant }: { variant: 'panel' | 'compact' }) {
   const { data: running } = useRunningTime()
   const workspaceId = useWorkspaceStore((state) => state.activeWorkspaceId)
   const { data: boards } = useBoards(workspaceId)
@@ -54,17 +55,42 @@ export function TimerWidget() {
     const task = tasks?.find((t) => t.id === running.task_id)
     const elapsed = Math.floor((Date.now() - new Date(running.started_at).getTime()) / 1000)
 
+    const title = task?.title ?? `Task #${running.task_id}`
+    const stop = () => stopTime.mutate(running.task_id)
+
+    if (variant === 'panel') {
+      return (
+        <section
+          aria-label="Running timer"
+          className="rounded-xl border border-sidebar-border bg-background p-3.5"
+        >
+          <h2 className="mb-2 eyebrow">
+            Tracking
+          </h2>
+          <p className="mb-0.5 truncate font-mono text-[0.6875rem] text-muted-foreground" title={title}>
+            {task ? `${task.ref} · ${task.title}` : title}
+          </p>
+          <p className="font-mono text-2xl font-medium tracking-tight tabular-nums">
+            {formatClock(elapsed)}
+          </p>
+          <Button className="mt-3 h-8 rounded-full px-3 text-[0.8125rem]" onClick={stop}>
+            Stop
+          </Button>
+        </section>
+      )
+    }
+
     return (
       <div className="flex min-w-0 items-center gap-2 rounded-full border border-destructive/40 bg-destructive/10 px-3 py-1 text-sm">
         <span className="h-2 w-2 animate-pulse rounded-full bg-destructive" />
-        <span className="max-w-40 truncate">{task?.title ?? `Task #${running.task_id}`}</span>
+        <span className="max-w-40 truncate">{title}</span>
         <span className="font-mono text-xs text-muted-foreground">{formatDuration(elapsed)}</span>
         <Button
           size="icon-xs"
           variant="destructive"
           title="Stop timer"
           aria-label="Stop timer"
-          onClick={() => stopTime.mutate(running.task_id)}
+          onClick={stop}
         >
           <Square className="fill-current" />
         </Button>
@@ -72,25 +98,30 @@ export function TimerWidget() {
     )
   }
 
+  const panel = variant === 'panel'
+
   return (
     <div ref={containerRef} className="relative">
       <Button
         variant="outline"
         size="sm"
-        className="text-muted-foreground"
+        className={cn('text-muted-foreground', panel && 'h-9 w-full justify-start rounded-xl')}
         aria-label="Start a timer"
         aria-expanded={open}
         aria-haspopup="dialog"
         onClick={() => setOpen((current) => !current)}
       >
         <Clock className="size-3.5" />
-        <span className="hidden sm:inline">Timer</span>
+        <span className={cn(!panel && 'hidden sm:inline')}>{panel ? 'Start a timer' : 'Timer'}</span>
       </Button>
       {open && (
         <div
           role="dialog"
           aria-label="Start a timer"
-          className="absolute right-0 z-50 mt-2 flex w-72 flex-col gap-2 rounded-lg border bg-popover p-3 shadow-lg"
+          className={cn(
+            'absolute z-50 flex w-72 flex-col gap-2 rounded-lg border bg-popover p-3 shadow-lg',
+            panel ? 'bottom-full left-0 mb-2' : 'right-0 mt-2',
+          )}
         >
           <p className="text-sm font-medium">Start a timer</p>
           <Input

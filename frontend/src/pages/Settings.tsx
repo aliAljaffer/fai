@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
+import { PageHeader } from '@/components/layout/PageHeader'
 import { Download, Trash2, TriangleAlert, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -1143,7 +1144,7 @@ export function Settings() {
 
   return (
     <div className="flex flex-col gap-3">
-      <h1 className="text-lg font-semibold">Settings</h1>
+      <PageHeader title="Settings" />
       <div className="columns-1 gap-3 [&>*]:mb-3 [&>*]:break-inside-avoid sm:columns-2 xl:columns-3">
       <WorkspacesCard />
 

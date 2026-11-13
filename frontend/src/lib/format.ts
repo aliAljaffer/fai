@@ -9,6 +9,11 @@ export function formatDuration(totalSeconds: number): string {
   return `${s}s`
 }
 
+export function formatClock(totalSeconds: number): string {
+  const pad = (value: number) => String(Math.floor(value)).padStart(2, '0')
+  return `${pad(totalSeconds / 3600)}:${pad((totalSeconds % 3600) / 60)}:${pad(totalSeconds % 60)}`
+}
+
 export function formatDueDate(value: string | null): string | null {
   if (!value) return null
   const date = parseISO(value)

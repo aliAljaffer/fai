@@ -1,4 +1,5 @@
 import { Send } from 'lucide-react'
+import { PageHeader } from '@/components/layout/PageHeader'
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -54,24 +55,26 @@ export function Chat() {
   if (status && !status.configured) {
     return (
       <div className="flex max-w-xl flex-col gap-2">
-        <h1 className="text-lg font-semibold">Chat</h1>
-        <p className="text-sm text-muted-foreground">
-          AI is not configured. Add a provider in Settings to use chat.
-        </p>
+        <PageHeader
+          title="Chat"
+          description="AI is not configured. Add a provider in Settings to use chat."
+        />
       </div>
     )
   }
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-3">
-      <header className="flex flex-col gap-1">
-        <h1 className="text-lg font-semibold">Chat</h1>
-        <p className="text-xs text-muted-foreground">
-          Ask about your tasks, notes, or what to do next. It can also create tasks and reminders,
-          for example "Create a task to refresh the Cloudflare token on Wednesday". The assistant
-          sees open task titles and note titles.
-        </p>
-      </header>
+      <PageHeader
+        title="Chat"
+        description={
+          <p>
+            Ask about your tasks, notes, or what to do next. It can also create tasks and
+            reminders, for example "Create a task to refresh the Cloudflare token on Wednesday".
+            The assistant sees open task titles and note titles.
+          </p>
+        }
+      />
 
       <div
         ref={transcriptRef}

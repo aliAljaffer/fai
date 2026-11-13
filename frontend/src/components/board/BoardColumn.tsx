@@ -1,7 +1,10 @@
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
+import { useColumnWidths } from '@/store/columnWidths'
+import { ColumnResizeHandle } from './ColumnResizeHandle'
+import { columnColorCss, useColumnColors } from '@/store/columnColors'
 import { CSS } from '@dnd-kit/utilities'
-import { ArrowLeft, ArrowRight, GripVertical, MoreHorizontal, Pencil, Plus } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { ArrowLeft, ArrowRight, MoreHorizontal, Pencil, Plus } from 'lucide-react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import {
@@ -143,12 +146,31 @@ export function BoardColumn({
     }
   }
 
+  const { colors } = useColumnColors()
+  const storedWidth = useColumnWidths((state) => state.widths[String(column.id)])
+  const [previewWidth, setPreviewWidth] = useState<number | null>(null)
+  const sectionRef = useRef<HTMLElement | null>(null)
+  const width = previewWidth ?? storedWidth
+
   return (
     <section
-      ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={cn('flex w-72 shrink-0 flex-col', isDragging && 'relative z-10')}
+      ref={(element) => {
+        setNodeRef(element)
+        sectionRef.current = element
+      }}
+      style={{ transform: CSS.Transform.toString(transform), transition, width }}
+      className={cn(
+        'relative flex flex-col',
+        width ? 'shrink-0' : 'min-w-64 flex-1 basis-0',
+        isDragging && 'z-10',
+      )}
     >
+      <ColumnResizeHandle
+        columnId={column.id}
+        columnName={column.name}
+        targetRef={sectionRef}
+        onPreview={setPreviewWidth}
+      />
       <div className="flex h-8 items-center justify-between gap-2 border-b pb-2">
         {renaming ? (
           <Input
@@ -175,23 +197,36 @@ export function BoardColumn({
           <div
             {...attributes}
             {...listeners}
-            className="flex min-w-0 flex-1 cursor-grab touch-none items-center gap-1 rounded-sm outline-none select-none focus-visible:ring-2 focus-visible:ring-ring/50 active:cursor-grabbing"
+            className="flex min-w-0 flex-1 cursor-grab touch-none items-center gap-2 rounded-sm outline-none select-none focus-visible:ring-2 focus-visible:ring-ring/50 active:cursor-grabbing"
             aria-label={`Reorder ${column.name}`}
             title="Drag to reorder"
           >
-            <GripVertical
-              className="size-3.5 shrink-0 text-muted-foreground/60"
+            <span
               aria-hidden
+              className="size-2 shrink-0 rounded-full"
+              style={{ backgroundColor: columnColorCss(column, colors) }}
             />
-            <h2 className="min-w-0 truncate text-sm font-medium">{column.name}</h2>
+            <h2 className="min-w-0 truncate text-[0.8125rem] font-bold tracking-[0.01em]">
+              {column.name}
+            </h2>
+            <span className="font-mono text-[0.6875rem] tabular-nums text-muted-foreground">
+              {hasFilters && tasks.length !== totalCount
+                ? `${tasks.length + reminders.length}/${totalCount + reminders.length}`
+                : tasks.length + reminders.length}
+            </span>
           </div>
         )}
-        <div className="flex shrink-0 items-center gap-1">
-          <span className="text-xs tabular-nums text-muted-foreground">
-            {hasFilters && tasks.length !== totalCount
-              ? `${tasks.length + reminders.length}/${totalCount + reminders.length}`
-              : tasks.length + reminders.length}
-          </span>
+        <div className="flex shrink-0 items-center gap-0.5">
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className="text-muted-foreground"
+            aria-label={`Add task to ${column.name}`}
+            title="Add task"
+            onClick={onStartAdding}
+          >
+            <Plus />
+          </Button>
           <DropdownMenu>
             <DropdownMenuTrigger
               render={
@@ -267,14 +302,14 @@ export function BoardColumn({
       )}
       <div
         className={cn(
-          'flex max-h-[calc(100dvh-14rem)] min-h-24 flex-1 flex-col gap-2 overflow-y-auto rounded-md pt-2 pr-0.5 transition-[background-color,box-shadow] duration-150 motion-reduce:transition-none',
+          'flex max-h-[calc(100dvh-14rem)] min-h-24 flex-1 flex-col gap-[11px] overflow-y-auto rounded-md px-0.5 pt-[11px] pb-3 transition-[background-color,box-shadow] duration-150 motion-reduce:transition-none',
           (isOver || highlighted) && 'bg-muted/40 ring-1 ring-primary/25',
         )}
       >
         <SortableContext items={tasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
           {tasks.map((task) => (
+            <Fragment key={task.id}>
             <TaskCard
-              key={task.id}
               task={task}
               runningTaskId={runningTaskId}
               isDone={column.is_done}
@@ -288,12 +323,7 @@ export function BoardColumn({
               expanded={expandedTaskId === task.id}
               onClick={() => onTaskClick(task)}
             />
-          ))}
-        </SortableContext>
-        {reminders.map((reminder) => (
-          <CompletedReminderCard key={`reminder-${reminder.id}`} reminder={reminder} />
-        ))}
-        {expandedTask && (
+            {expandedTask?.id === task.id && (
           <div className="fai-expand">
             <div>
           <TaskInlineEditor
@@ -306,7 +336,13 @@ export function BoardColumn({
           />
             </div>
           </div>
-        )}
+            )}
+            </Fragment>
+          ))}
+        </SortableContext>
+        {reminders.map((reminder) => (
+          <CompletedReminderCard key={`reminder-${reminder.id}`} reminder={reminder} />
+        ))}
         {!tasks.length && !reminders.length && !adding && !dragging && (
           hasFilters ? (
             <p className="flex h-16 items-center justify-center text-xs text-muted-foreground">

@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useHotkeys } from 'react-hotkeys-hook'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { PageHeader } from '@/components/layout/PageHeader'
 import { Check, ChevronRight, ChevronsDownUp, ChevronsUpDown, SlidersHorizontal, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -147,7 +148,14 @@ export function List() {
   const { data: tags } = useTags()
   const [q, setQ] = useState('')
   const [columnId, setColumnId] = useState('all')
-  const [tag, setTag] = useState('all')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const tag = searchParams.get('tag') ?? 'all'
+  function setTag(value: string) {
+    const next = new URLSearchParams(searchParams)
+    if (value === 'all') next.delete('tag')
+    else next.set('tag', value)
+    setSearchParams(next, { replace: true })
+  }
   const debouncedQ = useDebounced(q)
 
   const { data: tasks } = useTasks(boardId, {
@@ -156,7 +164,6 @@ export function List() {
     tag: tag === 'all' ? undefined : tag,
   })
 
-  const [searchParams, setSearchParams] = useSearchParams()
   const [sort, setSort] = useState<Sort>(loadSort)
   const [visible, setVisible] = useState<Set<ColumnKey>>(loadVisibleColumns)
   const [expanded, setExpanded] = useState<Set<number>>(() => new Set())
@@ -724,7 +731,7 @@ export function List() {
 
   return (
     <div className="flex flex-col gap-4 pb-24">
-      <h1 className="text-lg font-semibold">List</h1>
+      <PageHeader title="List" />
       <div className="flex flex-wrap items-center gap-2">
         <Input
           ref={filterRef}

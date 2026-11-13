@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { PageHeader } from '@/components/layout/PageHeader'
 import { Link, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -30,9 +31,9 @@ export function Notes() {
 
   return (
     <div className="flex flex-col gap-3">
-      <h1 className="text-lg font-semibold">Notes</h1>
-      <div className="flex justify-end">
-        {adding ? (
+      <PageHeader
+        title="Notes"
+        actions={adding ? (
           <div className="flex items-center gap-2">
             <Input
               autoFocus
@@ -66,7 +67,7 @@ export function Notes() {
         ) : (
           <Button onClick={() => setAdding(true)}>+ New note</Button>
         )}
-      </div>
+      />
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
         {notes?.map((note) => (
           <div

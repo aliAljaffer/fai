@@ -1,4 +1,5 @@
 import dayGridPlugin from '@fullcalendar/daygrid'
+import { PageHeader } from '@/components/layout/PageHeader'
 import interactionPlugin, { type DateClickArg } from '@fullcalendar/interaction'
 import FullCalendar from '@fullcalendar/react'
 import type {
@@ -275,14 +276,11 @@ export function Calendar() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div className="flex flex-col gap-1">
-          <h1 className="text-lg font-semibold">Calendar</h1>
-          <p className="text-xs text-muted-foreground">
-            Tasks with due dates plus imported feeds. Drag a task onto another day to reschedule it.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
+      <PageHeader
+        title="Calendar"
+        description="Tasks with due dates plus imported feeds. Drag a task onto another day to reschedule it."
+        actions={
+          <>
           <Select
             value={String(firstDay)}
             onValueChange={(value) => value && setFirstDay(Number(value))}
@@ -304,8 +302,9 @@ export function Calendar() {
             <MessageSquarePlus />
             Add meeting summary
           </Button>
-        </div>
-      </header>
+          </>
+        }
+      />
 
       {(!!sources?.length || importErrors.length > 0 || draggingTitle) && (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">

@@ -1,6 +1,6 @@
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import type { KeyboardEventHandler } from 'react'
+import type { CSSProperties, KeyboardEventHandler } from 'react'
 import { ChevronRight, GripVertical, Play, Square } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -56,41 +56,51 @@ function TaskCardBody({
 }) {
   const overdue = isPastDue(task.due_date, Boolean(task.completed_at) || isDone)
   const dueLabel = formatDueDate(task.due_date)
-  const showMeta = task.priority !== 'medium' || Boolean(dueLabel)
 
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex items-start gap-1.5">
-        <TaskTypeIcon kind={task.kind} status={status} size={14} className="mt-0.5" />
-        {task.created_by_fai && <FaiTaskIcon className="mt-1" />}
-        <p className={cn('line-clamp-3 text-sm leading-snug', !overlay && 'pr-13')}>{task.title}</p>
+    <div className="flex flex-col">
+      <div className={cn('mb-1.5 flex min-h-[22px] flex-wrap items-center gap-x-2 gap-y-1', !overlay && 'pr-13')}>
+        <TaskTypeIcon kind={task.kind} status={status} size={13} />
+        {task.created_by_fai && <FaiTaskIcon />}
+        <span className="font-mono text-[0.625rem] tracking-[0.06em] text-muted-foreground uppercase">
+          {task.ref}
+        </span>
+        {task.tags?.map((tag) => (
+          <TagChip
+            key={tag.id}
+            tag={tag}
+            className="h-[22px] rounded-full px-[9px] text-xs leading-none font-semibold"
+          />
+        ))}
       </div>
-      {!!task.tags?.length && (
-        <div className="flex flex-wrap gap-1">
-          {task.tags.map((tag) => (
-            <TagChip
-              key={tag.id}
-              tag={tag}
-              className="rounded-sm px-1 py-0.5 text-[0.65rem] text-muted-foreground"
-            />
-          ))}
-        </div>
+      <p className="line-clamp-3 text-sm leading-[1.35] font-semibold">{task.title}</p>
+      {task.description_md && (
+        <p className="mt-1 line-clamp-2 text-[0.8125rem] leading-[1.45] text-muted-foreground">
+          {task.description_md}
+        </p>
       )}
-      {showMeta && (
-        <div className="flex min-w-0 items-center gap-2 pr-13 text-xs text-muted-foreground">
-          {task.priority !== 'medium' && (
-            <span className={cn('capitalize', task.priority === 'high' && 'text-destructive')}>
-              {task.priority}
-            </span>
-          )}
-          {dueLabel && (
+      <div className="mt-2.5 flex min-w-0 items-center gap-2 font-mono text-[0.625rem] text-muted-foreground">
+        <span className="inline-flex items-center gap-[5px] capitalize">
+          <span
+            aria-hidden
+            className={cn(
+              'size-[7px] rounded-full bg-muted-foreground/50',
+              task.priority === 'high' && 'bg-destructive',
+              task.priority === 'low' && 'bg-muted-foreground/25',
+            )}
+          />
+          {task.priority}
+        </span>
+        {dueLabel && (
+          <>
+            <span aria-hidden>·</span>
             <span className={cn('truncate', overdue && 'font-medium text-destructive')}>
               {overdue ? 'Overdue' : 'Due'} {dueLabel}
             </span>
-          )}
-          {dueLabel && task.repeat && <RepeatIndicator repeat={task.repeat} />}
-        </div>
-      )}
+          </>
+        )}
+        {dueLabel && task.repeat && <RepeatIndicator repeat={task.repeat} />}
+      </div>
     </div>
   )
 }
@@ -121,16 +131,22 @@ function SortableTaskCard(props: TaskCardProps) {
     <div
       ref={setNodeRef}
       id={`task-${props.task.id}`}
-      style={{ transform: CSS.Transform.toString(transform), transition }}
+      style={
+        {
+          transform: CSS.Transform.toString(transform),
+          transition,
+          '--task-accent': props.task.tags?.[0]?.color || 'var(--border)',
+        } as CSSProperties
+      }
       {...cardListeners}
       className={cn(
-        'group/task relative cursor-grab rounded-md border bg-card px-2.5 py-2 text-card-foreground transition-colors select-none active:cursor-grabbing hover:border-foreground/20',
+        'group/task relative shrink-0 cursor-grab overflow-hidden rounded-xl border bg-card py-3 pr-[13px] pl-4 text-card-foreground shadow-(--task-shadow) transition-[transform,box-shadow] duration-150 select-none before:absolute before:inset-y-0 before:left-0 before:w-[3px] before:bg-(--task-accent) before:opacity-65 hover:-translate-y-0.5 hover:shadow-(--task-shadow-hover) active:cursor-grabbing motion-reduce:transition-none motion-reduce:hover:translate-y-0',
         isDragging && 'opacity-40',
       )}
     >
       <button
         type="button"
-        className="absolute inset-0 z-0 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+        className="absolute inset-0 z-0 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
         aria-label={`Open task: ${props.task.title}`}
         aria-expanded={props.expanded}
         onClick={props.onClick}
@@ -142,7 +158,7 @@ function SortableTaskCard(props: TaskCardProps) {
         aria-label={`Drag ${props.task.title}`}
         disabled={props.dragDisabled}
         className={cn(
-          'absolute top-1 right-8 z-10 flex size-5 touch-none items-center justify-center rounded text-muted-foreground opacity-0 outline-none hover:bg-muted focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring/50 group-hover/task:opacity-100 max-md:opacity-100',
+          'absolute top-2.5 right-8 z-10 flex size-5 touch-none items-center justify-center rounded text-muted-foreground opacity-0 outline-none hover:bg-muted focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring/50 group-hover/task:opacity-100 max-md:opacity-100',
           props.dragDisabled && 'hidden',
         )}
       >
@@ -204,7 +220,7 @@ function SortableTaskCard(props: TaskCardProps) {
           title={running ? 'Stop timer' : 'Start timer'}
           aria-label={`${running ? 'Stop' : 'Start'} timer: ${props.task.title}`}
           className={cn(
-            'absolute top-1 right-1 z-10 text-muted-foreground transition-opacity',
+            'absolute top-2.5 right-2 z-10 text-muted-foreground transition-opacity',
             running
               ? 'text-destructive opacity-100'
               : 'opacity-0 group-hover/task:opacity-100 group-focus-within/task:opacity-100 max-md:opacity-100',
@@ -225,7 +241,7 @@ function SortableTaskCard(props: TaskCardProps) {
 export function TaskCard(props: TaskCardProps) {
   if (props.overlay) {
     return (
-      <div className="w-72 rounded-md border bg-card px-2.5 py-2 text-card-foreground shadow-md">
+      <div className="w-72 rounded-xl border bg-card px-[13px] py-3 text-card-foreground shadow-md">
         <TaskCardBody task={props.task} status={taskStatus(props.task, props.columns)} isDone={props.isDone} overlay />
         {(props.subtasks?.length ?? 0) > 0 && (
           <p className="mt-2 text-xs text-muted-foreground">

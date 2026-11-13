@@ -1,4 +1,5 @@
 import { addDays, format, parseISO } from 'date-fns'
+import { PageHeader } from '@/components/layout/PageHeader'
 import {
   ArrowRight,
   Bell,
@@ -261,14 +262,10 @@ export function Overview() {
 
   return (
     <div className="flex flex-col gap-6">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div className="flex flex-col gap-1">
-          <p className="text-xs font-medium text-muted-foreground">{greetingFor(now.getHours())}</p>
-          <h1 className="text-2xl font-semibold tracking-tight">{format(now, 'EEEE d MMMM')}</h1>
-          <p className="text-sm text-muted-foreground">
-            Here is what the day looks like. Open a task to see the details.
-          </p>
-        </div>
+      <PageHeader
+        title={format(now, 'EEEE d MMMM')}
+        description={`${greetingFor(now.getHours())}. Here is what the day looks like. Open a task to see the details.`}
+        actions={
         <Button
           size="sm"
           disabled={!board?.id}
@@ -280,7 +277,8 @@ export function Overview() {
           <Plus />
           New task
         </Button>
-      </header>
+        }
+      />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatTile
