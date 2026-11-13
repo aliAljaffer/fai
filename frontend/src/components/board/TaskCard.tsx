@@ -247,12 +247,13 @@ function SortableTaskCard(props: TaskCardProps) {
         {
           transform: CSS.Transform.toString(transform),
           transition,
-          '--task-accent': overdue ? 'var(--destructive)' : (props.accent ?? 'var(--border)'),
+          '--task-accent': props.accent ?? 'var(--primary)',
         } as CSSProperties
       }
       {...cardListeners}
       className={cn(
-        'group/task relative shrink-0 cursor-grab overflow-hidden rounded-xl border bg-card py-3 pr-[13px] pl-4 text-card-foreground transition-colors select-none before:absolute before:inset-y-0 before:left-0 before:w-[3px] before:bg-(--task-accent) hover:border-foreground/20 active:cursor-grabbing',
+        'group/task relative shrink-0 cursor-grab overflow-hidden rounded-xl border bg-card px-[13px] py-3 text-card-foreground transition-colors select-none hover:border-foreground/20 active:cursor-grabbing',
+        overdue && 'border-destructive/40 hover:border-destructive/60',
         isDragging && 'opacity-40',
       )}
     >

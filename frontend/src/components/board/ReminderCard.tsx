@@ -76,7 +76,7 @@ export function ReminderCard({
   }
 
   return (
-    <div className="group rounded-md border border-attention/40 bg-attention/10 p-2">
+    <div className="group rounded-xl border bg-card px-[13px] py-3 text-card-foreground">
       <div className="flex items-start justify-between gap-2">
         <p className="text-sm font-medium break-words"><TaskRefText text={reminder.title} /></p>
         <div className="flex shrink-0 items-center">
@@ -100,22 +100,13 @@ export function ReminderCard({
           </Button>
         </div>
       </div>
-      <div className="flex items-center justify-between gap-2 pt-1">
-        <Badge
-          className={cn(
-            'border-transparent',
-            overdue
-              ? 'bg-destructive text-destructive-foreground'
-              : 'bg-attention text-attention-foreground',
-          )}
-        >
-          {dueIn}
-        </Badge>
-        <div className="flex items-center gap-1">
-          {reminder.repeat && (
-            <RepeatIndicator repeat={reminder.repeat} className="text-muted-foreground" />
-          )}
-          <span className="text-[0.65rem] text-muted-foreground">
+      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 pt-1.5">
+        <div className="flex items-center gap-1.5 font-mono text-[0.6875rem] whitespace-nowrap">
+          <span className={cn('font-semibold', overdue ? 'text-destructive' : 'text-attention')}>
+            {dueIn}
+          </span>
+          <span aria-hidden className="text-muted-foreground">·</span>
+          <span className="text-muted-foreground">
             {new Date(reminder.remind_at).toLocaleString(undefined, {
               month: 'short',
               day: 'numeric',
@@ -123,6 +114,11 @@ export function ReminderCard({
               minute: '2-digit',
             })}
           </span>
+        </div>
+        <div className="flex items-center gap-1">
+          {reminder.repeat && (
+            <RepeatIndicator repeat={reminder.repeat} className="text-muted-foreground" />
+          )}
           <Button
             variant="ghost"
             size="xs"
@@ -166,10 +162,10 @@ export function CompletedReminderCard({ reminder }: { reminder: Reminder }) {
   const deleteReminder = useDeleteReminder()
 
   return (
-    <div className="group rounded-md border border-attention/40 bg-attention/10 p-2">
+    <div className="group rounded-xl border bg-card px-[13px] py-3 text-card-foreground">
       <div className="flex items-start gap-2">
         <Check className="mt-0.5 size-3.5 shrink-0 text-attention" />
-        <p className="min-w-0 flex-1 text-sm font-medium break-words text-attention line-through">
+        <p className="min-w-0 flex-1 text-sm font-medium break-words text-muted-foreground line-through">
           <TaskRefText text={reminder.title} />
         </p>
         <DropdownMenu>
