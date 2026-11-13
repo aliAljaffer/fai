@@ -130,11 +130,11 @@ func (s *Store) ReorderColumns(ctx context.Context, boardID int64, ids []int64) 
 }
 
 func toTag(t sqlitedb.Tag) store.Tag {
-	return store.Tag{ID: t.ID, Name: t.Name, Color: t.Color}
+	return store.Tag{ID: t.ID, WorkspaceID: t.WorkspaceID, Name: t.Name, Color: t.Color}
 }
 
-func (s *Store) ListTags(ctx context.Context) ([]store.Tag, error) {
-	rows, err := s.q.ListTags(ctx)
+func (s *Store) ListTags(ctx context.Context, workspaceID *int64) ([]store.Tag, error) {
+	rows, err := s.q.ListTags(ctx, ptrToNullInt64(workspaceID))
 	if err != nil {
 		return nil, err
 	}
@@ -145,13 +145,24 @@ func (s *Store) ListTags(ctx context.Context) ([]store.Tag, error) {
 	return out, nil
 }
 
-func (s *Store) CreateTag(ctx context.Context, name, color string) (store.Tag, error) {
-	t, err := s.q.CreateTag(ctx, sqlitedb.CreateTagParams{Name: name, Color: color})
+func (s *Store) CreateTag(ctx context.Context, workspaceID int64, name, color string) (store.Tag, error) {
+	t, err := s.q.CreateTag(ctx, sqlitedb.CreateTagParams{WorkspaceID: workspaceID, Name: name, Color: color})
 	return toTag(t), err
 }
 
 func (s *Store) AddTaskTag(ctx context.Context, taskID, tagID int64) error {
-	return s.q.AddTaskTag(ctx, sqlitedb.AddTaskTagParams{TaskID: taskID, TagID: tagID})
+	added, err := s.q.AddTaskTag(ctx, sqlitedb.AddTaskTagParams{TaskID: taskID, TagID: tagID})
+	if err != nil || added > 0 {
+		return err
+	}
+	attached, err := s.q.TaskHasTag(ctx, sqlitedb.TaskHasTagParams{TaskID: taskID, TagID: tagID})
+	if err != nil {
+		return err
+	}
+	if !attached {
+		return store.ErrNotFound
+	}
+	return nil
 }
 
 func (s *Store) RemoveTaskTag(ctx context.Context, taskID, tagID int64) error {
@@ -172,7 +183,7 @@ func (s *Store) tagsForTasks(ctx context.Context, taskIDs []int64) (map[int64][]
 		}
 		placeholders := strings.TrimSuffix(strings.Repeat("?,", len(chunk)), ",")
 		rows, err := s.db.QueryContext(ctx, `
-			SELECT tt.task_id, t.id, t.name, t.color
+			SELECT tt.task_id, t.id, t.workspace_id, t.name, t.color
 			FROM tags t
 			JOIN task_tags tt ON tt.tag_id = t.id
 			WHERE tt.task_id IN (`+placeholders+`)
@@ -183,7 +194,7 @@ func (s *Store) tagsForTasks(ctx context.Context, taskIDs []int64) (map[int64][]
 		for rows.Next() {
 			var taskID int64
 			var tag store.Tag
-			if err := rows.Scan(&taskID, &tag.ID, &tag.Name, &tag.Color); err != nil {
+			if err := rows.Scan(&taskID, &tag.ID, &tag.WorkspaceID, &tag.Name, &tag.Color); err != nil {
 				rows.Close()
 				return nil, err
 			}

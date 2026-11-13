@@ -364,7 +364,7 @@ export function Board() {
   )
 
   const [labelFilter, setLabelFilter] = useLabelFilter()
-  const { data: tags } = useTags()
+  const { data: tags } = useTags(board?.workspace_id)
   const hasFilters = query.trim().length > 0 || priority !== 'all' || Boolean(labelFilter)
 
   const topLevelTasks = useMemo(

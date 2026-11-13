@@ -14,8 +14,8 @@ import type { Tag, Task } from '../../api/types'
 import { labelColorFor as colorFor, tagColor } from '../../lib/palette'
 
 export function LabelEditor({ task, inputId }: { task: Task; inputId?: string }) {
-  const { data: allTags } = useTags()
-  const createTag = useCreateTag()
+  const { data: allTags } = useTags(task.workspace_id)
+  const createTag = useCreateTag(task.workspace_id)
   const addTag = useAddTaskTag(task.id, task.board_id)
   const removeTag = useRemoveTaskTag(task.id, task.board_id)
   const [query, setQuery] = useState('')

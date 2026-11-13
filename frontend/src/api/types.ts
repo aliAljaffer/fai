@@ -67,6 +67,7 @@ export interface BoardColumn {
 
 export interface Tag {
   id: number
+  workspace_id: number
   name: string
   color: string
 }

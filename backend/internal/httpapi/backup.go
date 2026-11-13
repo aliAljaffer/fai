@@ -18,8 +18,10 @@ import (
 
 const (
 	backupFormat  = "fai-backup"
-	backupVersion = 1
-	maxBackupSize = maxAttachmentsTotalSize + (1 << 30)
+	backupVersion = 2
+	// Backups older than this version hold tags shared by every workspace.
+	workspaceTagsVersion = 2
+	maxBackupSize        = maxAttachmentsTotalSize + (1 << 30)
 )
 
 type backupManifest struct {
@@ -264,6 +266,9 @@ func (s *Server) restoreBackup(w http.ResponseWriter, r *http.Request) {
 	if !reflectCountsMatch(manifest.Counts, data) {
 		writeError(w, http.StatusBadRequest, "backup counts do not match its data")
 		return
+	}
+	if manifest.Version < workspaceTagsVersion {
+		data.ScopeTagsToWorkspaces()
 	}
 	if len(data.Attachments) > 0 && s.AttachmentsDir == "" {
 		writeError(w, http.StatusBadRequest, "attachments are not configured on this instance")

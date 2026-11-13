@@ -349,13 +349,20 @@ func (s *Store) DeleteTask(ctx context.Context, id int64) error {
 // not detach the tag; revisit if the UI starts offering label removal from text.
 func (s *Store) attachBodyLabels(ctx context.Context, taskID int64, body string) error {
 	for _, label := range store.ParseBodyLabels(body) {
+		const find = `
+			SELECT id FROM tags
+			WHERE workspace_id = (SELECT workspace_id FROM tasks WHERE id = $1) AND lower(name) = lower($2)
+			ORDER BY id LIMIT 1`
 		var tagID int64
-		err := s.pool.QueryRow(ctx, `SELECT id FROM tags WHERE lower(name) = lower($1) ORDER BY id LIMIT 1`, label).Scan(&tagID)
+		err := s.pool.QueryRow(ctx, find, taskID, label).Scan(&tagID)
 		if errors.Is(err, pgx.ErrNoRows) {
-			if _, err := s.pool.Exec(ctx, `INSERT INTO tags (name, color) VALUES ($1, '#888888') ON CONFLICT (name) DO NOTHING`, label); err != nil {
+			if _, err := s.pool.Exec(ctx, `
+				INSERT INTO tags (workspace_id, name, color)
+				SELECT workspace_id, $2, '#888888' FROM tasks WHERE id = $1
+				ON CONFLICT (workspace_id, name) DO NOTHING`, taskID, label); err != nil {
 				return err
 			}
-			err = s.pool.QueryRow(ctx, `SELECT id FROM tags WHERE lower(name) = lower($1) ORDER BY id LIMIT 1`, label).Scan(&tagID)
+			err = s.pool.QueryRow(ctx, find, taskID, label).Scan(&tagID)
 		}
 		if err != nil {
 			return err

@@ -92,13 +92,13 @@ func (s *Store) DumpBackup(ctx context.Context) (store.BackupData, error) {
 	}
 	rows.Close()
 
-	rows, err = s.db.QueryContext(ctx, `SELECT id, name, color FROM tags ORDER BY id`)
+	rows, err = s.db.QueryContext(ctx, `SELECT id, workspace_id, name, color FROM tags ORDER BY id`)
 	if err != nil {
 		return out, err
 	}
 	for rows.Next() {
 		var item store.BackupTag
-		if err := rows.Scan(&item.ID, &item.Name, &item.Color); err != nil {
+		if err := rows.Scan(&item.ID, &item.WorkspaceID, &item.Name, &item.Color); err != nil {
 			rows.Close()
 			return out, err
 		}
@@ -454,8 +454,8 @@ func (s *Store) RestoreBackup(ctx context.Context, data store.BackupData) error 
 	}
 	for _, item := range data.Tags {
 		if _, err := tx.ExecContext(ctx,
-			`INSERT INTO tags (id, name, color) VALUES (?, ?, ?)`,
-			item.ID, item.Name, item.Color); err != nil {
+			`INSERT INTO tags (id, workspace_id, name, color) VALUES (?, ?, ?, ?)`,
+			item.ID, item.WorkspaceID, item.Name, item.Color); err != nil {
 			return err
 		}
 	}

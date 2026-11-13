@@ -56,9 +56,10 @@ type BoardColumn struct {
 }
 
 type Tag struct {
-	ID    int64  `json:"id"`
-	Name  string `json:"name"`
-	Color string `json:"color"`
+	ID          int64  `json:"id"`
+	WorkspaceID int64  `json:"workspace_id"`
+	Name        string `json:"name"`
+	Color       string `json:"color"`
 }
 
 type ChatMessage struct {

@@ -88,13 +88,13 @@ func (s *Store) DumpBackup(ctx context.Context) (store.BackupData, error) {
 	}
 	rows.Close()
 
-	rows, err = s.pool.Query(ctx, `SELECT id, name, color FROM tags ORDER BY id`)
+	rows, err = s.pool.Query(ctx, `SELECT id, workspace_id, name, color FROM tags ORDER BY id`)
 	if err != nil {
 		return out, err
 	}
 	for rows.Next() {
 		var item store.BackupTag
-		if err := rows.Scan(&item.ID, &item.Name, &item.Color); err != nil {
+		if err := rows.Scan(&item.ID, &item.WorkspaceID, &item.Name, &item.Color); err != nil {
 			rows.Close()
 			return out, err
 		}
@@ -433,8 +433,8 @@ func (s *Store) RestoreBackup(ctx context.Context, data store.BackupData) error 
 	}
 	for _, item := range data.Tags {
 		if _, err := tx.Exec(ctx,
-			`INSERT INTO tags (id, name, color) OVERRIDING SYSTEM VALUE VALUES ($1, $2, $3)`,
-			item.ID, item.Name, item.Color); err != nil {
+			`INSERT INTO tags (id, workspace_id, name, color) OVERRIDING SYSTEM VALUE VALUES ($1, $2, $3, $4)`,
+			item.ID, item.WorkspaceID, item.Name, item.Color); err != nil {
 			return err
 		}
 	}

@@ -254,7 +254,7 @@ func listTasksHTTP(t *testing.T, server string) []store.Task {
 func tagTask(t *testing.T, st *lite.Store, taskID int64, names ...string) {
 	t.Helper()
 	for _, name := range names {
-		tag, err := st.CreateTag(context.Background(), name, "#111111")
+		tag, err := st.CreateTag(context.Background(), 1, name, "#111111")
 		if err != nil {
 			t.Fatal(err)
 		}

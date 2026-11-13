@@ -290,7 +290,7 @@ func (s *Server) importWorkspaceTasks(w http.ResponseWriter, r *http.Request) {
 		return set, nil
 	}
 
-	tags, err := s.Store.ListTags(r.Context())
+	tags, err := s.Store.ListTags(r.Context(), &workspaceID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -397,7 +397,7 @@ func (s *Server) importWorkspaceTasks(w http.ResponseWriter, r *http.Request) {
 				if color == "" {
 					color = "#888888"
 				}
-				tag, err = s.Store.CreateTag(r.Context(), name, color)
+				tag, err = s.Store.CreateTag(r.Context(), workspaceID, name, color)
 				if err != nil {
 					writeError(w, http.StatusInternalServerError, err.Error())
 					return

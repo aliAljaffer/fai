@@ -53,7 +53,7 @@ export function useRefPicker({
   const workspaceId = useWorkspaceStore((state) => state.activeWorkspaceId)
   const debouncedQuery = useDebounced(token?.kind === '@' ? token.query : '', 150)
   const { data: refs } = useResolveRefs(debouncedQuery, workspaceId)
-  const { data: tags } = useTags()
+  const { data: tags } = useTags(workspaceId)
 
   const options = useMemo<RefOption[]>(() => {
     if (!token) return []

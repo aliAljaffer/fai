@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom'
 import { X } from 'lucide-react'
 import { useViewTransition } from './useViewTransition'
 import { useTags } from '@/api/hooks'
+import { useWorkspaceStore } from '@/store/workspace'
 import { TagChip } from '@/components/TagChip'
 import { activeLabel, filtersInPlace, labelFilterLink } from '@/lib/labelFilter'
 import { tagColor } from '@/lib/palette'
@@ -12,7 +13,8 @@ import { cn } from '@/lib/utils'
 const COLLAPSED_HEIGHT = 138
 
 export function SidebarLabels() {
-  const { data: tags } = useTags()
+  const workspaceId = useWorkspaceStore((state) => state.activeWorkspaceId)
+  const { data: tags } = useTags(workspaceId)
   const location = useLocation()
   const viewTransition = useViewTransition()
   const listRef = useRef<HTMLUListElement>(null)
