@@ -9,6 +9,7 @@ import {
   subWeeks,
   addDays,
 } from 'date-fns'
+import { PageHeader } from '@/components/layout/PageHeader'
 import {
   CheckCircle2,
   Clock,
@@ -456,7 +457,7 @@ export function Stats() {
   if (tasksLoading || completionsQuery.isLoading) {
     return (
       <div className="flex flex-col gap-6">
-        <h1 className="text-lg font-semibold">Stats</h1>
+        <PageHeader title="Stats" />
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           {Array.from({ length: 6 }, (_, index) => (
             <Skeleton key={index} className="h-24 w-full" />
@@ -473,12 +474,7 @@ export function Stats() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-lg font-semibold">Stats</h1>
-        <p className="text-sm text-muted-foreground">
-          A year of activity across all workspaces.
-        </p>
-      </div>
+      <PageHeader title="Stats" description="A year of activity across all workspaces." />
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <StatCard

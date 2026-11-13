@@ -13,6 +13,9 @@ import {
   type DragOverEvent,
   type DragStartEvent,
 } from '@dnd-kit/core'
+import { cn } from '@/lib/utils'
+import { format } from 'date-fns'
+import { PageHeader } from '@/components/layout/PageHeader'
 import {
   SortableContext,
   horizontalListSortingStrategy,
@@ -51,7 +54,6 @@ import {
   useUpdateBoard,
   useUpdateColumn,
   useUpdateTask,
-  useWorkspaces,
 } from '../api/hooks'
 import { BoardColumn } from '../components/board/BoardColumn'
 import { RemindersColumn } from '../components/board/RemindersColumn'
@@ -173,10 +175,15 @@ function BoardSkeleton({ columns = 4 }: { columns?: number }) {
   )
 }
 
+const PRIORITY_FILTERS = [
+  { value: 'all', label: 'All tasks' },
+  { value: 'high', label: 'High' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'low', label: 'Low' },
+]
+
 export function Board() {
-  const { activeWorkspaceId, setActiveWorkspaceId } = useWorkspaceStore()
-  const workspaceId = activeWorkspaceId
-  const { data: workspaces } = useWorkspaces()
+  const workspaceId = useWorkspaceStore((state) => state.activeWorkspaceId)
   const boardsQuery = useBoards(workspaceId)
   const boards = boardsQuery.data
   const { selectedBoardId, setSelectedBoardId, newTaskRequest } = useUIStore()
@@ -631,9 +638,7 @@ export function Board() {
   if (boardsQuery.isError) {
     return (
       <div className="flex flex-col gap-4">
-        <header className="flex items-center justify-between gap-3">
-          <h1 className="text-lg font-semibold">Boards</h1>
-        </header>
+        <PageHeader title="Boards" />
         <LoadError
           title="Could not load boards"
           detail="Check that the API is reachable, then try again."
@@ -648,7 +653,7 @@ export function Board() {
   if (!boards.length) {
     return (
       <div className="flex flex-col gap-4">
-        <h1 className="text-lg font-semibold">Boards</h1>
+        <PageHeader title="Boards" />
         <div className="flex max-w-md flex-col items-start gap-2 rounded-md border border-dashed p-6">
           <p className="text-sm font-medium">No boards yet</p>
           <p className="text-xs text-muted-foreground">A board holds your columns and tasks.</p>
@@ -699,11 +704,23 @@ export function Board() {
         setDragTasks(null)
       }}
     >
-      <div className="flex min-w-0 flex-col gap-4 pb-24">
-        <h1 className="sr-only">{board?.name ?? 'Board'}</h1>
-        <header className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex min-w-0 flex-col gap-1">
-            <div className="flex min-w-0 items-center gap-1">
+      <div className="flex min-w-0 flex-col gap-[22px] pb-24">
+        <PageHeader
+          title="Board"
+          description={`${format(new Date(), 'EEEE d MMMM')} · ${tasks ? summary : 'Loading tasks…'}`}
+          actions={
+            <Button
+              className="h-[38px] rounded-full px-4"
+              disabled={!orderedColumns.length}
+              onClick={() => orderedColumns[0] && setComposerColumnId(orderedColumns[0].id)}
+            >
+              <Plus />
+              New task
+            </Button>
+          }
+        />
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex min-w-0 items-center gap-1">
               {boardEditor === 'rename' ? (
                 <>
                   <Input
@@ -744,36 +761,13 @@ export function Board() {
               ) : (
                 <>
                   <Select
-                    items={(workspaces ?? []).map((item) => ({
-                      value: String(item.id),
-                      label: item.name,
-                    }))}
-                    value={activeWorkspaceId ? String(activeWorkspaceId) : undefined}
-                    onValueChange={(value) => {
-                      if (!value) return
-                      setActiveWorkspaceId(Number(value))
-                      setSelectedBoardId(undefined)
-                    }}
-                  >
-                    <SelectTrigger size="sm" aria-label="Switch workspace" className="max-w-32">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent align="start">
-                      {(workspaces ?? []).map((item) => (
-                        <SelectItem key={item.id} value={String(item.id)}>
-                          {item.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Select
                     items={boards.map((item) => ({ value: String(item.id), label: item.name }))}
                     value={boardId ? String(boardId) : undefined}
                     onValueChange={(value) => value && setSelectedBoardId(Number(value))}
                   >
                     <SelectTrigger
                       aria-label="Switch board"
-                      className="h-auto w-fit max-w-full border-0 bg-transparent py-0 pr-1 pl-0 text-lg font-semibold hover:bg-transparent focus-visible:ring-0 dark:bg-transparent dark:hover:bg-transparent [&_svg]:size-4"
+                      className="h-auto w-fit max-w-full border-0 bg-transparent py-0 pr-1 pl-0 text-sm font-semibold hover:bg-transparent focus-visible:ring-0 dark:bg-transparent dark:hover:bg-transparent [&_svg]:size-4"
                     >
                       <SelectValue />
                     </SelectTrigger>
@@ -799,108 +793,91 @@ export function Board() {
                   </Button>
                 </>
               )}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              {tasks ? summary : 'Loading tasks…'}
-            </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="relative">
-              <Search
-                aria-hidden
-                className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground"
-              />
-              <Input
-                value={query}
-                placeholder="Filter tasks"
-                aria-label="Filter tasks"
-                className="w-52 pl-7"
-                onChange={(event) => setQuery(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Escape') setQuery('')
-                }}
-              />
-            </div>
-            <Select
-              items={{
-                all: 'All priorities',
-                high: 'High',
-                medium: 'Medium',
-                low: 'Low',
+          <div role="group" aria-label="Filter by priority" className="flex items-center gap-1">
+            {PRIORITY_FILTERS.map((item) => (
+              <button
+                key={item.value}
+                type="button"
+                aria-pressed={priority === item.value}
+                className={cn(
+                  'rounded-full border border-transparent px-3 py-1.5 text-[0.8125rem] text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50',
+                  priority === item.value && 'border-border bg-muted text-foreground',
+                )}
+                onClick={() => setPriority(item.value)}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+          <span className="flex-1" />
+          <div className="relative">
+            <Search
+              aria-hidden
+              className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground"
+            />
+            <Input
+              value={query}
+              placeholder="Filter tasks"
+              aria-label="Filter tasks"
+              className="w-52 pl-7"
+              onChange={(event) => setQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') setQuery('')
               }}
-              value={priority}
-              onValueChange={(value) => value && setPriority(value)}
-            >
-              <SelectTrigger className="w-36" aria-label="Filter by priority">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All priorities</SelectItem>
-                <SelectItem value="high">High</SelectItem>
-                <SelectItem value="medium">Medium</SelectItem>
-                <SelectItem value="low">Low</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button
-              size="sm"
-              disabled={!orderedColumns.length}
-              onClick={() => orderedColumns[0] && setComposerColumnId(orderedColumns[0].id)}
-            >
-              <Plus />
-              New task
-            </Button>
-            {boardEditor === 'new' ? (
-              <div className="flex items-center gap-1">
-                <Input
-                  autoFocus
-                  value={boardName}
-                  placeholder="Board name"
-                  aria-label="Board name"
-                  className="h-8 w-48"
-                  disabled={boardSaving}
-                  onChange={(event) => setBoardName(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.nativeEvent.isComposing) return
-                    if (event.key === 'Enter') {
-                      event.preventDefault()
-                      void submitBoard()
-                    }
-                    if (event.key === 'Escape') {
-                      event.preventDefault()
-                      setBoardEditor(null)
-                      setBoardName('')
-                    }
-                  }}
-                />
-                <Button size="sm" disabled={!boardName.trim() || boardSaving} onClick={() => void submitBoard()}>
-                  Create
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => {
+            />
+          </div>
+          {boardEditor === 'new' ? (
+            <div className="flex items-center gap-1">
+              <Input
+                autoFocus
+                value={boardName}
+                placeholder="Board name"
+                aria-label="Board name"
+                className="h-8 w-48"
+                disabled={boardSaving}
+                onChange={(event) => setBoardName(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.nativeEvent.isComposing) return
+                  if (event.key === 'Enter') {
+                    event.preventDefault()
+                    void submitBoard()
+                  }
+                  if (event.key === 'Escape') {
+                    event.preventDefault()
                     setBoardEditor(null)
                     setBoardName('')
-                  }}
-                >
-                  Cancel
-                </Button>
-              </div>
-            ) : (
+                  }
+                }}
+              />
+              <Button size="sm" disabled={!boardName.trim() || boardSaving} onClick={() => void submitBoard()}>
+                Create
+              </Button>
               <Button
                 size="sm"
-                variant="outline"
+                variant="ghost"
                 onClick={() => {
+                  setBoardEditor(null)
                   setBoardName('')
-                  setBoardEditor('new')
                 }}
               >
-                <Plus />
-                New board
+                Cancel
               </Button>
-            )}
-          </div>
-        </header>
+            </div>
+          ) : (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setBoardName('')
+                setBoardEditor('new')
+              }}
+            >
+              <Plus />
+              New board
+            </Button>
+          )}
+        </div>
 
         {columnsQuery.isError || tasksQuery.isError ? (
           <LoadError
