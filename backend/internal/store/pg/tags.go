@@ -31,7 +31,7 @@ func (s *Store) attachTags(ctx context.Context, tasks []store.Task) error {
 	}
 
 	rows, err := s.pool.Query(ctx, `
-		SELECT tt.task_id, t.id, t.name, t.color
+		SELECT tt.task_id, t.id, t.workspace_id, t.name, t.color
 		FROM task_tags tt
 		JOIN tags t ON t.id = tt.tag_id
 		WHERE tt.task_id = ANY($1::bigint[])
@@ -44,7 +44,7 @@ func (s *Store) attachTags(ctx context.Context, tasks []store.Task) error {
 	for rows.Next() {
 		var taskID int64
 		var tag store.Tag
-		if err := rows.Scan(&taskID, &tag.ID, &tag.Name, &tag.Color); err != nil {
+		if err := rows.Scan(&taskID, &tag.ID, &tag.WorkspaceID, &tag.Name, &tag.Color); err != nil {
 			return err
 		}
 		i, ok := index[taskID]

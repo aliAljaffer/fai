@@ -329,7 +329,7 @@ func (s *Store) DeleteTask(ctx context.Context, id int64) error {
 // not detach the tag; revisit if the UI starts offering label removal from text.
 func (s *Store) attachBodyLabels(ctx context.Context, taskID int64, body string) error {
 	for _, label := range store.ParseBodyLabels(body) {
-		tagID, err := s.tagIDByName(ctx, label)
+		tagID, err := s.tagIDForTask(ctx, taskID, label)
 		if err != nil {
 			return err
 		}
@@ -341,19 +341,26 @@ func (s *Store) attachBodyLabels(ctx context.Context, taskID int64, body string)
 	return nil
 }
 
-func (s *Store) tagIDByName(ctx context.Context, name string) (int64, error) {
+func (s *Store) tagIDForTask(ctx context.Context, taskID int64, name string) (int64, error) {
+	const find = `
+		SELECT id FROM tags
+		WHERE workspace_id = (SELECT workspace_id FROM tasks WHERE id = ?) AND lower(name) = lower(?)
+		ORDER BY id LIMIT 1`
 	var id int64
-	err := s.db.QueryRowContext(ctx, `SELECT id FROM tags WHERE lower(name) = lower(?) ORDER BY id LIMIT 1`, name).Scan(&id)
+	err := s.db.QueryRowContext(ctx, find, taskID, name).Scan(&id)
 	if err == nil {
 		return id, nil
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
 		return 0, err
 	}
-	_, err = s.db.ExecContext(ctx, `INSERT INTO tags (name, color) VALUES (?, '#888888') ON CONFLICT DO NOTHING`, name)
+	_, err = s.db.ExecContext(ctx, `
+		INSERT INTO tags (workspace_id, name, color)
+		SELECT workspace_id, ?, '#888888' FROM tasks WHERE id = ?
+		ON CONFLICT DO NOTHING`, name, taskID)
 	if err != nil {
 		return 0, err
 	}
-	err = s.db.QueryRowContext(ctx, `SELECT id FROM tags WHERE lower(name) = lower(?) ORDER BY id LIMIT 1`, name).Scan(&id)
+	err = s.db.QueryRowContext(ctx, find, taskID, name).Scan(&id)
 	return id, err
 }

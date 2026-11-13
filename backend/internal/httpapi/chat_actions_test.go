@@ -116,7 +116,7 @@ func TestChatTagTaskCreatesAndRemovesTags(t *testing.T) {
 	st := actionTestStore(t)
 	ctx := context.Background()
 	task := chatTask(t, st, "Renew the domain", "", nil)
-	old, err := st.CreateTag(ctx, "later", "#888888")
+	old, err := st.CreateTag(ctx, 1, "later", "#888888")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -281,7 +281,7 @@ func TestBodyLabels(t *testing.T) {
 	st := newTestStore(t)
 	ctx := context.Background()
 
-	existing, err := st.CreateTag(ctx, "Bug", "#ff0000")
+	existing, err := st.CreateTag(ctx, 1, "Bug", "#ff0000")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -307,7 +307,7 @@ func TestBodyLabels(t *testing.T) {
 		t.Errorf("dash token missing: %#v", names)
 	}
 
-	explicit, err := st.CreateTag(ctx, "manual", "#00ff00")
+	explicit, err := st.CreateTag(ctx, 1, "manual", "#00ff00")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -329,7 +329,7 @@ func TestBodyLabels(t *testing.T) {
 		t.Errorf("labels should stay attached, got %#v", tags)
 	}
 
-	newTag, err := st.CreateTag(ctx, "Release", "#0000ff")
+	newTag, err := st.CreateTag(ctx, 1, "Release", "#0000ff")
 	if err != nil {
 		t.Fatal(err)
 	}

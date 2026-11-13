@@ -132,7 +132,7 @@ func TestRollRepeatingTaskCopiesTagsAndClearsTheRule(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, name := range []string{"home", "money"} {
-		tag, err := st.CreateTag(ctx, name, "#111111")
+		tag, err := st.CreateTag(ctx, 1, name, "#111111")
 		if err != nil {
 			t.Fatal(err)
 		}

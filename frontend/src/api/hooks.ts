@@ -336,14 +336,19 @@ export function useDeleteTaskComment(taskId: number) {
   })
 }
 
-export function useTags() {
-  return useQuery({ queryKey: ['tags'], queryFn: () => api.get<Tag[]>('/tags') })
+export function useTags(workspaceId: number | undefined) {
+  return useQuery({
+    queryKey: ['tags', workspaceId ?? null],
+    queryFn: () => api.get<Tag[]>(`/tags${workspaceParam(workspaceId)}`),
+    enabled: workspaceId !== undefined,
+  })
 }
 
-export function useCreateTag() {
+export function useCreateTag(workspaceId: number | undefined) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (body: { name: string; color?: string }) => api.post<Tag>('/tags', body),
+    mutationFn: (body: { name: string; color?: string }) =>
+      api.post<Tag>('/tags', { ...body, workspace_id: workspaceId }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['tags'] }),
   })
 }

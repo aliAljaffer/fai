@@ -1,14 +1,17 @@
 package httpapi
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
+
+	"github.com/alialjaffer/fai/backend/internal/store"
 )
 
 func (s *Server) listTags(w http.ResponseWriter, r *http.Request) {
-	tags, err := s.Store.ListTags(r.Context())
+	tags, err := s.Store.ListTags(r.Context(), optionalInt64Param(r, "workspace_id"))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -18,17 +21,22 @@ func (s *Server) listTags(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) createTag(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Name  string `json:"name"`
-		Color string `json:"color"`
+		WorkspaceID int64  `json:"workspace_id"`
+		Name        string `json:"name"`
+		Color       string `json:"color"`
 	}
 	if err := decodeJSON(r, &body); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid body")
 		return
 	}
+	if body.WorkspaceID == 0 {
+		writeError(w, http.StatusBadRequest, "workspace_id is required")
+		return
+	}
 	if body.Color == "" {
 		body.Color = "#888888"
 	}
-	tag, err := s.Store.CreateTag(r.Context(), body.Name, body.Color)
+	tag, err := s.Store.CreateTag(r.Context(), body.WorkspaceID, body.Name, body.Color)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -44,6 +52,10 @@ func (s *Server) addTaskTag(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.Store.AddTaskTag(r.Context(), taskID, tagID); err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "task or tag not found in the same workspace")
+			return
+		}
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}

@@ -70,7 +70,7 @@ func TestFullBackupRestore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tag, err := source.CreateTag(ctx, "alpha", "#123456")
+	tag, err := source.CreateTag(ctx, 1, "alpha", "#123456")
 	if err != nil {
 		t.Fatal(err)
 	}

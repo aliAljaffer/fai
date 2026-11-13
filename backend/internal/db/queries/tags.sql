@@ -1,18 +1,20 @@
 -- name: ListTags :many
-SELECT * FROM tags ORDER BY name;
+SELECT * FROM tags
+WHERE sqlc.narg('workspace_id')::bigint IS NULL OR workspace_id = sqlc.narg('workspace_id')
+ORDER BY name;
 
 -- name: CreateTag :one
-INSERT INTO tags (name, color) VALUES ($1, $2) RETURNING *;
+INSERT INTO tags (workspace_id, name, color) VALUES ($1, $2, $3)
+RETURNING *;
 
--- name: AddTaskTag :exec
-INSERT INTO task_tags (task_id, tag_id) VALUES ($1, $2)
+-- name: AddTaskTag :execrows
+INSERT INTO task_tags (task_id, tag_id)
+SELECT k.id, t.id FROM tasks k JOIN tags t ON t.workspace_id = k.workspace_id
+WHERE k.id = sqlc.arg(task_id) AND t.id = sqlc.arg(tag_id)
 ON CONFLICT DO NOTHING;
+
+-- name: TaskHasTag :one
+SELECT EXISTS (SELECT 1 FROM task_tags WHERE task_id = $1 AND tag_id = $2);
 
 -- name: RemoveTaskTag :exec
 DELETE FROM task_tags WHERE task_id = $1 AND tag_id = $2;
-
--- name: ListTagsForTask :many
-SELECT t.* FROM tags t
-JOIN task_tags tt ON tt.tag_id = t.id
-WHERE tt.task_id = $1
-ORDER BY t.name;

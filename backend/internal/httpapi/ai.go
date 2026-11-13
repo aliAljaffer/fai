@@ -86,7 +86,7 @@ func (s *Server) aiSuggestLabels(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tags, err := s.Store.ListTags(ctx)
+	tags, err := s.Store.ListTags(ctx, &task.WorkspaceID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -139,7 +139,6 @@ func (s *Server) aiSuggestLabelsBatch(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 	tasks := make([]store.Task, len(body.TaskIDs))
-	var tags []store.Tag
 	errTaskNotFound := errors.New("task not found")
 	g, ctx := errgroup.WithContext(ctx)
 	g.SetLimit(8)
@@ -154,16 +153,23 @@ func (s *Server) aiSuggestLabelsBatch(w http.ResponseWriter, r *http.Request) {
 			return nil
 		})
 	}
-	g.Go(func() error {
-		var err error
-		tags, err = s.Store.ListTags(ctx)
-		return err
-	})
 	if err := g.Wait(); err != nil {
 		if errors.Is(err, errTaskNotFound) {
 			writeError(w, http.StatusNotFound, "task not found")
 			return
 		}
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	workspaceID := tasks[0].WorkspaceID
+	for _, task := range tasks {
+		if task.WorkspaceID != workspaceID {
+			writeError(w, http.StatusBadRequest, "tasks must belong to one workspace")
+			return
+		}
+	}
+	tags, err := s.Store.ListTags(r.Context(), &workspaceID)
+	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}

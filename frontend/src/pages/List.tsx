@@ -146,7 +146,7 @@ export function List() {
     ],
     [columns],
   )
-  const { data: tags } = useTags()
+  const { data: tags } = useTags(workspaceParam)
   const [q, setQ] = useState('')
   const [columnId, setColumnId] = useState('all')
   const [searchParams, setSearchParams] = useSearchParams()
@@ -180,7 +180,7 @@ export function List() {
   const restoreTasks = useRestoreTasks(boardId)
   const updateTask = useUpdateTask(boardId)
   const bulk = useBulkTaskActions()
-  const createTag = useCreateTag()
+  const createTag = useCreateTag(workspaceParam)
   const suggestBatch = useSuggestLabelsBatch()
   const { data: aiStatus } = useAIStatus()
   const [suggestions, setSuggestions] = useState<Record<number, string[]>>({})

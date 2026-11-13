@@ -400,7 +400,7 @@ func TestAISuggestLabelsSanitisesOutput(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := st.CreateTag(ctx, "billing", "#888888"); err != nil {
+	if _, err := st.CreateTag(ctx, 1, "billing", "#888888"); err != nil {
 		t.Fatal(err)
 	}
 

@@ -578,7 +578,7 @@ func (s *Server) confirmChatTagTask(ctx context.Context, action chatAction) (str
 	if err != nil {
 		return "", err
 	}
-	tags, err := s.Store.ListTags(ctx)
+	tags, err := s.Store.ListTags(ctx, &task.WorkspaceID)
 	if err != nil {
 		return "", err
 	}
@@ -586,7 +586,7 @@ func (s *Server) confirmChatTagTask(ctx context.Context, action chatAction) (str
 	for _, name := range sanitiseLabels(action.Add) {
 		tag, exists := tagByName(tags, name)
 		if !exists {
-			if tag, err = s.Store.CreateTag(ctx, name, "#888888"); err != nil {
+			if tag, err = s.Store.CreateTag(ctx, task.WorkspaceID, name, "#888888"); err != nil {
 				return "", err
 			}
 		}

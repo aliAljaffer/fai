@@ -117,6 +117,9 @@ func New(path string) (*Store, error) {
 	if _, err := db.ExecContext(ctx, migrationssqlite.ReminderCompletion); err != nil {
 		return nil, fmt.Errorf("applying sqlite reminder completion schema: %w", err)
 	}
+	if err := scopeTagsToWorkspaces(ctx, db); err != nil {
+		return nil, fmt.Errorf("moving tags into workspaces: %w", err)
+	}
 
 	return &Store{q: sqlitedb.New(db), db: db}, nil
 }

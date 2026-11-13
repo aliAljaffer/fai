@@ -348,9 +348,9 @@ export function TaskDetail({
 
 export function LabelSuggestions({ task }: { task: Task }) {
   const { data: status } = useAIStatus()
-  const { data: allTags } = useTags()
+  const { data: allTags } = useTags(task.workspace_id)
   const suggest = useSuggestLabels(task.id)
-  const createTag = useCreateTag()
+  const createTag = useCreateTag(task.workspace_id)
   const addTag = useAddTaskTag(task.id, task.board_id)
   const [suggested, setSuggested] = useState<string[]>([])
   const [done, setDone] = useState<string[]>([])

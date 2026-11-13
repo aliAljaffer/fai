@@ -61,9 +61,10 @@ type BackupColumn struct {
 }
 
 type BackupTag struct {
-	ID    int64  `json:"id"`
-	Name  string `json:"name"`
-	Color string `json:"color"`
+	ID          int64  `json:"id"`
+	WorkspaceID int64  `json:"workspace_id"`
+	Name        string `json:"name"`
+	Color       string `json:"color"`
 }
 
 type BackupTask struct {

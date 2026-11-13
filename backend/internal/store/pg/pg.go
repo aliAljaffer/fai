@@ -142,11 +142,11 @@ func (s *Store) ReorderColumns(ctx context.Context, boardID int64, ids []int64) 
 }
 
 func toTag(t sqlc.Tag) store.Tag {
-	return store.Tag{ID: t.ID, Name: t.Name, Color: t.Color}
+	return store.Tag{ID: t.ID, WorkspaceID: t.WorkspaceID, Name: t.Name, Color: t.Color}
 }
 
-func (s *Store) ListTags(ctx context.Context) ([]store.Tag, error) {
-	rows, err := s.q.ListTags(ctx)
+func (s *Store) ListTags(ctx context.Context, workspaceID *int64) ([]store.Tag, error) {
+	rows, err := s.q.ListTags(ctx, ptrToInt8(workspaceID))
 	if err != nil {
 		return nil, err
 	}
@@ -157,13 +157,24 @@ func (s *Store) ListTags(ctx context.Context) ([]store.Tag, error) {
 	return out, nil
 }
 
-func (s *Store) CreateTag(ctx context.Context, name, color string) (store.Tag, error) {
-	t, err := s.q.CreateTag(ctx, sqlc.CreateTagParams{Name: name, Color: color})
+func (s *Store) CreateTag(ctx context.Context, workspaceID int64, name, color string) (store.Tag, error) {
+	t, err := s.q.CreateTag(ctx, sqlc.CreateTagParams{WorkspaceID: workspaceID, Name: name, Color: color})
 	return toTag(t), err
 }
 
 func (s *Store) AddTaskTag(ctx context.Context, taskID, tagID int64) error {
-	return s.q.AddTaskTag(ctx, sqlc.AddTaskTagParams{TaskID: taskID, TagID: tagID})
+	added, err := s.q.AddTaskTag(ctx, sqlc.AddTaskTagParams{TaskID: taskID, TagID: tagID})
+	if err != nil || added > 0 {
+		return err
+	}
+	attached, err := s.q.TaskHasTag(ctx, sqlc.TaskHasTagParams{TaskID: taskID, TagID: tagID})
+	if err != nil {
+		return err
+	}
+	if !attached {
+		return store.ErrNotFound
+	}
+	return nil
 }
 
 func (s *Store) RemoveTaskTag(ctx context.Context, taskID, tagID int64) error {

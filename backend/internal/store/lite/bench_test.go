@@ -1,6 +1,7 @@
 package lite
 
 import (
+	"fmt"
 	"path/filepath"
 	"testing"
 	"time"
@@ -61,7 +62,7 @@ func BenchmarkRollRepeatingTask(b *testing.B) {
 	rule := store.TaskRepeat{Rule: recurrence.Rule{Freq: recurrence.Weekly, Interval: 1}, Anchor: due}
 	var tagIDs []int64
 	for i := range 5 {
-		tag, err := st.CreateTag(ctx, "tag"+string(rune('a'+i)), "#111111")
+		tag, err := st.CreateTag(ctx, 1, "tag"+string(rune('a'+i)), "#111111")
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -104,5 +105,38 @@ func BenchmarkMoveTask(b *testing.B) {
 		if _, err := st.MoveTask(ctx, task.ID, 1, 2); err != nil {
 			b.Fatal(err)
 		}
+	}
+}
+
+func BenchmarkListTags(b *testing.B) {
+	st := benchStore(b)
+	workspaces := []int64{1}
+	for i := range 4 {
+		w, err := st.CreateWorkspace(b.Context(), "Workspace", fmt.Sprintf("W%d", i))
+		if err != nil {
+			b.Fatal(err)
+		}
+		workspaces = append(workspaces, w.ID)
+	}
+	for i := range 1000 {
+		if _, err := st.CreateTag(b.Context(), workspaces[i%len(workspaces)], fmt.Sprintf("label-%d", i), "#888888"); err != nil {
+			b.Fatal(err)
+		}
+	}
+	for name, bench := range map[string]struct {
+		workspaceID *int64
+		want        int
+	}{
+		"all":          {nil, 1000},
+		"oneWorkspace": {&workspaces[0], 200},
+	} {
+		b.Run(name, func(b *testing.B) {
+			for range b.N {
+				tags, err := st.ListTags(b.Context(), bench.workspaceID)
+				if err != nil || len(tags) != bench.want {
+					b.Fatalf("got %d tags, err %v", len(tags), err)
+				}
+			}
+		})
 	}
 }

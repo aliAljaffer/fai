@@ -75,8 +75,11 @@ type Store interface {
 	ReorderColumns(ctx context.Context, boardID int64, ids []int64) ([]BoardColumn, error)
 
 	// Tags
-	ListTags(ctx context.Context) ([]Tag, error)
-	CreateTag(ctx context.Context, name, color string) (Tag, error)
+	// ListTags returns every workspace's tags when workspaceID is nil.
+	ListTags(ctx context.Context, workspaceID *int64) ([]Tag, error)
+	CreateTag(ctx context.Context, workspaceID int64, name, color string) (Tag, error)
+	// AddTaskTag returns ErrNotFound when the task or the tag is missing, or
+	// when they belong to different workspaces.
 	AddTaskTag(ctx context.Context, taskID, tagID int64) error
 	RemoveTaskTag(ctx context.Context, taskID, tagID int64) error
 	ListTagsForTask(ctx context.Context, taskID int64) ([]Tag, error)
