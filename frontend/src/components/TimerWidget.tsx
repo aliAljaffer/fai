@@ -38,10 +38,12 @@ export function TimerWidget() {
     }
   }, [open])
 
+  const isRunning = Boolean(running)
   useEffect(() => {
+    if (!isRunning) return
     const id = setInterval(() => tick((n) => n + 1), 1000)
     return () => clearInterval(id)
-  }, [])
+  }, [isRunning])
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase()

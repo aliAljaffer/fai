@@ -26,7 +26,7 @@ const (
 )
 
 type ChatRunner interface {
-	RunChat(ctx context.Context, messages []ai.ChatMessage, tzOffset *int) (httpapi.ChatOutcome, error)
+	RunChat(ctx context.Context, messages []ai.ChatMessage, loc *time.Location) (httpapi.ChatOutcome, error)
 	ConfirmChatAction(ctx context.Context, pending httpapi.PendingChatAction) (string, error)
 	Transcribe(ctx context.Context, audio []byte, format string) (string, error)
 }
@@ -42,7 +42,7 @@ type Bot struct {
 	runner        ChatRunner
 	allowedUserID int64
 	allowedChatID int64
-	tzOffset      *int
+	location      *time.Location
 	now           func() time.Time
 	offsets       OffsetStore
 	histories     HistoryStore
@@ -92,7 +92,7 @@ func (b *Bot) WithHistoryStore(store HistoryStore) *Bot {
 
 func (b *Bot) WithTZOffset(minutes int) *Bot {
 	if b != nil {
-		b.tzOffset = &minutes
+		b.location = httpapi.ResolveLocation("", &minutes)
 	}
 	return b
 }
@@ -285,7 +285,7 @@ func (b *Bot) respond(ctx context.Context, chatID int64, text, prefix string) {
 		history = history[len(history)-historyLimit:]
 	}
 
-	outcome, err := b.runner.RunChat(ctx, history, b.tzOffset)
+	outcome, err := b.runner.RunChat(ctx, history, b.location)
 	if err != nil {
 		log.Printf("telegram: chat: %v", err)
 		b.sendText(ctx, chatID, "Could not answer that right now.")

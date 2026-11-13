@@ -69,20 +69,24 @@ export function Notes() {
       </div>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
         {notes?.map((note) => (
-          <Link
+          <div
             key={note.id}
-            to={`/notes/${note.id}`}
-            className="block rounded-xl outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+            className="-m-1 p-1 [contain-intrinsic-size:auto_6rem] [content-visibility:auto]"
           >
-            <Card className="h-full transition-colors hover:bg-muted/40">
-              <CardContent>
-                <div className="font-medium">{note.title}</div>
-                <div className="mt-1 line-clamp-2 text-sm text-muted-foreground">
-                  {note.body_md}
-                </div>
-              </CardContent>
-            </Card>
-          </Link>
+            <Link
+              to={`/notes/${note.id}`}
+              className="block h-full rounded-xl outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+            >
+              <Card className="h-full transition-colors hover:bg-muted/40">
+                <CardContent>
+                  <div className="font-medium">{note.title}</div>
+                  <div className="mt-1 line-clamp-2 text-sm text-muted-foreground">
+                    {note.body_md}
+                  </div>
+                </CardContent>
+              </Card>
+            </Link>
+          </div>
         ))}
       </div>
     </div>

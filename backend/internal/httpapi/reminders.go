@@ -176,12 +176,11 @@ func parseAIReminder(text string) (string, time.Time, repeatChange, error) {
 	return title, remindAt, modelRepeat(parsed.Repeat), nil
 }
 
-func localNow(offset *int) time.Time {
-	minutes := 0
-	if offset != nil && *offset >= -14*60 && *offset <= 14*60 {
-		minutes = *offset
+func localNow(loc *time.Location) time.Time {
+	if loc == nil {
+		loc = time.UTC
 	}
-	return time.Now().In(time.FixedZone("local", minutes*60))
+	return time.Now().In(loc)
 }
 
 func (s *Server) aiReminder(w http.ResponseWriter, r *http.Request) {
@@ -192,6 +191,7 @@ func (s *Server) aiReminder(w http.ResponseWriter, r *http.Request) {
 	}
 	var body struct {
 		Text        string `json:"text"`
+		TZ          string `json:"tz"`
 		TZOffset    *int   `json:"tz_offset"`
 		WorkspaceID int64  `json:"workspace_id"`
 	}
@@ -215,7 +215,7 @@ func (s *Server) aiReminder(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	now := localNow(body.TZOffset)
+	now := localNow(ResolveLocation(body.TZ, body.TZOffset))
 
 	reply, err := provider.Chat(r.Context(), ai.FaiSystem, []ai.ChatMessage{{
 		Role:    "user",

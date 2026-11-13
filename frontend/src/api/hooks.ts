@@ -397,6 +397,7 @@ export function useAITask(boardId: number | undefined) {
     }) =>
       api.post<Task>('/tasks/ai', {
         ...body,
+        tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
         tz_offset: -new Date().getTimezoneOffset(),
       }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['tasks', boardId] }),
@@ -641,7 +642,7 @@ export function useUpdateNote() {
 export function useReminders(workspaceId?: number) {
   return useQuery({
     queryKey: ['reminders', workspaceId ?? null],
-    queryFn: () => api.get<Reminder[]>(`/reminders${workspaceParam(workspaceId)}`),
+    queryFn: () => api.get<Reminder[]>(`/reminders${workspaceParam(workspaceId)}`, { background: true }),
     refetchInterval: 60_000,
   })
 }
@@ -701,6 +702,7 @@ export function useAIReminder(workspaceId?: number) {
     mutationFn: (text: string) =>
       api.post<Reminder>('/reminders/ai', {
         text,
+        tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
         tz_offset: -new Date().getTimezoneOffset(),
         workspace_id: workspaceId,
       }),
@@ -954,6 +956,7 @@ export function useAIChat() {
       }>('/ai/chat', {
         messages,
         workspace_id: workspaceId,
+        tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
         tz_offset: -new Date().getTimezoneOffset(),
       }),
     onSuccess: (result) => {
@@ -1093,6 +1096,7 @@ export function usePendingMeetingOutcomes(workspaceId?: number) {
     queryFn: () =>
       api.get<MeetingOutcome[]>(
         `/meeting-outcomes?pending=true${workspaceId === undefined ? '' : `&workspace_id=${workspaceId}`}`,
+        { background: true },
       ),
     refetchOnWindowFocus: true,
     refetchInterval: 60_000,

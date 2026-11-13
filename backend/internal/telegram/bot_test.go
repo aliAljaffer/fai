@@ -86,8 +86,8 @@ func TestClearPendingClearsOnlyThatChat(t *testing.T) {
 func TestWithTZOffsetSetsOffset(t *testing.T) {
 	bot := &Bot{}
 	bot.WithTZOffset(180)
-	if bot.tzOffset == nil || *bot.tzOffset != 180 {
-		t.Fatalf("tzOffset = %v", bot.tzOffset)
+	if bot.location == nil || bot.location.String() != "local" {
+		t.Fatalf("location = %v", bot.location)
 	}
 }
 

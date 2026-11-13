@@ -830,7 +830,7 @@ export function List() {
       )}
 
       <div className="@container">
-      <Table>
+      <Table aria-label="Tasks">
         <TableHeader>
           <TableRow>
             <TableHead className="w-8">

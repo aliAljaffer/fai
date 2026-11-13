@@ -387,7 +387,7 @@ export function TaskInlineEditor({
                 role="button"
                 tabIndex={0}
                 aria-label="Edit description"
-                className="-mx-2 max-h-40 cursor-text overflow-hidden rounded-md px-2 py-1 outline-none transition-colors hover:bg-muted/60 focus-visible:ring-3 focus-visible:ring-ring/50 active:bg-muted"
+                className="-mx-2 line-clamp-8 cursor-text rounded-md px-2 py-1 outline-none transition-colors hover:bg-muted/60 focus-visible:ring-3 focus-visible:ring-ring/50 active:bg-muted"
                 onClick={(event) => {
                   if ((event.target as HTMLElement).closest('a')) return
                   setEditingDescription(true)
@@ -502,7 +502,7 @@ export function TaskInlineEditor({
         className="flex min-h-9 items-center justify-end border-t px-3 py-2 text-xs text-muted-foreground @2xl/editor:px-4"
       >
         {failed ? (
-          <span role="alert" className="text-destructive">
+          <span className="text-destructive">
             Could not save.{' '}
             <button
               type="button"

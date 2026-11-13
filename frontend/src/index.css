@@ -67,6 +67,7 @@
 }
 
 :root {
+  color-scheme: light;
   --brand-tile: oklch(0.82 0.05 250);
   --brand-ink: #17130e;
   --background: oklch(0.99 0.003 250);
@@ -109,6 +110,7 @@
 }
 
 .dark {
+  color-scheme: dark;
   --background: oklch(0.17 0.006 250);
   --foreground: oklch(0.97 0.004 250);
   --card: oklch(0.22 0.008 250);
@@ -202,6 +204,18 @@
   }
   html {
     @apply font-sans;
+    font-size-adjust: from-font;
+    scrollbar-width: thin;
+    scrollbar-color: var(--muted-foreground) transparent;
+  }
+  h1,
+  h2,
+  h3,
+  [data-slot="card-title"] {
+    text-wrap: balance;
+  }
+  p {
+    text-wrap: pretty;
   }
 }
 
@@ -408,17 +422,16 @@
 
 .fai-expand {
   display: grid;
-  grid-template-rows: 0fr;
-  animation: fai-expand 160ms ease forwards;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 160ms ease;
 }
-@keyframes fai-expand {
-  to {
-    grid-template-rows: 1fr;
+@starting-style {
+  .fai-expand {
+    grid-template-rows: 0fr;
   }
 }
 @media (prefers-reduced-motion: reduce) {
   .fai-expand {
-    animation: none;
-    grid-template-rows: 1fr;
+    transition: none;
   }
 }

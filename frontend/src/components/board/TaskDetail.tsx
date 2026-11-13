@@ -1,4 +1,3 @@
-import MDEditor from '@uiw/react-md-editor'
 import { Check, Play, Sparkles, Square, X } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -49,6 +48,7 @@ import {
 import { formatDuration } from '../../lib/format'
 import { repeatBlocker } from '../../lib/repeat'
 import type { Task, TaskBacklink } from '../../api/types'
+import { LazyMDEditor } from '@/components/LazyMDEditor'
 
 export function TaskDetail({
   task,
@@ -151,7 +151,7 @@ export function TaskDetail({
           </TabsList>
 
           <TabsContent value="details" className="flex flex-col gap-4">
-            <MDEditor
+            <LazyMDEditor
               value={description}
               onChange={(value, event) => {
                 setDescription(value ?? '')
@@ -164,6 +164,7 @@ export function TaskDetail({
                 onSelect: refs.sync,
               }}
               height={220}
+              fallbackHeight={220}
               preview="edit"
               data-color-mode={resolvedTheme === "light" ? "light" : "dark"}
             />

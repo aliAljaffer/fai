@@ -78,7 +78,7 @@ export function RepeatPicker({
           className="h-7 w-16 bg-background"
           onBlur={(event) => commitInterval(event.currentTarget)}
           onKeyDown={(event) => {
-            if (event.key === 'Enter') commitInterval(event.currentTarget)
+            if (event.key === 'Enter' && !event.nativeEvent.isComposing) commitInterval(event.currentTarget)
           }}
         />
       )}

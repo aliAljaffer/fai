@@ -70,6 +70,9 @@ function WorkspaceRow({ workspace }: { workspace: Workspace }) {
   const [name, setName] = useState(workspace.name)
   const [tag, setTag] = useState(workspace.tag)
   const [error, setError] = useState('')
+  const nameInput = useRef<HTMLInputElement>(null)
+  const tagInput = useRef<HTMLInputElement>(null)
+  const errorId = `workspace-error-${workspace.id}`
 
   function startEditing() {
     setName(workspace.name)
@@ -83,10 +86,12 @@ function WorkspaceRow({ workspace }: { workspace: Workspace }) {
     const trimmedTag = tag.trim()
     if (!trimmedName) {
       setError('Name is required.')
+      nameInput.current?.focus()
       return
     }
     if (!TAG_PATTERN.test(trimmedTag)) {
       setError('Tag must be 3 or 4 letters.')
+      tagInput.current?.focus()
       return
     }
     updateWorkspace.mutate(
@@ -119,17 +124,24 @@ function WorkspaceRow({ workspace }: { workspace: Workspace }) {
       <div className="flex flex-wrap items-center gap-2">
         <Input
           autoFocus
+          ref={nameInput}
+          required
           value={name}
           aria-label={`Name for ${workspace.name}`}
           aria-invalid={Boolean(error)}
+          aria-describedby={error ? errorId : undefined}
           placeholder="Workspace name"
           className="h-7 max-w-48"
           onChange={(event) => setName(event.target.value)}
         />
         <Input
+          ref={tagInput}
+          required
+          pattern="[A-Za-z]{3,4}"
           value={tag}
           aria-label={`Tag for ${workspace.name}`}
           aria-invalid={Boolean(error)}
+          aria-describedby={error ? errorId : undefined}
           placeholder="TAG"
           className="h-7 w-20 font-mono uppercase"
           onChange={(event) => setTag(event.target.value)}
@@ -142,7 +154,7 @@ function WorkspaceRow({ workspace }: { workspace: Workspace }) {
         </Button>
       </div>
       {error && (
-        <p role="alert" className="text-xs text-destructive">
+        <p id={errorId} className="text-xs text-destructive">
           {error}
         </p>
       )}
@@ -156,16 +168,20 @@ function WorkspacesCard() {
   const [name, setName] = useState('')
   const [tag, setTag] = useState('')
   const [error, setError] = useState('')
+  const nameInput = useRef<HTMLInputElement>(null)
+  const tagInput = useRef<HTMLInputElement>(null)
 
   function submit() {
     const trimmedName = name.trim()
     const trimmedTag = tag.trim()
     if (!trimmedName) {
       setError('Name is required.')
+      nameInput.current?.focus()
       return
     }
     if (!TAG_PATTERN.test(trimmedTag)) {
       setError('Tag must be 3 or 4 letters.')
+      tagInput.current?.focus()
       return
     }
     createWorkspace.mutate(
@@ -202,22 +218,29 @@ function WorkspacesCard() {
         <div className="flex flex-col gap-2 border-t pt-3">
           <div className="flex flex-wrap items-center gap-2">
             <Input
+              ref={nameInput}
+              required
               value={name}
               aria-label="New workspace name"
               aria-invalid={Boolean(error)}
+              aria-describedby={error ? 'workspaces-error' : undefined}
               placeholder="Workspace name"
               className="max-w-48"
               onChange={(event) => setName(event.target.value)}
             />
             <Input
+              ref={tagInput}
+              required
+              pattern="[A-Za-z]{3,4}"
               value={tag}
               aria-label="New workspace tag"
               aria-invalid={Boolean(error)}
+              aria-describedby={error ? 'workspaces-error' : undefined}
               placeholder="TAG"
               className="w-20 font-mono uppercase"
               onChange={(event) => setTag(event.target.value)}
               onKeyDown={(event) => {
-                if (event.key === 'Enter') submit()
+                if (event.key === 'Enter' && !event.nativeEvent.isComposing) submit()
               }}
             />
             <Button size="sm" disabled={createWorkspace.isPending} onClick={submit}>
@@ -225,7 +248,7 @@ function WorkspacesCard() {
             </Button>
           </div>
           {error && (
-        <p role="alert" className="text-xs text-destructive">
+        <p id="workspaces-error" className="text-xs text-destructive">
           {error}
         </p>
       )}
@@ -1261,6 +1284,7 @@ export function Settings() {
               onClick={() => {
                 if (!feed) return
                 navigator.clipboard.writeText(feed.url).then(
+                  () => toast.success('Copied the URL'),
                   () => toast.error('Could not copy the URL'),
                 )
               }}
