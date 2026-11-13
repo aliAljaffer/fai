@@ -116,6 +116,7 @@ type Store interface {
 
 	// Notes
 	ListNotes(ctx context.Context, workspaceID *int64) ([]Note, error)
+	CountNotes(ctx context.Context, workspaceID *int64) (int64, error)
 	GetNote(ctx context.Context, id int64) (Note, error)
 	GetNoteByTitle(ctx context.Context, title string) (Note, error)
 	CreateNote(ctx context.Context, title, bodyMd string, taskID *int64, workspaceID int64) (Note, error)

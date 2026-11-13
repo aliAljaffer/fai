@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { formatTimestamp } from '../lib/format'
+import { useLabelFilter } from '../lib/labelFilter'
 import { useAIStatus, useBoards, useBulkTaskActions, useColumns, useCreateTag, useDeleteTask, useJiraLinks, useMoveTask, useRestoreTasks, useRunningTime, useStartTime, useStopTime, useSuggestLabelsBatch, useTags, useTasks, useUpdateTask } from '../api/hooks'
 import { showUndo } from '../lib/undo'
 import { BulkTaskBar } from '../components/board/BulkTaskBar'
@@ -149,13 +150,9 @@ export function List() {
   const [q, setQ] = useState('')
   const [columnId, setColumnId] = useState('all')
   const [searchParams, setSearchParams] = useSearchParams()
-  const tag = searchParams.get('tag') ?? 'all'
-  function setTag(value: string) {
-    const next = new URLSearchParams(searchParams)
-    if (value === 'all') next.delete('tag')
-    else next.set('tag', value)
-    setSearchParams(next, { replace: true })
-  }
+  const [labelFilter, setLabelFilter] = useLabelFilter()
+  const tag = labelFilter ?? 'all'
+  const setTag = (value: string) => setLabelFilter(value === 'all' ? null : value)
   const debouncedQ = useDebounced(q)
 
   const { data: tasks } = useTasks(boardId, {

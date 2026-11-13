@@ -23,6 +23,7 @@ import {
   useRestoreTasks,
   type BulkTaskAction,
 } from '../../api/hooks'
+import { tagColor } from '../../lib/palette'
 import { showUndo } from '../../lib/undo'
 import type { BoardColumn, Tag, Task } from '../../api/types'
 
@@ -171,7 +172,7 @@ export function BulkTaskBar({
                   >
                     <span
                       className="size-1.5 rounded-full"
-                      style={{ backgroundColor: tag.color || undefined }}
+                      style={{ backgroundColor: tagColor(tag) }}
                     />
                     {tag.name}
                   </DropdownMenuCheckboxItem>

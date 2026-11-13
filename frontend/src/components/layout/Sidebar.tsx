@@ -4,13 +4,21 @@ import { AppIcon } from '@/components/Logo'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { TimerWidget } from '@/components/TimerWidget'
 import { UpdateIndicator } from '@/components/UpdateIndicator'
+import { useNotesCount } from '@/api/hooks'
+import { appVersion, isDesktop } from '@/lib/updates'
 import { cn } from '@/lib/utils'
+import { useWorkspaceStore } from '@/store/workspace'
 import { NAV_ITEMS, SETTINGS_ITEM } from './nav'
 import { SidebarLabels } from './SidebarLabels'
 import { WorkspaceSwitcher } from './WorkspaceSwitcher'
 
 export function Sidebar() {
   const viewTransition = useViewTransition()
+  const workspaceId = useWorkspaceStore((state) => state.activeWorkspaceId)
+  const { data: notesCount } = useNotesCount(workspaceId)
+  const counts: Record<string, number | undefined> = { '/notes': notesCount }
+  const version = appVersion()
+  const versionLabel = /^\d/.test(version) ? `v${version}` : version
   return (
     <aside className="sticky top-0 hidden h-dvh w-[244px] shrink-0 flex-col gap-[22px] border-r border-sidebar-border bg-sidebar px-4 py-5 text-sidebar-foreground lg:flex">
       <NavLink
@@ -41,6 +49,9 @@ export function Sidebar() {
           >
             <item.icon aria-hidden className="size-4" strokeWidth={1.5} />
             {item.label}
+            {counts[item.to] !== undefined && (
+              <span className="ml-auto font-mono text-[0.6875rem] tabular-nums">{counts[item.to]}</span>
+            )}
           </NavLink>
         ))}
       </nav>
@@ -49,7 +60,9 @@ export function Sidebar() {
         <TimerWidget variant="panel" />
         <div className="flex items-center gap-1.5 border-t border-sidebar-border px-1.5 pt-2">
           <UpdateIndicator />
-          <span className="flex-1" />
+          <span className="min-w-0 flex-1 truncate font-mono text-[0.6875rem] text-muted-foreground">
+            {versionLabel} · {isDesktop() ? 'desktop' : 'self-hosted'}
+          </span>
           <ThemeToggle />
           <NavLink
             viewTransition={viewTransition}

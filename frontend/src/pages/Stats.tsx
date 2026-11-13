@@ -54,6 +54,7 @@ import {
   useWorkspaces,
 } from '../api/hooks'
 import type { BoardColumn } from '../api/types'
+import { tagColor } from '../lib/palette'
 import { taskStatus } from '../lib/taskType'
 
 const TODAY = startOfDay(new Date())
@@ -368,7 +369,7 @@ export function Stats() {
     const counts = new Map<string, { name: string; value: number; color: string; fill: string }>()
     for (const task of openTasks) {
       for (const tag of task.tags ?? []) {
-        const color = tag.color || 'var(--chart-1)'
+        const color = tagColor(tag)
         const entry = counts.get(tag.name) ?? { name: tag.name, value: 0, color, fill: color }
         entry.value += 1
         counts.set(tag.name, entry)

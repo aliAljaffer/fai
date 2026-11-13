@@ -16,6 +16,15 @@ func (s *Server) listNotes(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, notes)
 }
 
+func (s *Server) countNotes(w http.ResponseWriter, r *http.Request) {
+	count, err := s.Store.CountNotes(r.Context(), optionalInt64Param(r, "workspace_id"))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]int64{"count": count})
+}
+
 type noteBody struct {
 	Title       string `json:"title"`
 	BodyMd      string `json:"body_md"`

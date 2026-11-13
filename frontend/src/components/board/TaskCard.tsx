@@ -1,7 +1,13 @@
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import type { CSSProperties, KeyboardEventHandler } from 'react'
-import { ChevronRight, GripVertical, Play, Square } from 'lucide-react'
+import {
+  Fragment,
+  useState,
+  type CSSProperties,
+  type KeyboardEventHandler,
+  type ReactNode,
+} from 'react'
+import { Check, ChevronRight, GripVertical, Play, Square } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { cn } from '@/lib/utils'
@@ -27,6 +33,7 @@ interface TaskCardProps {
   onToggleSubtask?: (subtask: Task) => void
   dragDisabled?: boolean
   expanded?: boolean
+  accent?: string
 }
 
 type SubtaskNode = { task: Task; depth: number }
@@ -43,23 +50,122 @@ function flattenSubtasks(
   ])
 }
 
+interface StepProgress {
+  done: number
+  total: number
+  unit: 'tasks' | 'steps'
+  expanded: boolean
+  onToggle: () => void
+}
+
+function TaskMeta({
+  task,
+  done,
+  steps,
+}: {
+  task: Task
+  done: boolean
+  steps?: StepProgress
+}) {
+  const overdue = isPastDue(task.due_date, done)
+  const dueLabel = formatDueDate(task.due_date)
+  const completedLabel = formatDueDate(task.completed_at)
+  const items: ReactNode[] = []
+
+  if (done) {
+    items.push(
+      <span key="done" className="inline-flex items-center gap-1 font-semibold text-(--status-done)">
+        <Check aria-hidden className="size-3" />
+        Done{completedLabel ? ` ${completedLabel}` : ''}
+      </span>,
+    )
+  } else {
+    if (task.priority === 'high' || task.priority === 'low') {
+      items.push(
+        <span key="priority" className="inline-flex items-center gap-[5px] capitalize">
+          <span
+            aria-hidden
+            className={cn(
+              'size-[7px] rounded-full',
+              task.priority === 'high' ? 'bg-destructive' : 'border-[1.5px] border-muted-foreground',
+            )}
+          />
+          {task.priority}
+        </span>,
+      )
+    }
+    if (dueLabel) {
+      items.push(
+        <span key="due" className="inline-flex min-w-0 items-center gap-1">
+          <span
+            className={cn(
+              'truncate',
+              overdue && 'rounded-full bg-destructive/12 px-[7px] py-0.5 font-semibold text-destructive',
+            )}
+          >
+            {overdue ? 'Overdue' : 'Due'} {dueLabel}
+          </span>
+          {task.repeat && <RepeatIndicator repeat={task.repeat} />}
+        </span>,
+      )
+    }
+  }
+  if (steps) {
+    items.push(
+      <button
+        key="steps"
+        type="button"
+        aria-expanded={steps.expanded}
+        className="pointer-events-auto inline-flex items-center gap-1 rounded-sm outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
+        onClick={(event) => {
+          event.stopPropagation()
+          steps.onToggle()
+        }}
+        onPointerDown={(event) => event.stopPropagation()}
+      >
+        <ChevronRight className={cn('size-3 transition-transform', steps.expanded && 'rotate-90')} />
+        {steps.done}/{steps.total} {steps.unit}
+      </button>,
+    )
+  }
+  if (!items.length) return null
+
+  return (
+    <div className="mt-2.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[0.6875rem] text-foreground/70">
+      {items.map((item, index) => (
+        <Fragment key={index}>
+          {index > 0 && <span aria-hidden>·</span>}
+          {item}
+        </Fragment>
+      ))}
+    </div>
+  )
+}
+
 function TaskCardBody({
   task,
   status,
   isDone,
   overlay,
+  steps,
 }: {
   task: Task
   status?: 'todo' | 'doing' | 'done'
   isDone?: boolean
   overlay?: boolean
+  steps?: StepProgress
 }) {
-  const overdue = isPastDue(task.due_date, Boolean(task.completed_at) || isDone)
-  const dueLabel = formatDueDate(task.due_date)
+  const done = Boolean(task.completed_at) || Boolean(isDone)
 
   return (
     <div className="flex flex-col">
-      <div className={cn('mb-1.5 flex min-h-[22px] flex-wrap items-center gap-x-2 gap-y-1', !overlay && 'pr-13')}>
+      <div
+        className={cn(
+          'mb-1.5 flex min-h-[22px] flex-wrap items-center gap-x-2 gap-y-1',
+          !overlay && 'pr-13',
+          done && 'opacity-70',
+        )}
+      >
         <TaskTypeIcon kind={task.kind} status={status} size={13} />
         {task.created_by_fai && <FaiTaskIcon />}
         <span className="font-mono text-[0.625rem] tracking-[0.06em] text-muted-foreground uppercase">
@@ -73,34 +179,28 @@ function TaskCardBody({
           />
         ))}
       </div>
-      <p className="line-clamp-3 text-sm leading-[1.35] font-semibold">{task.title}</p>
+      <p
+        className={cn(
+          'line-clamp-3 text-sm leading-[1.35]',
+          done ? 'font-medium text-muted-foreground' : 'font-semibold',
+        )}
+      >
+        {task.title}
+      </p>
       {task.description_md && (
         <p className="mt-1 line-clamp-2 text-[0.8125rem] leading-[1.45] text-muted-foreground">
           {task.description_md}
         </p>
       )}
-      <div className="mt-2.5 flex min-w-0 items-center gap-2 font-mono text-[0.625rem] text-muted-foreground">
-        <span className="inline-flex items-center gap-[5px] capitalize">
-          <span
-            aria-hidden
-            className={cn(
-              'size-[7px] rounded-full bg-muted-foreground/50',
-              task.priority === 'high' && 'bg-destructive',
-              task.priority === 'low' && 'bg-muted-foreground/25',
-            )}
-          />
-          {task.priority}
-        </span>
-        {dueLabel && (
-          <>
-            <span aria-hidden>·</span>
-            <span className={cn('truncate', overdue && 'font-medium text-destructive')}>
-              {overdue ? 'Overdue' : 'Due'} {dueLabel}
-            </span>
-          </>
-        )}
-        {dueLabel && task.repeat && <RepeatIndicator repeat={task.repeat} />}
-      </div>
+      {steps && !done && (
+        <progress
+          className="mt-2.5 -mb-1 block h-[3px] w-full appearance-none overflow-clip rounded-full border-0 bg-foreground/10 [&::-moz-progress-bar]:bg-(--task-accent) [&::-webkit-progress-bar]:bg-transparent [&::-webkit-progress-value]:rounded-full [&::-webkit-progress-value]:bg-(--task-accent)"
+          aria-label={`${steps.done} of ${steps.total} ${steps.unit} done`}
+          max={steps.total}
+          value={steps.done}
+        />
+      )}
+      <TaskMeta task={task} done={done} steps={steps} />
     </div>
   )
 }
@@ -115,6 +215,7 @@ function SortableTaskCard(props: TaskCardProps) {
   // so Space and arrows on the card's buttons do not start a drag.
   const { onKeyDown, ...cardListeners } = listeners ?? {}
   const running = props.runningTaskId === props.task.id
+  const [stepsExpanded, setStepsExpanded] = useState(false)
   const isArc = props.task.kind === 'arc'
   const flattened = flattenSubtasks(props.subtasksByParent, props.task.id)
   const nodes: SubtaskNode[] = flattened.length
@@ -126,6 +227,17 @@ function SortableTaskCard(props: TaskCardProps) {
   const doneCount = counted.filter(
     (subtask) => subtask.completed_at || props.doneColumnIds?.has(subtask.column_id),
   ).length
+  const cardDone = Boolean(props.task.completed_at) || Boolean(props.isDone)
+  const overdue = isPastDue(props.task.due_date, cardDone)
+  const steps: StepProgress | undefined = nodes.length
+    ? {
+        done: doneCount,
+        total: counted.length,
+        unit: isArc ? 'tasks' : 'steps',
+        expanded: stepsExpanded,
+        onToggle: () => setStepsExpanded((current) => !current),
+      }
+    : undefined
 
   return (
     <div
@@ -135,12 +247,12 @@ function SortableTaskCard(props: TaskCardProps) {
         {
           transform: CSS.Transform.toString(transform),
           transition,
-          '--task-accent': props.task.tags?.[0]?.color || 'var(--border)',
+          '--task-accent': overdue ? 'var(--destructive)' : (props.accent ?? 'var(--border)'),
         } as CSSProperties
       }
       {...cardListeners}
       className={cn(
-        'group/task relative shrink-0 cursor-grab overflow-hidden rounded-xl border bg-card py-3 pr-[13px] pl-4 text-card-foreground shadow-(--task-shadow) transition-[transform,box-shadow] duration-150 select-none before:absolute before:inset-y-0 before:left-0 before:w-[3px] before:bg-(--task-accent) before:opacity-65 hover:-translate-y-0.5 hover:shadow-(--task-shadow-hover) active:cursor-grabbing motion-reduce:transition-none motion-reduce:hover:translate-y-0',
+        'group/task relative shrink-0 cursor-grab overflow-hidden rounded-xl border bg-card py-3 pr-[13px] pl-4 text-card-foreground transition-colors select-none before:absolute before:inset-y-0 before:left-0 before:w-[3px] before:bg-(--task-accent) hover:border-foreground/20 active:cursor-grabbing',
         isDragging && 'opacity-40',
       )}
     >
@@ -165,53 +277,44 @@ function SortableTaskCard(props: TaskCardProps) {
         <GripVertical className="size-3.5" />
       </button>
       <div className="pointer-events-none relative z-0">
-        <TaskCardBody task={props.task} status={status} isDone={props.isDone} />
+        <TaskCardBody task={props.task} status={status} isDone={props.isDone} steps={steps} />
       </div>
-      {nodes.length > 0 && (
-        <details className="group/steps pointer-events-none relative z-10 mt-2">
-          <summary
-            className="pointer-events-auto flex w-fit cursor-pointer list-none items-center gap-1 rounded-sm text-xs text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 [&::-webkit-details-marker]:hidden"
-            onPointerDown={(event) => event.stopPropagation()}
-          >
-            <ChevronRight className="size-3 transition-transform group-open/steps:rotate-90" />
-            {doneCount}/{counted.length} {isArc ? 'tasks' : 'steps'}
-          </summary>
-          <ul className="mt-1 flex flex-col gap-1 border-t pt-1.5">
-            {nodes.map(({ task: subtask, depth }) => {
-              const done = Boolean(subtask.completed_at) || props.doneColumnIds?.has(subtask.column_id)
-              const isStep = normalizeKind(subtask.kind) === 'step'
-              return (
-                <li
-                  key={subtask.id}
-                  className="flex items-center gap-1.5 text-xs"
-                  style={depth ? { paddingLeft: depth * 12 } : undefined}
-                >
-                  {isStep ? (
-                    <Checkbox
-                      checked={done}
-                      className="pointer-events-auto"
-                      aria-label={`Mark ${subtask.title} done`}
-                      disabled={!props.onToggleSubtask}
-                      onCheckedChange={() => props.onToggleSubtask?.(subtask)}
-                      onClick={(event) => event.stopPropagation()}
-                      onPointerDown={(event) => event.stopPropagation()}
-                    />
-                  ) : (
-                    <TaskTypeIcon
-                      kind={subtask.kind}
-                      status={taskStatus(subtask, props.columns)}
-                      size={12}
-                    />
-                  )}
-                  {subtask.created_by_fai && <FaiTaskIcon size={11} />}
-                  <span className={cn(done && 'text-muted-foreground line-through')}>
-                    {subtask.title}
-                  </span>
-                </li>
-              )
-            })}
-          </ul>
-        </details>
+      {stepsExpanded && nodes.length > 0 && (
+        <ul className="pointer-events-none relative z-10 mt-2 flex flex-col gap-1 border-t pt-1.5">
+          {nodes.map(({ task: subtask, depth }) => {
+            const done = Boolean(subtask.completed_at) || props.doneColumnIds?.has(subtask.column_id)
+            const isStep = normalizeKind(subtask.kind) === 'step'
+            return (
+              <li
+                key={subtask.id}
+                className="flex items-center gap-1.5 text-xs"
+                style={depth ? { paddingLeft: depth * 12 } : undefined}
+              >
+                {isStep ? (
+                  <Checkbox
+                    checked={done}
+                    className="pointer-events-auto"
+                    aria-label={`Mark ${subtask.title} done`}
+                    disabled={!props.onToggleSubtask}
+                    onCheckedChange={() => props.onToggleSubtask?.(subtask)}
+                    onClick={(event) => event.stopPropagation()}
+                    onPointerDown={(event) => event.stopPropagation()}
+                  />
+                ) : (
+                  <TaskTypeIcon
+                    kind={subtask.kind}
+                    status={taskStatus(subtask, props.columns)}
+                    size={12}
+                  />
+                )}
+                {subtask.created_by_fai && <FaiTaskIcon size={11} />}
+                <span className={cn(done && 'text-muted-foreground line-through')}>
+                  {subtask.title}
+                </span>
+              </li>
+            )
+          })}
+        </ul>
       )}
       {props.onToggleTimer && (
         <Button

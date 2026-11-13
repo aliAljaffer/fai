@@ -1,5 +1,5 @@
 import { cn } from '@/lib/utils'
-import { labelChipStyle } from '../lib/palette'
+import { labelChipStyle, tagColor } from '../lib/palette'
 import type { Tag } from '../api/types'
 
 export function TagChip({
@@ -11,19 +11,15 @@ export function TagChip({
   className?: string
   children?: React.ReactNode
 }) {
-  const color = tag.color
-  const base = labelChipStyle(color)
-  const style =
-    base && color
-      ? {
-          ...base,
-          color: `color-mix(in oklch, ${color} 68%, var(--foreground))`,
-        }
-      : undefined
+  const color = tagColor(tag)
+  const style = {
+    ...labelChipStyle(color),
+    color: `color-mix(in oklch, ${color} 68%, var(--foreground))`,
+  }
 
   return (
     <span className={cn('inline-flex items-center gap-1 border', className)} style={style}>
-      <span className="size-1.5 rounded-full" style={{ backgroundColor: tag.color || undefined }} />
+      <span className="size-1.5 rounded-full" style={{ backgroundColor: color }} />
       {tag.name}
       {children}
     </span>

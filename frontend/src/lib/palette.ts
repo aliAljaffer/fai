@@ -21,6 +21,14 @@ export function labelColorFor(name: string) {
   return LABEL_COLORS[hash % LABEL_COLORS.length]
 }
 
+// The backend stores this grey for a label created without a colour.
+const UNSET_LABEL_COLOR = '#888888'
+
+export function tagColor(tag: { name: string; color?: string | null }) {
+  const unset = !tag.color || tag.color.toLowerCase() === UNSET_LABEL_COLOR
+  return unset ? labelColorFor(tag.name) : tag.color!
+}
+
 export function labelChipStyle(color?: string | null) {
   if (!color) return undefined
   return {

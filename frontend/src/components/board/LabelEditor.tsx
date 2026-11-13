@@ -11,7 +11,7 @@ import {
 } from '../../api/hooks'
 import { TagChip } from '../TagChip'
 import type { Tag, Task } from '../../api/types'
-import { labelColorFor as colorFor } from '../../lib/palette'
+import { labelColorFor as colorFor, tagColor } from '../../lib/palette'
 
 export function LabelEditor({ task, inputId }: { task: Task; inputId?: string }) {
   const { data: allTags } = useTags()
@@ -104,7 +104,7 @@ export function LabelEditor({ task, inputId }: { task: Task; inputId?: string })
               >
                 <span
                   className="size-1.5 rounded-full"
-                  style={{ backgroundColor: tag.color || undefined }}
+                  style={{ backgroundColor: tagColor(tag) }}
                 />
                 {tag.name}
               </button>
