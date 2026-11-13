@@ -13,7 +13,6 @@ import {
   type DragOverEvent,
   type DragStartEvent,
 } from '@dnd-kit/core'
-import { cn } from '@/lib/utils'
 import { format } from 'date-fns'
 import { PageHeader } from '@/components/layout/PageHeader'
 import {
@@ -21,23 +20,17 @@ import {
   horizontalListSortingStrategy,
   sortableKeyboardCoordinates,
 } from '@dnd-kit/sortable'
-import { Pencil, Plus, Search } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { useHotkeys } from 'react-hotkeys-hook'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   useBoards,
+  useTags,
   useColumns,
   useCreateBoard,
   useCreateColumn,
@@ -56,11 +49,14 @@ import {
   useUpdateTask,
 } from '../api/hooks'
 import { BoardColumn } from '../components/board/BoardColumn'
+import { BoardFilters } from '../components/board/BoardFilters'
+import { BoardSwitcher, type BoardEditorMode } from '../components/board/BoardSwitcher'
 import { RemindersColumn } from '../components/board/RemindersColumn'
 import { TaskCard } from '../components/board/TaskCard'
 import { planDrop } from '../lib/boardDrag'
 import { isPastDue } from '../lib/format'
 import { useLabelFilter } from '../lib/labelFilter'
+import { tagColor } from '../lib/palette'
 import { showUndo } from '../lib/undo'
 import { useUIStore } from '../store/ui'
 import { useWorkspaceStore } from '../store/workspace'
@@ -176,13 +172,6 @@ function BoardSkeleton({ columns = 4 }: { columns?: number }) {
   )
 }
 
-const PRIORITY_FILTERS = [
-  { value: 'all', label: 'All tasks' },
-  { value: 'high', label: 'High' },
-  { value: 'medium', label: 'Medium' },
-  { value: 'low', label: 'Low' },
-]
-
 export function Board() {
   const workspaceId = useWorkspaceStore((state) => state.activeWorkspaceId)
   const boardsQuery = useBoards(workspaceId)
@@ -231,7 +220,7 @@ export function Board() {
   const dragPointer = useRef<{ x: number; y: number } | null>(null)
   const [composerColumnId, setComposerColumnId] = useState<number | null>(null)
   const [expandedTaskId, setExpandedTaskId] = useState<number | null>(null)
-  const [boardEditor, setBoardEditor] = useState<'new' | 'rename' | null>(null)
+  const [boardEditor, setBoardEditor] = useState<BoardEditorMode | null>(null)
   const [showShortcuts, setShowShortcuts] = useState(false)
   const [fieldFocus, setFieldFocus] = useState<{
     field: 'due' | 'status' | 'labels'
@@ -374,7 +363,8 @@ export function Board() {
     [orderedColumns],
   )
 
-  const [labelFilter] = useLabelFilter()
+  const [labelFilter, setLabelFilter] = useLabelFilter()
+  const { data: tags } = useTags()
   const hasFilters = query.trim().length > 0 || priority !== 'all' || Boolean(labelFilter)
 
   const topLevelTasks = useMemo(
@@ -729,164 +719,42 @@ export function Board() {
             </Button>
           }
         />
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex min-w-0 items-center gap-1">
-              {boardEditor === 'rename' ? (
-                <>
-                  <Input
-                    autoFocus
-                    value={boardName}
-                    placeholder="Board name"
-                    aria-label="Board name"
-                    className="h-8 w-56"
-                    disabled={boardSaving}
-                    onChange={(event) => setBoardName(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.nativeEvent.isComposing) return
-                      if (event.key === 'Enter') {
-                        event.preventDefault()
-                        void submitBoard()
-                      }
-                      if (event.key === 'Escape') {
-                        event.preventDefault()
-                        setBoardEditor(null)
-                        setBoardName('')
-                      }
-                    }}
-                  />
-                  <Button size="xs" disabled={!boardName.trim() || boardSaving} onClick={() => void submitBoard()}>
-                    Save
-                  </Button>
-                  <Button
-                    size="xs"
-                    variant="ghost"
-                    onClick={() => {
-                      setBoardEditor(null)
-                      setBoardName('')
-                    }}
-                  >
-                    Cancel
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <Select
-                    items={boards.map((item) => ({ value: String(item.id), label: item.name }))}
-                    value={boardId ? String(boardId) : undefined}
-                    onValueChange={(value) => value && setSelectedBoardId(Number(value))}
-                  >
-                    <SelectTrigger
-                      aria-label="Switch board"
-                      className="h-auto w-fit max-w-full border-0 bg-transparent py-0 pr-1 pl-0 text-sm font-semibold hover:bg-transparent focus-visible:ring-0 dark:bg-transparent dark:hover:bg-transparent [&_svg]:size-4"
-                    >
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent align="start">
-                      {boards.map((item) => (
-                        <SelectItem key={item.id} value={String(item.id)}>
-                          {item.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    className="text-muted-foreground"
-                    aria-label="Rename board"
-                    onClick={() => {
-                      setBoardName(board?.name ?? '')
-                      setBoardEditor('rename')
-                    }}
-                  >
-                    <Pencil />
-                  </Button>
-                </>
-              )}
-          </div>
-          <div role="group" aria-label="Filter by priority" className="flex items-center gap-1">
-            {PRIORITY_FILTERS.map((item) => (
-              <button
-                key={item.value}
-                type="button"
-                aria-pressed={priority === item.value}
-                className={cn(
-                  'rounded-full border border-transparent px-3 py-1.5 text-[0.8125rem] text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50',
-                  priority === item.value && 'border-border bg-muted text-foreground',
-                )}
-                onClick={() => setPriority(item.value)}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-          <span className="flex-1" />
-          <div className="relative">
-            <Search
-              aria-hidden
-              className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground"
-            />
-            <Input
-              value={query}
-              placeholder="Filter tasks"
-              aria-label="Filter tasks"
-              className="w-52 pl-7"
-              onChange={(event) => setQuery(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Escape') setQuery('')
-              }}
-            />
-          </div>
-          {boardEditor === 'new' ? (
-            <div className="flex items-center gap-1">
-              <Input
-                autoFocus
-                value={boardName}
-                placeholder="Board name"
-                aria-label="Board name"
-                className="h-8 w-48"
-                disabled={boardSaving}
-                onChange={(event) => setBoardName(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.nativeEvent.isComposing) return
-                  if (event.key === 'Enter') {
-                    event.preventDefault()
-                    void submitBoard()
-                  }
-                  if (event.key === 'Escape') {
-                    event.preventDefault()
-                    setBoardEditor(null)
-                    setBoardName('')
-                  }
-                }}
-              />
-              <Button size="sm" disabled={!boardName.trim() || boardSaving} onClick={() => void submitBoard()}>
-                Create
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => {
-                  setBoardEditor(null)
-                  setBoardName('')
-                }}
-              >
-                Cancel
-              </Button>
-            </div>
-          ) : (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => {
-                setBoardName('')
-                setBoardEditor('new')
-              }}
-            >
-              <Plus />
-              New board
-            </Button>
-          )}
+        <div className="flex flex-wrap items-center gap-2.5">
+          <BoardSwitcher
+            boards={boards}
+            boardId={boardId}
+            editor={boardEditor}
+            name={boardName}
+            saving={boardSaving}
+            onSelect={setSelectedBoardId}
+            onStartEditing={(mode) => {
+              setBoardName(mode === 'rename' ? (board?.name ?? '') : '')
+              setBoardEditor(mode)
+            }}
+            onNameChange={setBoardName}
+            onSubmit={() => void submitBoard()}
+            onCancel={() => {
+              setBoardEditor(null)
+              setBoardName('')
+            }}
+          />
+          <BoardFilters
+            priority={priority}
+            query={query}
+            label={labelFilter}
+            labelColor={tagColor({
+              name: labelFilter ?? '',
+              color: tags?.find((tag) => tag.name === labelFilter)?.color,
+            })}
+            onPriorityChange={setPriority}
+            onQueryChange={setQuery}
+            onClearLabel={() => setLabelFilter(null)}
+            onClearAll={() => {
+              setPriority('all')
+              setQuery('')
+              setLabelFilter(null)
+            }}
+          />
         </div>
 
         {columnsQuery.isError || tasksQuery.isError ? (

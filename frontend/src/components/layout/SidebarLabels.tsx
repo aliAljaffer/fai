@@ -35,7 +35,7 @@ export function SidebarLabels() {
   if (!ordered.length) return null
 
   return (
-    <section aria-label="Labels" className="flex min-h-0 flex-col gap-2.5">
+    <section aria-label="Labels" className="flex shrink-0 flex-col gap-2.5">
       <div className="flex items-center justify-between px-2.5">
         <h2 className="eyebrow">Labels</h2>
         {selected && (
@@ -52,10 +52,7 @@ export function SidebarLabels() {
       <ul
         ref={listRef}
         style={showAll ? undefined : { maxHeight: COLLAPSED_HEIGHT }}
-        className={cn(
-          'flex min-h-0 flex-wrap gap-1.5 px-1.5 py-0.5',
-          showAll ? 'overflow-y-auto' : 'overflow-hidden',
-        )}
+        className="flex flex-wrap gap-1.5 overflow-hidden px-1.5 py-0.5"
       >
         {ordered.map((tag) => {
           const isSelected = tag.name === selected

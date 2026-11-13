@@ -32,6 +32,7 @@ export function Sidebar() {
         <span className="text-[1.3rem] leading-none font-semibold tracking-tight">fai</span>
       </NavLink>
       <WorkspaceSwitcher className="h-auto w-full rounded-xl border-sidebar-border px-2.5 py-2 text-sm" />
+      <div className="flex min-h-0 flex-1 flex-col gap-[22px] overflow-y-auto">
       <nav aria-label="Primary" className="flex flex-col gap-0.5">
         {NAV_ITEMS.map((item) => (
           <NavLink
@@ -56,7 +57,8 @@ export function Sidebar() {
         ))}
       </nav>
       <SidebarLabels />
-      <div className="mt-auto flex flex-col gap-[22px]">
+      </div>
+      <div className="flex flex-col gap-[22px]">
         <TimerWidget variant="panel" />
         <div className="flex items-center gap-1.5 border-t border-sidebar-border px-1.5 pt-2">
           <UpdateIndicator />
