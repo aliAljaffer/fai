@@ -161,6 +161,7 @@ func NewRouter(s *Server) http.Handler {
 			r.Get("/time/running", s.runningTime)
 
 			r.Get("/notes", s.listNotes)
+			r.Get("/notes/count", s.countNotes)
 			r.Post("/notes", s.createNote)
 			r.Get("/notes/by-title/{title}", s.getNoteByTitle)
 			r.Get("/notes/{noteID}", s.getNote)

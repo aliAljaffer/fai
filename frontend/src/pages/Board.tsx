@@ -60,6 +60,7 @@ import { RemindersColumn } from '../components/board/RemindersColumn'
 import { TaskCard } from '../components/board/TaskCard'
 import { planDrop } from '../lib/boardDrag'
 import { isPastDue } from '../lib/format'
+import { useLabelFilter } from '../lib/labelFilter'
 import { showUndo } from '../lib/undo'
 import { useUIStore } from '../store/ui'
 import { useWorkspaceStore } from '../store/workspace'
@@ -213,6 +214,13 @@ export function Board() {
   const startTime = useStartTime()
   const stopTime = useStopTime()
   const [searchParams, setSearchParams] = useSearchParams()
+  const openTaskPanel = (taskId: number) =>
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current)
+      next.set('task', String(taskId))
+      next.set('panel', '1')
+      return next
+    })
   const navigate = useNavigate()
 
   const [query, setQuery] = useState('')
@@ -334,7 +342,7 @@ export function Board() {
     preventDefault: true,
   })
   useHotkeys('shift+enter', () => {
-    if (expandedTaskId !== null) setSearchParams({ task: String(expandedTaskId), panel: '1' })
+    if (expandedTaskId !== null) openTaskPanel(expandedTaskId)
   }, { enabled: expandedTaskId !== null, preventDefault: true })
   useHotkeys('shift+slash', () => setShowShortcuts((current) => !current), { preventDefault: true })
 
@@ -366,7 +374,8 @@ export function Board() {
     [orderedColumns],
   )
 
-  const hasFilters = query.trim().length > 0 || priority !== 'all'
+  const [labelFilter] = useLabelFilter()
+  const hasFilters = query.trim().length > 0 || priority !== 'all' || Boolean(labelFilter)
 
   const topLevelTasks = useMemo(
     () => (tasks ?? []).filter((task) => !task.parent_task_id),
@@ -389,13 +398,14 @@ export function Board() {
     const needle = query.trim().toLowerCase()
     return topLevelTasks.filter((task) => {
       if (priority !== 'all' && task.priority !== priority) return false
+      if (labelFilter && !task.tags.some((tag) => tag.name === labelFilter)) return false
       if (!needle) return true
       return (
         task.title.toLowerCase().includes(needle) ||
         task.tags.some((tag) => tag.name.toLowerCase().includes(needle))
       )
     })
-  }, [topLevelTasks, query, priority])
+  }, [topLevelTasks, query, priority, labelFilter])
 
   const completedReminders = useMemo(() => {
     const needle = query.trim().toLowerCase()
@@ -941,7 +951,7 @@ export function Board() {
                       navigate(`/tasks/${task.id}`)
                       return
                     }
-                    setSearchParams({ task: String(task.id), panel: '1' })
+                    openTaskPanel(task.id)
                   }}
                   onCloseExpanded={() => setExpandedTaskId(null)}
                   onAddTask={async (title) => {

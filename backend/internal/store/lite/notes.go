@@ -25,6 +25,14 @@ func (s *Store) ListNotes(ctx context.Context, workspaceID *int64) ([]store.Note
 	return out, nil
 }
 
+func (s *Store) CountNotes(ctx context.Context, workspaceID *int64) (int64, error) {
+	var count int64
+	err := s.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM notes WHERE ?1 IS NULL OR workspace_id = ?1`,
+		ptrToNullInt64(workspaceID)).Scan(&count)
+	return count, err
+}
+
 func (s *Store) GetNote(ctx context.Context, id int64) (store.Note, error) {
 	n, err := s.q.GetNote(ctx, id)
 	return toNote(n), err

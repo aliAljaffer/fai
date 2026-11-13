@@ -147,6 +147,7 @@ export function BoardColumn({
   }
 
   const { colors } = useColumnColors()
+  const accent = columnColorCss(column, colors)
   const storedWidth = useColumnWidths((state) => state.widths[String(column.id)])
   const [previewWidth, setPreviewWidth] = useState<number | null>(null)
   const sectionRef = useRef<HTMLElement | null>(null)
@@ -204,7 +205,7 @@ export function BoardColumn({
             <span
               aria-hidden
               className="size-2 shrink-0 rounded-full"
-              style={{ backgroundColor: columnColorCss(column, colors) }}
+              style={{ backgroundColor: accent }}
             />
             <h2 className="min-w-0 truncate text-[0.8125rem] font-bold tracking-[0.01em]">
               {column.name}
@@ -313,6 +314,7 @@ export function BoardColumn({
               task={task}
               runningTaskId={runningTaskId}
               isDone={column.is_done}
+              accent={accent}
               columns={columns}
               subtasks={subtasksByParent.get(task.id)}
               subtasksByParent={subtasksByParent}
@@ -349,28 +351,10 @@ export function BoardColumn({
               No matching tasks.
             </p>
           ) : (
-            <button
-              type="button"
-              className="flex h-16 flex-col items-center justify-center gap-0.5 rounded-md border border-dashed text-xs text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
-              onClick={onStartAdding}
-            >
-              <span>No tasks yet</span>
-              <span className="font-medium text-foreground">Add the first task</span>
-            </button>
+            <p className="px-1.5 py-4 text-xs text-muted-foreground">No tasks</p>
           )
         )}
       </div>
-      {!adding && (
-        <Button
-          variant="ghost"
-          size="sm"
-          className="mt-1 w-full justify-start text-muted-foreground"
-          onClick={onStartAdding}
-        >
-          <Plus />
-          Add task
-        </Button>
-      )}
     </section>
   )
 }

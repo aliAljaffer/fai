@@ -601,6 +601,14 @@ export function useNotes(workspaceId?: number) {
   })
 }
 
+export function useNotesCount(workspaceId?: number) {
+  return useQuery({
+    queryKey: ['notes', 'count', workspaceId ?? null],
+    queryFn: () => api.get<{ count: number }>(`/notes/count${workspaceParam(workspaceId)}`),
+    select: (data) => data.count,
+  })
+}
+
 export function useNote(id: number | undefined) {
   return useQuery({
     queryKey: ['notes', id],
@@ -1241,6 +1249,7 @@ export function useDeleteNote() {
       // the editor from navigating away until retries finish.
       qc.removeQueries({ queryKey: ['notes', id] })
       qc.invalidateQueries({ queryKey: ['notes', 'list'] })
+      qc.invalidateQueries({ queryKey: ['notes', 'count'] })
     },
   })
 }

@@ -1,4 +1,4 @@
-import { Clock, Square } from 'lucide-react'
+import { Clock, Play, Square } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -101,17 +101,29 @@ export function TimerWidget({ variant }: { variant: 'panel' | 'compact' }) {
   const panel = variant === 'panel'
 
   return (
-    <div ref={containerRef} className="relative">
+    <div
+      ref={containerRef}
+      className={cn('relative', panel && 'rounded-xl border border-sidebar-border bg-background p-3.5')}
+    >
+      {panel && (
+        <>
+          <h2 className="mb-2 eyebrow">Tracking</h2>
+          <p className="mb-0.5 font-mono text-[0.6875rem] text-muted-foreground">No timer running</p>
+          <p aria-hidden className="font-mono text-2xl font-medium tracking-tight text-foreground/35 tabular-nums">
+            {formatClock(0)}
+          </p>
+        </>
+      )}
       <Button
-        variant="outline"
+        variant={panel ? 'default' : 'outline'}
         size="sm"
-        className={cn('text-muted-foreground', panel && 'h-9 w-full justify-start rounded-xl')}
+        className={panel ? 'mt-3 h-8 rounded-full px-3 text-[0.8125rem]' : 'text-muted-foreground'}
         aria-label="Start a timer"
         aria-expanded={open}
         aria-haspopup="dialog"
         onClick={() => setOpen((current) => !current)}
       >
-        <Clock className="size-3.5" />
+        {panel ? <Play className="fill-current" /> : <Clock className="size-3.5" />}
         <span className={cn(!panel && 'hidden sm:inline')}>{panel ? 'Start a timer' : 'Timer'}</span>
       </Button>
       {open && (
