@@ -1,9 +1,10 @@
 import { NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
-import { useEffect, useRef } from 'react'
+import { lazy, Suspense, useEffect, useRef, useSyncExternalStore } from 'react'
 import { useHotkeys } from 'react-hotkeys-hook'
 import { Search } from 'lucide-react'
 import { Toaster } from '@/components/ui/sonner'
 import { Button } from '@/components/ui/button'
+import { Skeleton } from '@/components/ui/skeleton'
 import {
   Select,
   SelectContent,
@@ -13,15 +14,7 @@ import {
 } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 import { AuthCallback } from './pages/AuthCallback'
-import { Board } from './pages/Board'
-import { Calendar } from './pages/Calendar'
-import { Chat } from './pages/Chat'
-import { List } from './pages/List'
-import { Notes } from './pages/Notes'
 import { Overview } from './pages/Overview'
-import { NoteEditor } from './pages/NoteEditor'
-import { Settings } from './pages/Settings'
-import { Stats } from './pages/Stats'
 import { CommandPalette } from './components/CommandPalette'
 import { AppIcon } from './components/Logo'
 import { ThemeController } from './components/ThemeController'
@@ -31,12 +24,41 @@ import { JiraImportBar } from './components/JiraImportBar'
 import { TimerWidget } from './components/TimerWidget'
 import { UpdateIndicator } from './components/UpdateIndicator'
 import { TaskDetailSheet } from './components/board/TaskDetailSheet'
-import { TaskDetailPage } from './pages/TaskDetailPage'
 import { useUIStore } from './store/ui'
 import { useWorkspaceStore } from './store/workspace'
 import { useWorkspaces } from './api/hooks'
 import { useLiveUpdates } from './lib/live'
 import { undoLatest } from './lib/undo'
+
+const lazyPage = <K extends string>(load: () => Promise<Record<K, React.ComponentType>>, name: K) =>
+  lazy(() => load().then((m) => ({ default: m[name] })))
+
+const Board = lazyPage(() => import('./pages/Board'), 'Board')
+const Calendar = lazyPage(() => import('./pages/Calendar'), 'Calendar')
+const Chat = lazyPage(() => import('./pages/Chat'), 'Chat')
+const List = lazyPage(() => import('./pages/List'), 'List')
+const Notes = lazyPage(() => import('./pages/Notes'), 'Notes')
+const NoteEditor = lazyPage(() => import('./pages/NoteEditor'), 'NoteEditor')
+const Settings = lazyPage(() => import('./pages/Settings'), 'Settings')
+const Stats = lazyPage(() => import('./pages/Stats'), 'Stats')
+const TaskDetailPage = lazyPage(() => import('./pages/TaskDetailPage'), 'TaskDetailPage')
+
+const reducedMotionQuery = '(prefers-reduced-motion: reduce)'
+
+function subscribeReducedMotion(notify: () => void) {
+  const media = window.matchMedia(reducedMotionQuery)
+  media.addEventListener('change', notify)
+  return () => media.removeEventListener('change', notify)
+}
+
+function RouteFallback() {
+  return (
+    <div className="flex flex-col gap-3" role="status" aria-label="Loading page">
+      <Skeleton className="h-8 w-48" />
+      <Skeleton className="h-40 w-full" />
+    </div>
+  )
+}
 
 const NAV_ITEMS = [
   { to: '/', label: 'Overview', end: true },
@@ -85,6 +107,11 @@ export function App() {
   const { activeWorkspaceId, setActiveWorkspaceId } = useWorkspaceStore()
   const location = useLocation()
   const navigate = useNavigate()
+  const viewTransition = !useSyncExternalStore(
+    subscribeReducedMotion,
+    () => window.matchMedia(reducedMotionQuery).matches,
+    () => false,
+  )
   const announcementRef = useRef<HTMLDivElement>(null)
   const storedWorkspace = workspaces?.find((workspace) => workspace.id === activeWorkspaceId)
   const activeWorkspace = storedWorkspace ?? workspaces?.[0]
@@ -99,17 +126,17 @@ export function App() {
     if (!bridge?.onMenuCommand) return
     return bridge.onMenuCommand((command) => {
       if (command === 'new-task') {
-        navigate('/board')
+        navigate('/board', { viewTransition })
         requestNewTask()
       } else if (command === 'command-palette') {
         setCommandOpen(true)
       } else if (command === 'settings') {
-        navigate('/settings')
+        navigate('/settings', { viewTransition })
       } else if (command === 'undo') {
         undoLatest()
       }
     })
-  }, [navigate, requestNewTask, setCommandOpen])
+  }, [navigate, requestNewTask, setCommandOpen, viewTransition])
 
   useEffect(() => {
     if (!workspaces?.length || storedWorkspace) return
@@ -141,6 +168,7 @@ export function App() {
         <NavLink
           to="/"
           end
+          viewTransition={viewTransition}
           aria-label="fai home"
           className="mr-1 flex items-center gap-2 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
         >
@@ -184,7 +212,13 @@ export function App() {
         )}
         <div className="hidden items-center gap-4 lg:flex">
           {NAV_ITEMS.map((item) => (
-            <NavLink key={item.to} to={item.to} end={item.end} className={navLinkClass}>
+            <NavLink
+              key={item.to}
+              to={item.to}
+              end={item.end}
+              viewTransition={viewTransition}
+              className={navLinkClass}
+            >
               {item.label}
             </NavLink>
           ))}
@@ -218,6 +252,7 @@ export function App() {
             key={item.to}
             to={item.to}
             end={item.end}
+            viewTransition={viewTransition}
             className={({ isActive }) =>
               cn(
                 'flex min-w-16 flex-1 flex-col items-center justify-center px-2 py-2 text-[0.65rem] text-muted-foreground',
@@ -230,6 +265,7 @@ export function App() {
         ))}
       </nav>
       <main id="main-content" tabIndex={-1} className="flex flex-1 flex-col p-4 pb-20 outline-none sm:p-6 lg:pb-6">
+        <Suspense fallback={<RouteFallback />}>
         <Routes>
           <Route path="/" element={<Overview />} />
           <Route path="/board" element={<Board />} />
@@ -243,6 +279,7 @@ export function App() {
           <Route path="/settings" element={<Settings />} />
           <Route path="/auth/callback" element={<AuthCallback />} />
         </Routes>
+        </Suspense>
       </main>
       <TaskDetailSheet />
       <CommandPalette />

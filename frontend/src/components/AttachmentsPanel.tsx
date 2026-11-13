@@ -12,6 +12,18 @@ import {
 } from '../api/hooks'
 import { formatBytes } from '../lib/format'
 
+function FileName({ name }: { name: string }) {
+  const dot = name.lastIndexOf('.')
+  const stem = dot > 0 ? name.slice(0, dot) : name
+  const extension = dot > 0 ? name.slice(dot) : ''
+  return (
+    <span className="flex min-w-0 whitespace-nowrap" title={name}>
+      <span className="truncate">{stem}</span>
+      {extension}
+    </span>
+  )
+}
+
 export function AttachmentsPanel({ taskId, noteId }: { taskId?: number; noteId?: number }) {
   const taskAttachments = useTaskAttachments(taskId)
   const noteAttachments = useNoteAttachments(noteId)
@@ -54,9 +66,7 @@ export function AttachmentsPanel({ taskId, noteId }: { taskId?: number; noteId?:
       {attachments.map((a) => (
         <div key={a.id} className="flex items-center gap-2 rounded-lg border px-2 py-1.5 text-sm">
           <Paperclip className="size-4 shrink-0 text-muted-foreground" />
-          <span className="min-w-0 truncate" title={a.filename}>
-            {a.filename}
-          </span>
+          <FileName name={a.filename} />
           <span className="ml-auto shrink-0 text-xs text-muted-foreground">{formatBytes(a.size_bytes)}</span>
           <Button
             size="icon-sm"

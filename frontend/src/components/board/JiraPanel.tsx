@@ -95,7 +95,7 @@ export function JiraPanel({ taskId }: { taskId: number }) {
             onFocus={() => setShowSuggestions(true)}
             onKeyDown={(event) => {
               if (event.key === 'Escape') setOpen(false)
-              if (event.key === 'Enter' && key.trim() && !linkJira.isPending) {
+              if (event.key === 'Enter' && !event.nativeEvent.isComposing && key.trim() && !linkJira.isPending) {
                 event.preventDefault()
                 linkJira.mutate(key.trim(), {
                   onSuccess: () => setOpen(false),

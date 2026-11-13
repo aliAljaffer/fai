@@ -22,19 +22,12 @@ export function JiraImportBar() {
               <span>
                 Importing from Jira: {handled} of {data.total}
               </span>
-              <div
-                className="mt-1 h-1 overflow-hidden rounded bg-muted"
-                role="progressbar"
+              <progress
+                className="mt-1 block h-1 w-full appearance-none overflow-clip rounded border-0 bg-muted [&::-moz-progress-bar]:bg-primary [&::-webkit-progress-bar]:bg-muted [&::-webkit-progress-value]:bg-primary [&::-webkit-progress-value]:transition-[width] [&::-webkit-progress-value]:duration-300"
                 aria-label="Jira import progress"
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-valuenow={percent}
-              >
-                <div
-                  className="h-full bg-primary transition-[width] duration-300"
-                  style={{ width: `${percent}%` }}
-                />
-              </div>
+                max={100}
+                value={percent}
+              />
             </>
           ) : data.error ? (
             <span className="text-destructive">Jira import failed: {data.error}</span>

@@ -1,6 +1,6 @@
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { useState, type KeyboardEventHandler } from 'react'
+import type { KeyboardEventHandler } from 'react'
 import { ChevronRight, GripVertical, Play, Square } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -105,7 +105,6 @@ function SortableTaskCard(props: TaskCardProps) {
   // so Space and arrows on the card's buttons do not start a drag.
   const { onKeyDown, ...cardListeners } = listeners ?? {}
   const running = props.runningTaskId === props.task.id
-  const [expanded, setExpanded] = useState(false)
   const isArc = props.task.kind === 'arc'
   const flattened = flattenSubtasks(props.subtasksByParent, props.task.id)
   const nodes: SubtaskNode[] = flattened.length
@@ -153,60 +152,50 @@ function SortableTaskCard(props: TaskCardProps) {
         <TaskCardBody task={props.task} status={status} isDone={props.isDone} />
       </div>
       {nodes.length > 0 && (
-        <div className="pointer-events-none relative z-10 mt-2 flex flex-col gap-1">
-          <button
-            type="button"
-            aria-expanded={expanded}
-            className="pointer-events-auto flex w-fit items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-            onClick={(event) => {
-              event.stopPropagation()
-              setExpanded((current) => !current)
-            }}
+        <details className="group/steps pointer-events-none relative z-10 mt-2">
+          <summary
+            className="pointer-events-auto flex w-fit cursor-pointer list-none items-center gap-1 rounded-sm text-xs text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 [&::-webkit-details-marker]:hidden"
             onPointerDown={(event) => event.stopPropagation()}
           >
-            <ChevronRight
-              className={cn('size-3 transition-transform', expanded && 'rotate-90')}
-            />
+            <ChevronRight className="size-3 transition-transform group-open/steps:rotate-90" />
             {doneCount}/{counted.length} {isArc ? 'tasks' : 'steps'}
-          </button>
-          {expanded && (
-            <ul className="flex flex-col gap-1 border-t pt-1.5">
-              {nodes.map(({ task: subtask, depth }) => {
-                const done = Boolean(subtask.completed_at) || props.doneColumnIds?.has(subtask.column_id)
-                const isStep = normalizeKind(subtask.kind) === 'step'
-                return (
-                  <li
-                    key={subtask.id}
-                    className="flex items-center gap-1.5 text-xs"
-                    style={depth ? { paddingLeft: depth * 12 } : undefined}
-                  >
-                    {isStep ? (
-                      <Checkbox
-                        checked={done}
-                        className="pointer-events-auto"
-                        aria-label={`Mark ${subtask.title} done`}
-                        disabled={!props.onToggleSubtask}
-                        onCheckedChange={() => props.onToggleSubtask?.(subtask)}
-                        onClick={(event) => event.stopPropagation()}
-                        onPointerDown={(event) => event.stopPropagation()}
-                      />
-                    ) : (
-                      <TaskTypeIcon
-                        kind={subtask.kind}
-                        status={taskStatus(subtask, props.columns)}
-                        size={12}
-                      />
-                    )}
-                    {subtask.created_by_fai && <FaiTaskIcon size={11} />}
-                    <span className={cn(done && 'text-muted-foreground line-through')}>
-                      {subtask.title}
-                    </span>
-                  </li>
-                )
-              })}
-            </ul>
-          )}
-        </div>
+          </summary>
+          <ul className="mt-1 flex flex-col gap-1 border-t pt-1.5">
+            {nodes.map(({ task: subtask, depth }) => {
+              const done = Boolean(subtask.completed_at) || props.doneColumnIds?.has(subtask.column_id)
+              const isStep = normalizeKind(subtask.kind) === 'step'
+              return (
+                <li
+                  key={subtask.id}
+                  className="flex items-center gap-1.5 text-xs"
+                  style={depth ? { paddingLeft: depth * 12 } : undefined}
+                >
+                  {isStep ? (
+                    <Checkbox
+                      checked={done}
+                      className="pointer-events-auto"
+                      aria-label={`Mark ${subtask.title} done`}
+                      disabled={!props.onToggleSubtask}
+                      onCheckedChange={() => props.onToggleSubtask?.(subtask)}
+                      onClick={(event) => event.stopPropagation()}
+                      onPointerDown={(event) => event.stopPropagation()}
+                    />
+                  ) : (
+                    <TaskTypeIcon
+                      kind={subtask.kind}
+                      status={taskStatus(subtask, props.columns)}
+                      size={12}
+                    />
+                  )}
+                  {subtask.created_by_fai && <FaiTaskIcon size={11} />}
+                  <span className={cn(done && 'text-muted-foreground line-through')}>
+                    {subtask.title}
+                  </span>
+                </li>
+              )
+            })}
+          </ul>
+        </details>
       )}
       {props.onToggleTimer && (
         <Button

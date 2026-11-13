@@ -1,4 +1,3 @@
-import MDEditor from '@uiw/react-md-editor'
 import { useTheme } from 'next-themes'
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
@@ -10,6 +9,7 @@ import { RefPicker } from '../components/refs/RefPicker'
 import { useRefPicker } from '../components/refs/useRefPicker'
 import { useDeleteNote, useNote, useUpdateNote } from '../api/hooks'
 import { toast } from 'sonner'
+import { LazyMDEditor } from '@/components/LazyMDEditor'
 
 export function NoteEditor() {
   const { id } = useParams()
@@ -111,7 +111,7 @@ export function NoteEditor() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <MDEditor
+        <LazyMDEditor
           value={body}
           onChange={(value, event) => {
             setBody(value ?? '')
@@ -124,6 +124,7 @@ export function NoteEditor() {
             onSelect: refs.sync,
           }}
           height={400}
+          fallbackHeight={400}
           preview="edit"
           data-color-mode={resolvedTheme === "light" ? "light" : "dark"}
         />

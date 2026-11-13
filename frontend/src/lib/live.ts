@@ -16,13 +16,26 @@ export function useLiveUpdates() {
     let retryTimer: number | undefined
     let invalidateTimer: number | undefined
 
+    let pending = false
+
     const scheduleInvalidate = () => {
+      if (document.hidden) {
+        pending = true
+        return
+      }
       if (invalidateTimer) return
       invalidateTimer = window.setTimeout(() => {
         invalidateTimer = undefined
         queryClient.invalidateQueries()
       }, invalidateDelay)
     }
+
+    const onVisibility = () => {
+      if (document.hidden || !pending) return
+      pending = false
+      scheduleInvalidate()
+    }
+    document.addEventListener('visibilitychange', onVisibility)
 
     const connect = async () => {
       try {
@@ -61,6 +74,7 @@ export function useLiveUpdates() {
     connect()
     return () => {
       stopped = true
+      document.removeEventListener('visibilitychange', onVisibility)
       controller.abort()
       if (retryTimer) window.clearTimeout(retryTimer)
       if (invalidateTimer) window.clearTimeout(invalidateTimer)

@@ -74,6 +74,7 @@ func (s *Server) aiTask(w http.ResponseWriter, r *http.Request) {
 	}
 	var body struct {
 		Text        string `json:"text"`
+		TZ          string `json:"tz"`
 		TZOffset    *int   `json:"tz_offset"`
 		BoardID     int64  `json:"board_id"`
 		ColumnID    int64  `json:"column_id"`
@@ -99,7 +100,7 @@ func (s *Server) aiTask(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	now := localNow(body.TZOffset)
+	now := localNow(ResolveLocation(body.TZ, body.TZOffset))
 	reply, err := provider.Chat(r.Context(), ai.StepSystem, []ai.ChatMessage{{
 		Role:    "user",
 		Content: aiTaskPrompt(text, now),

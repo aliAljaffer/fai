@@ -222,6 +222,7 @@ func sanitiseLabels(raw []string) []string {
 type aiChatBody struct {
 	Messages    []ai.ChatMessage `json:"messages"`
 	Prompt      string           `json:"prompt"`
+	TZ          string           `json:"tz"`
 	TZOffset    *int             `json:"tz_offset"`
 	WorkspaceID int64            `json:"workspace_id"`
 }
@@ -232,7 +233,7 @@ type ChatOutcome struct {
 	Pending *PendingChatAction
 }
 
-func (s *Server) RunChat(ctx context.Context, messages []ai.ChatMessage, tzOffset *int) (ChatOutcome, error) {
+func (s *Server) RunChat(ctx context.Context, messages []ai.ChatMessage, loc *time.Location) (ChatOutcome, error) {
 	provider := s.aiProvider(ctx)
 	if provider == nil {
 		return ChatOutcome{}, fmt.Errorf("AI is not configured")
@@ -247,7 +248,7 @@ func (s *Server) RunChat(ctx context.Context, messages []ai.ChatMessage, tzOffse
 		return ChatOutcome{}, fmt.Errorf("the last message must come from the user")
 	}
 
-	now := localNow(tzOffset)
+	now := localNow(loc)
 	system := ai.StepSystem + "\n\nCurrent local time: " + now.Format("Monday, 2006-01-02 15:04 -07:00") + ".\n" + chatActionInstructions
 	if context := s.faiContext(ctx); context != "" {
 		system += "\n\nOpen tasks with their steps, board columns, open reminders, and note titles from Fai. Use them only when relevant, and do not invent anything that is not listed:\n" + context
@@ -317,7 +318,7 @@ func (s *Server) aiChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	outcome, err := s.RunChat(r.Context(), messages, body.TZOffset)
+	outcome, err := s.RunChat(r.Context(), messages, ResolveLocation(body.TZ, body.TZOffset))
 	if err != nil {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return

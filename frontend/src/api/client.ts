@@ -15,7 +15,8 @@ async function request<T>(path: string, init?: RequestInit, json = true): Promis
 }
 
 export const api = {
-  get: <T>(path: string) => request<T>(path),
+  get: <T>(path: string, options?: { background?: boolean }) =>
+    request<T>(path, options?.background ? { priority: 'low' } : undefined),
   post: <T>(path: string, body?: unknown) =>
     request<T>(path, { method: 'POST', body: body ? JSON.stringify(body) : undefined }),
   patch: <T>(path: string, body?: unknown) =>

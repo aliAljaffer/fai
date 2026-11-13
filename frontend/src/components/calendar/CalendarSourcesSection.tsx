@@ -128,12 +128,13 @@ export function CalendarSourcesSection() {
             onChange={(event) => setName(event.target.value)}
           />
           <Input
+            type="url"
             value={url}
             placeholder="https://example.com/calendar.ics"
             aria-label="Calendar feed URL"
             onChange={(event) => setURL(event.target.value)}
             onKeyDown={(event) => {
-              if (event.key === 'Enter') {
+              if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
                 event.preventDefault()
                 void submit()
               }
