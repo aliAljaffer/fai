@@ -25,7 +25,7 @@ the short install commands.
 
 - Go 1.27
 - Node 22
-- Docker
+- Docker and Make for the Compose stacks
 - SQLite or PostgreSQL
 - `goose` and `sqlc` for schema changes
 - Keycloak for OIDC mode, optional for local development
@@ -33,35 +33,48 @@ the short install commands.
 ## Local development
 
 ```sh
-make dev-db-up
-make migrate-up
-cp backend/.env.example backend/.env
 make backend-run
 make frontend-run
 ```
 
-The local backend uses `DISABLE_AUTH=true`. The frontend dev server proxies
-`/api` to `:8080`.
+The backend listens on `:8080` with `DISABLE_AUTH=true`, SQLite at
+`backend/data/fai.db`, and attachments under `backend/data/attachments`. The
+Vite dev server listens on `:5173` and proxies `/api` to `:8080`.
+
+To develop against PostgreSQL instead, start one and point the backend at it:
+
+```sh
+make dev-db-up
+# DATABASE_URL=postgres://fai:fai@localhost:5432/fai?sslmode=disable
+```
+
+Put that line in `backend/.env` or pass it in the shell. The backend applies
+pending migrations at startup. To skip the database and run the whole app as
+containers, use `make up` instead.
 
 The backend uses Go, chi, pgx, sqlc, and goose. The frontend uses React and
 Vite. The desktop shell uses Electron. Storage uses SQLite or PostgreSQL.
 
 ## Docker Compose
 
-The production Compose stack uses SQLite, a bundled ntfy service, and Caddy for
-HTTP Basic authentication and TLS. It does not require an identity provider.
+There are two stacks. Both need only Docker and Make.
 
-1. Copy `.env.prod.example` to `.env.prod`.
-2. Set `FAI_DOMAIN`, `FAI_AUTH_USER`, `FAI_AUTH_HASH`, and `ICS_TOKEN`.
-3. Generate the password hash with `make hash-password`.
-4. Start the stack:
+- `docker-compose.yml` builds from the checkout, uses SQLite, and disables
+  authentication. Run it with `make up`, then open <http://localhost:8080>.
+  `make down` stops it.
+- `docker-compose.prod.yml` pulls the published images and adds Caddy for TLS
+  and HTTP Basic auth. Run it with `make up-prod`.
 
-```sh
-docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
-```
+For the production stack:
 
-Pass `--env-file .env.prod` on the command line. Compose does not load that file
-automatically, and values such as `FAI_DOMAIN` and `PUBLIC_URL` would be empty.
+1. Copy `.env.example` to `.env`.
+2. Set `FAI_DOMAIN` to a hostname whose DNS points at this server.
+3. Set `FAI_AUTH_PASSWORD` to the site password.
+4. Start the stack with `make up-prod`.
+
+Caddy hashes the password at container start, so no hash generation step is
+needed. Every other value in `.env` is optional. `FAI_AUTH_USER` defaults to
+`admin`.
 
 Caddy shows the browser's Basic authentication prompt and sets
 `X-Forwarded-User` for the API. The backend trusts that header in
@@ -71,7 +84,12 @@ bypasses Basic authentication for the ICS feed, which uses its URL token.
 Vite embeds `VITE_*` values when it builds the frontend. The Kubernetes image
 includes `VITE_OIDC_AUTHORITY`, but the Compose stack needs a frontend without
 client-side OIDC. CI publishes `ghcr.io/alialjaffer/fai-frontend:compose` for
-this deployment. Build it locally with `make build-frontend-compose`.
+this deployment. To run the production stack from source, build both images
+with `make compose-build` before `make up-prod`.
+
+The two stacks use separate Compose projects, so they can exist on one machine
+without sharing containers or volumes. The local stack stores its data in the
+`fai-dev` project volumes.
 
 ## Desktop app
 
@@ -145,10 +163,11 @@ start if the selected auth mode lacks its required configuration.
 
 Set `DATABASE_URL` to select the database:
 
+- Unset defaults to `sqlite://./data/fai.db`.
 - `postgres://...` selects PostgreSQL. The backend applies pending goose
   migrations at startup.
-- `sqlite://path/to/file.db` selects SQLite. The backend creates the schema on
-  first run.
+- `sqlite://path/to/file.db` selects SQLite. The backend creates the directory
+  and the schema on first run.
 
 Both use the `internal/store.Store` interface. Implementations are in
 `backend/internal/store/pg` and `backend/internal/store/lite`.
@@ -158,8 +177,8 @@ Both use the `internal/store.Store` interface. Implementations are in
 Tasks and notes accept files up to 25 MiB through
 `POST /api/tasks/{id}/attachments` and `POST /api/notes/{id}/attachments`.
 Metadata is stored in the database. File bytes are stored under
-`ATTACHMENTS_DIR`. Uploads require `ATTACHMENTS_DIR` and stop when storage
-reaches 10 GiB.
+`ATTACHMENTS_DIR`, which defaults to `./data/attachments`. Uploads stop when
+storage reaches 10 GiB.
 
 ### Calendar feed
 
@@ -167,10 +186,11 @@ Subscribe to `GET /api/calendar.ics?token=<ICS_TOKEN>` from Apple Calendar or
 another ICS client. The read-only feed contains open tasks with due dates and open reminders. It
 does not include calendars imported into the web app.
 
-Set `ICS_TOKEN` and `PUBLIC_URL`. Generate the token with
-`openssl rand -hex 32`. `PUBLIC_URL` supplies task links inside events.
-Changing the token breaks existing subscriptions. In Docker Compose, Caddy
-routes the ICS path around Basic authentication.
+Set `ICS_TOKEN` to enable the feed. Generate the token with
+`openssl rand -hex 32`. `PUBLIC_URL` supplies task links inside events and
+defaults to the request's own host. Changing the token breaks existing
+subscriptions. In Docker Compose, Caddy routes the ICS path around Basic
+authentication.
 
 ### Repeating reminders and tasks
 
@@ -294,8 +314,9 @@ Telegram uses `getUpdates` long polling and needs no public route. Configure:
 - `TELEGRAM_STATE_FILE` (optional, defaults to `fai-telegram-offset`)
 
 The state file holds the update offset. The history file uses the same path
-plus `-history`. In Docker Compose, set `TELEGRAM_STATE_FILE=/data/fai-telegram-offset`.
-That path is on the `faidata` volume and survives container recreation.
+plus `-history`. The production Compose stack defaults it to
+`/data/fai-telegram-offset` on the `faidata` volume, so it survives container
+recreation.
 
 ### Jira
 

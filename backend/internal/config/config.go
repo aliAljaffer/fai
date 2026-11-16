@@ -84,7 +84,7 @@ func (c Config) SQLitePath() string {
 
 func Load() Config {
 	return Config{
-		DatabaseURL:           os.Getenv("DATABASE_URL"),
+		DatabaseURL:           envOr("DATABASE_URL", "sqlite://./data/fai.db"),
 		Port:                  envOr("PORT", "8080"),
 		BindAddr:              os.Getenv("BIND_ADDR"),
 		MetricsAddr:           os.Getenv("METRICS_ADDR"),
@@ -109,7 +109,7 @@ func Load() Config {
 		SMTPTo:                os.Getenv("SMTP_TO"),
 		ICSToken:              os.Getenv("ICS_TOKEN"),
 		PublicURL:             os.Getenv("PUBLIC_URL"),
-		AttachmentsDir:        os.Getenv("ATTACHMENTS_DIR"),
+		AttachmentsDir:        envOr("ATTACHMENTS_DIR", "./data/attachments"),
 		AIProvider:            os.Getenv("AI_PROVIDER"),
 		AIBaseURL:             os.Getenv("AI_BASE_URL"),
 		AIAPIKey:              os.Getenv("AI_API_KEY"),

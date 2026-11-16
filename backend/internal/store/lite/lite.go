@@ -7,6 +7,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"os"
+	"path/filepath"
 
 	_ "modernc.org/sqlite"
 
@@ -29,6 +31,11 @@ var _ store.Store = (*Store)(nil)
 // with no distributed-system need for a pool, and it sidesteps having to push
 // PRAGMA foreign_keys=ON onto every pooled connection individually.
 func New(path string) (*Store, error) {
+	if dir := filepath.Dir(path); dir != "." {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return nil, fmt.Errorf("creating sqlite directory: %w", err)
+		}
+	}
 	db, err := sql.Open("sqlite", path)
 	if err != nil {
 		return nil, fmt.Errorf("opening sqlite db: %w", err)

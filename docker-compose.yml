@@ -1,14 +1,45 @@
+# Local stack: builds this checkout, SQLite, no auth. http://localhost:8080
+name: fai-dev
+
 services:
+  backend:
+    build: ./backend
+    environment:
+      DATABASE_URL: sqlite:///data/fai.db
+      DISABLE_AUTH: "true"
+      ATTACHMENTS_DIR: /data/attachments
+      PUBLIC_URL: http://localhost:8080
+      NTFY_URL: http://ntfy
+      NTFY_TOPIC: fai-reminders
+    volumes:
+      - faidata:/data
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    volumes:
+      - ./frontend/nginx.dev.conf:/etc/nginx/conf.d/default.conf:ro
+    ports: ["127.0.0.1:8080:80"]
+    depends_on: [backend]
+    restart: unless-stopped
+
+  ntfy:
+    image: binwiederhier/ntfy
+    command: serve
+    volumes: [ntfydata:/var/lib/ntfy]
+    restart: unless-stopped
+
   postgres:
     image: postgres:17-alpine
+    profiles: [postgres] # opt in with `make dev-db-up`
     environment:
       POSTGRES_USER: fai
       POSTGRES_PASSWORD: fai
       POSTGRES_DB: fai
-    ports:
-      - "5432:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
+    ports: ["127.0.0.1:5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
 
 volumes:
-  pgdata:
+  faidata: {}
+  ntfydata: {}
+  pgdata: {}

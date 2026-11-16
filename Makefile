@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: dev-db-up dev-db-down migrate-up migrate-new sqlc-generate sqlc-generate-sqlite backend-run frontend-run build build-images push-images build-frontend-compose hash-password compose-prod-up compose-prod-down electron-dev electron-dist
+.PHONY: up down up-prod down-prod dev-db-up dev-db-down migrate-up migrate-new sqlc-generate sqlc-generate-sqlite backend-run frontend-run build build-images push-images compose-build electron-dev electron-dist
 
 GOOSE := $(HOME)/go/bin/goose
 SQLC := $(HOME)/go/bin/sqlc
@@ -8,11 +8,25 @@ DB_URL := postgres://fai:fai@localhost:5432/fai?sslmode=disable
 REGISTRY := ghcr.io/alialjaffer
 OIDC_AUTHORITY ?= https://kc.alialjaffer.com/realms/homelab
 
+# Local stack, from this checkout: http://localhost:8080
+up:
+	docker compose up -d --build
+
+down:
+	docker compose down
+
+# Production stack. Needs FAI_DOMAIN and FAI_AUTH_PASSWORD in .env.
+up-prod:
+	docker compose -f docker-compose.prod.yml up -d
+
+down-prod:
+	docker compose -f docker-compose.prod.yml down
+
 dev-db-up:
-	docker compose up -d postgres
+	docker compose --profile postgres up -d postgres
 
 dev-db-down:
-	docker compose down
+	docker compose stop postgres
 
 migrate-up:
 	$(GOOSE) -dir backend/migrations postgres "$(DB_URL)" up
@@ -26,14 +40,8 @@ sqlc-generate:
 sqlc-generate-sqlite:
 	cd backend && $(SQLC) generate -f sqlc.sqlite.yaml
 
-compose-prod-up:
-	docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
-
-compose-prod-down:
-	docker compose -f docker-compose.prod.yml --env-file .env.prod down
-
 backend-run:
-	cd backend && go run ./cmd/api
+	cd backend && DISABLE_AUTH=true go run ./cmd/api
 
 frontend-run:
 	cd frontend && npm run dev
@@ -44,7 +52,7 @@ build:
 
 # Kubernetes images bake in the OIDC authority; CI publishes the same thing
 # tagged by commit SHA. The compose deployment needs the separate target below
-# because oauth2-proxy already gates every request there.
+# because Caddy already gates every request there.
 build-images:
 	docker build -t $(REGISTRY)/fai-backend:latest backend/
 	docker build -t $(REGISTRY)/fai-frontend:latest --build-arg VITE_OIDC_AUTHORITY=$(OIDC_AUTHORITY) frontend/
@@ -54,7 +62,9 @@ push-images:
 	docker push $(REGISTRY)/fai-backend:latest
 	docker push $(REGISTRY)/fai-frontend:latest
 
-build-frontend-compose:
+# Builds the images docker-compose.prod.yml uses, for running it from source.
+compose-build:
+	docker build -t $(REGISTRY)/fai-backend:latest backend/
 	docker build -t $(REGISTRY)/fai-frontend:compose frontend/
 
 electron-dev:
@@ -66,8 +76,3 @@ electron-dist:
 	cd frontend && npm run build
 	cd backend && go build -trimpath -ldflags="-s -w" -o bin/fai-backend ./cmd/api
 	cd electron && npm install && npm run dist
-
-# Prints the bcrypt hash already $$-escaped for Compose's env_file interpolation.
-hash-password:
-	@read -rsp 'Password: ' pw; echo; \
-	printf '%s\n' "$$pw" | docker run --rm -i caddy:alpine caddy hash-password | sed 's/\$$/\$$\$$/g'

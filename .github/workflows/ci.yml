@@ -11,7 +11,8 @@ on:
       - ".gitignore"
       - "docker-compose*.yml"
       - "Caddyfile.prod"
-      - ".env.prod.example"
+      - ".env.example"
+      - "caddy-entrypoint.sh"
       - "Makefile"
 
 permissions:
