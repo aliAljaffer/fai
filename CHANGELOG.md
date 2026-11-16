@@ -1,5 +1,44 @@
 # Changelog
 
+## v0.3.0
+
+### Changes
+
+- Make labels belong to a workspace: scope the tags table, API, backups and frontend label queries by workspace, and split existing shared labels per workspace.
+- Collapse reminders into a rail, move board actions into the board menu, show active filters in the toolbar, and drop the coloured card side bar
+- Redesign task cards and the sidebar: flat status-accented cards, a label gallery that filters the board and list in place, a notes count endpoint, and an idle timer panel
+- Move the app to a sidebar layout with a shared page header, resizable board columns, and task details under the clicked card
+- Apply modern web guidance: route code-splitting, IANA timezones, report-only CSP, and native form, disclosure and progress fixes
+- Parse repeat phrases in the natural-language reminder and task inputs
+- Add repeating reminders and tasks, timer chat actions, saved Telegram history, and reminders in the calendar feed
+- ci: attribute manifest commits to update-manifests-homelab
+- List every arc task with its step count in the chat confirmation
+- Accept Telegram voice notes up to 10 minutes and transcribe long notes in 60-second parts
+- Let the chat agent edit, complete, delete, tag, comment on, and log time for tasks, and manage reminders and notes
+- Add quarantine update instructions [skip ci]
+- Use the owner timezone for Telegram relative dates
+- Clear stale Telegram confirmations on new messages
+- Document confirmation expiry
+- Confirm every mutating chat action
+- Document OpenCode Go primary with free fallback
+- Add AI model fallback and OpenCode Go session header
+- Add OpenAI-compatible speech-to-text
+- Parallelize independent I/O in hot paths
+- removed uppercasing where not needed, greeting is now date-based
+- Make the whole board card draggable and fix the drag preview loop
+- Fix board drag placement and add drag tests
+- Send macOS users to the download page instead of the unsigned updater [skip ci]
+- Generate release notes automatically and sign macOS builds [skip ci]
+- Add the changelog
+
+### Dependencies
+
+- Bump the desktop version to 0.3.0
+- Bump GitHub Actions off Node 20 [skip ci]
+- Group Dependabot updates per ecosystem to reduce PR count
+
+**Full changelog:** https://github.com/aliAljaffer/fai/compare/v0.2.0...v0.3.0
+
 ## v0.2.0
 
 ### AI and chat
