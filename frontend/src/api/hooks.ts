@@ -1196,6 +1196,7 @@ export function useCreateTaskFromOutcome(outcomeId: number) {
 }
 
 export interface JiraImportStatus {
+  configured: boolean
   running: boolean
   total: number
   imported: number

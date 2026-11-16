@@ -1126,6 +1126,8 @@ export function Settings() {
   const { data: workspaces } = useWorkspaces()
   const jiraImport = useJiraImport()
   const jiraImportStatus = useJiraImportStatus()
+  // Undefined while loading stays enabled so the button does not flicker.
+  const jiraConfigured = jiraImportStatus.data?.configured ?? true
   const { data: feed } = useCalendarFeedURL(workspaceId)
   const selectedBoardId = useUIStore((state) => state.selectedBoardId)
   const board =
@@ -1172,6 +1174,12 @@ export function Settings() {
             Already-imported issues are skipped unless "force update" is checked. Completion dates
             are taken from Jira.
           </p>
+          {!jiraConfigured && (
+            <p className="text-sm text-muted-foreground">
+              Jira is not configured. Set JIRA_BASE_URL, JIRA_EMAIL, and JIRA_API_TOKEN on the
+              server, then restart fai.
+            </p>
+          )}
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium" htmlFor="jira-import-board">
               Target board
@@ -1214,7 +1222,7 @@ export function Settings() {
             Force update already-imported issues
           </label>
           <Button
-            disabled={!importBoard || jiraImport.isPending || jiraImportStatus.data?.running}
+            disabled={!importBoard || !jiraConfigured || jiraImport.isPending || jiraImportStatus.data?.running}
             onClick={() => {
               if (!importBoard) return
               jiraImport.mutate(

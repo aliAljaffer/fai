@@ -624,3 +624,33 @@ func TestJiraImportRejectsConcurrentRun(t *testing.T) {
 	close(release)
 	waitJiraFinished(t, server)
 }
+
+// TestJiraImportStatusReportsConfiguration keeps the UI able to explain an
+// unconfigured server instead of showing a button that always fails.
+func TestJiraImportStatusReportsConfiguration(t *testing.T) {
+	for _, configured := range []bool{false, true} {
+		server := &Server{Store: actionTestStore(t)}
+		if configured {
+			server.Jira = jira.New("https://example.atlassian.net", "a@example.com", "token")
+		}
+		httpServer := httptest.NewServer(NewRouter(server))
+		res, err := http.Get(httpServer.URL + "/api/jira/import")
+		if err != nil {
+			httpServer.Close()
+			t.Fatal(err)
+		}
+		var body struct {
+			Configured bool `json:"configured"`
+		}
+		if err := json.NewDecoder(res.Body).Decode(&body); err != nil {
+			res.Body.Close()
+			httpServer.Close()
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		httpServer.Close()
+		if body.Configured != configured {
+			t.Fatalf("configured = %v, want %v", body.Configured, configured)
+		}
+	}
+}

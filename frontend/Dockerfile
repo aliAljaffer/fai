@@ -1,4 +1,4 @@
-FROM node:alpine AS builder
+FROM --platform=$BUILDPLATFORM node:alpine AS builder
 WORKDIR /src
 COPY package.json package-lock.json ./
 RUN npm ci

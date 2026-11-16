@@ -196,14 +196,21 @@ func (s *Server) jiraImport(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusAccepted, jiraImportState{Running: true})
 }
 
+type jiraImportStatusResponse struct {
+	jiraImportState
+	// Configured mirrors Server.Jira so the UI can explain an unconfigured server
+	// instead of letting the import button fail.
+	Configured bool `json:"configured"`
+}
+
 func (s *Server) jiraImportStatus(w http.ResponseWriter, r *http.Request) {
 	s.jiraMu.Lock()
 	defer s.jiraMu.Unlock()
-	if s.jiraRun == nil {
-		writeJSON(w, http.StatusOK, jiraImportState{})
-		return
+	response := jiraImportStatusResponse{Configured: s.Jira != nil}
+	if s.jiraRun != nil {
+		response.jiraImportState = *s.jiraRun
 	}
-	writeJSON(w, http.StatusOK, *s.jiraRun)
+	writeJSON(w, http.StatusOK, response)
 }
 
 func (s *Server) finishJiraImport(run *jiraImportState, err error) {
