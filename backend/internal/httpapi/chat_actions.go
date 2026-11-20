@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
@@ -255,47 +254,17 @@ func (s *Server) ConfirmChatAction(ctx context.Context, pending PendingChatActio
 
 func (s *Server) resolveChatActionTask(ctx context.Context, action chatAction) (store.Task, []store.TaskRef, error) {
 	if action.TaskID != 0 {
-		task, err := s.Store.GetTask(ctx, action.TaskID)
+		task, err := s.taskService().ByID(ctx, action.TaskID)
 		if err != nil {
 			return store.Task{}, nil, nil
 		}
 		return task, nil, nil
 	}
-	query := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(action.Task), "@"))
-	if query == "" {
-		return store.Task{}, nil, nil
-	}
-	if id, err := strconv.ParseInt(query, 10, 64); err == nil {
-		if task, err := s.Store.GetTask(ctx, id); err == nil {
-			return task, nil, nil
-		}
-	}
-	refs, err := s.Store.ResolveRefs(ctx, query, nil)
+	lookup, err := s.taskService().Resolve(ctx, action.Task, nil)
 	if err != nil {
 		return store.Task{}, nil, err
 	}
-	if len(refs) > 1 {
-		exact := make([]store.TaskRef, 0, len(refs))
-		for _, ref := range refs {
-			if strings.EqualFold(strings.TrimSpace(ref.Title), query) {
-				exact = append(exact, ref)
-			}
-		}
-		if len(exact) == 1 {
-			refs = exact
-		}
-	}
-	if len(refs) == 0 {
-		return store.Task{}, nil, nil
-	}
-	if len(refs) > 1 {
-		return store.Task{}, refs, nil
-	}
-	task, err := s.Store.GetTask(ctx, refs[0].ID)
-	if err != nil {
-		return store.Task{}, nil, err
-	}
-	return task, nil, nil
+	return lookup.Task, lookup.Candidates, nil
 }
 
 // A non-empty question means nothing was resolved.

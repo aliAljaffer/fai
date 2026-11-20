@@ -1,6 +1,7 @@
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from './client'
 import type {
+  AgentToken,
   AISettings,
   AppearanceSettings,
   Attachment,
@@ -8,6 +9,7 @@ import type {
   Board,
   BoardColumn,
   CalendarSource,
+  CreatedAgentToken,
   ExtractedTask,
   ImportedCalendar,
   JiraExportResponse,
@@ -829,6 +831,30 @@ export function useExportJiraTasks() {
 
 export function useAIStatus() {
   return useQuery({ queryKey: ['ai', 'status'], queryFn: () => api.get<{ configured: boolean }>('/ai/status') })
+}
+
+export function useAgentTokens() {
+  return useQuery({
+    queryKey: ['agent-tokens'],
+    queryFn: () => api.get<AgentToken[]>('/agent-tokens'),
+  })
+}
+
+export function useCreateAgentToken() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { name: string; workspace_id?: number }) =>
+      api.post<CreatedAgentToken>('/agent-tokens', body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['agent-tokens'] }),
+  })
+}
+
+export function useDeleteAgentToken() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) => api.delete<void>(`/agent-tokens/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['agent-tokens'] }),
+  })
 }
 
 export function useAISettings() {

@@ -39,6 +39,11 @@ func (s *Server) createTaskComment(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	if s.Webhooks != nil {
+		if task, err := s.Store.GetTask(r.Context(), taskID); err == nil {
+			s.notifyTask(r.Context(), "task.commented", task)
+		}
+	}
 	writeJSON(w, http.StatusCreated, comment)
 }
 

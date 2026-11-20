@@ -34,3 +34,6 @@ var ChatMessages string
 
 //go:embed 010_reminder_completion.sql
 var ReminderCompletion string
+
+//go:embed 011_agent_tokens.sql
+var AgentTokens string

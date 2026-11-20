@@ -24,8 +24,10 @@ import (
 	"github.com/alialjaffer/fai/backend/internal/store"
 	"github.com/alialjaffer/fai/backend/internal/store/lite"
 	"github.com/alialjaffer/fai/backend/internal/store/pg"
+	"github.com/alialjaffer/fai/backend/internal/tasks"
 	"github.com/alialjaffer/fai/backend/internal/telegram"
 	"github.com/alialjaffer/fai/backend/internal/transcribe"
+	"github.com/alialjaffer/fai/backend/internal/webhook"
 )
 
 func main() {
@@ -66,6 +68,19 @@ func main() {
 		st = pg.New(pool)
 	}
 	defer st.Close()
+
+	agentTokens, err := auth.ParseAgentTokens(cfg.AgentTokens)
+	if err != nil {
+		log.Fatalf("FAI_AGENT_TOKENS: %v", err)
+	}
+	if agentTokens.Len() > 0 {
+		log.Printf("FAI_AGENT_TOKENS: %d static agent key(s) enabled", agentTokens.Len())
+	}
+	webhooks := webhook.New(cfg.WebhookURL, cfg.WebhookSecret)
+	if webhooks != nil {
+		go webhooks.Run(context.Background())
+		log.Printf("FAI_WEBHOOK_URL set: task events go to %s", cfg.WebhookURL)
+	}
 
 	jiraClient := jira.New(cfg.JiraBaseURL, cfg.JiraEmail, cfg.JiraAPIToken)
 	if jiraClient == nil {
@@ -111,6 +126,9 @@ func main() {
 		AttachmentsDir:       cfg.AttachmentsDir,
 		StaticDir:            cfg.StaticDir,
 		AuthMiddleware:       authMiddleware,
+		AgentTokens:          agentTokens,
+		Webhooks:             webhooks,
+		Tasks:                tasks.New(st),
 		Metrics:              metrics.New(st),
 	}
 	switch {

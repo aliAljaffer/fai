@@ -4,14 +4,18 @@ import (
 	"context"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
 	"github.com/alialjaffer/fai/backend/internal/ai"
+	"github.com/alialjaffer/fai/backend/internal/auth"
 	"github.com/alialjaffer/fai/backend/internal/jira"
 	"github.com/alialjaffer/fai/backend/internal/metrics"
 	"github.com/alialjaffer/fai/backend/internal/store"
+	"github.com/alialjaffer/fai/backend/internal/tasks"
+	"github.com/alialjaffer/fai/backend/internal/webhook"
 )
 
 type Server struct {
@@ -42,6 +46,14 @@ type Server struct {
 	// AuthMiddleware validates bearer tokens on every /api/* route when set.
 	// Left nil under DISABLE_AUTH for local dev.
 	AuthMiddleware func(http.Handler) http.Handler
+	// AgentTokens are static agent keys from FAI_AGENT_TOKENS. Keys created in
+	// the UI are stored in the database and resolved separately.
+	AgentTokens auth.AgentTokens
+	// Webhooks forwards task events to an agent endpoint when set.
+	Webhooks *webhook.Notifier
+	// Tasks holds the task operations shared with the assistant and MCP. It is
+	// built from Store by NewRouter when unset.
+	Tasks *tasks.Service
 	// Metrics, when set, records request counts and latency per route pattern.
 	Metrics *metrics.Metrics
 
@@ -52,6 +64,12 @@ type Server struct {
 
 	hubOnce  sync.Once
 	hubValue *eventHub
+
+	tasksOnce  sync.Once
+	tasksValue *tasks.Service
+
+	agentTouchMu sync.Mutex
+	agentTouched map[int64]time.Time
 
 	// The current or last Jira import, guarded by jiraMu, so progress survives
 	// navigation and request timeouts.
@@ -87,6 +105,14 @@ func NewRouter(s *Server) http.Handler {
 		w.Write([]byte("ok"))
 	})
 
+	// Agents authenticate with their own bearer key instead of the site login,
+	// so the reverse proxy exempts /mcp from Basic auth.
+	mcpHandler := s.mcpHandler()
+	agentAuth := s.AgentTokens.Middleware(s.resolveAgentToken, s.AuthMiddleware)
+	r.With(agentAuth, rateLimitByUser(600, 120)).Handle("/mcp", mcpHandler)
+	// Clients that append a trailing path still reach the same endpoint.
+	r.With(agentAuth, rateLimitByUser(600, 120)).Handle("/mcp/*", mcpHandler)
+
 	r.Route("/api", func(r chi.Router) {
 		// Calendar clients cannot complete OIDC; this one route is gated by its
 		// own URL token instead (see calendar.go).
@@ -100,6 +126,9 @@ func NewRouter(s *Server) http.Handler {
 			r.Use(s.broadcastMutations)
 
 			r.Get("/events", s.events)
+			r.Get("/agent-tokens", s.listAgentTokens)
+			r.Post("/agent-tokens", s.createAgentToken)
+			r.Delete("/agent-tokens/{tokenID}", s.deleteAgentToken)
 			r.Get("/calendar/feed", s.calendarFeedInfo)
 			r.Get("/calendar/sources", s.listCalendarSources)
 			r.Post("/calendar/sources", s.createCalendarSource)

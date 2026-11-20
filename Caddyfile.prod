@@ -15,6 +15,12 @@
 		reverse_proxy backend:8080
 	}
 
+	# Agents cannot complete a browser login; /mcp authenticates with the agent
+	# key itself, so it must not sit behind the site-wide Basic auth.
+	handle /mcp* {
+		reverse_proxy backend:8080
+	}
+
 	handle {
 		basic_auth {
 			{$FAI_AUTH_USER} {$FAI_AUTH_HASH}

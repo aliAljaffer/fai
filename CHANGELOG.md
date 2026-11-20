@@ -4,6 +4,7 @@
 
 ### Changes
 
+- Add an MCP endpoint for agents with keys created in Settings, plus signed task webhooks for orchestration
 - Make labels belong to a workspace: scope the tags table, API, backups and frontend label queries by workspace, and split existing shared labels per workspace.
 - Collapse reminders into a rail, move board actions into the board menu, show active filters in the toolbar, and drop the coloured card side bar
 - Redesign task cards and the sidebar: flat status-accented cards, a label gallery that filters the board and list in place, a notes count endpoint, and an idle timer panel

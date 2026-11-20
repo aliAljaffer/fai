@@ -15,13 +15,9 @@ import (
 	"github.com/alialjaffer/fai/backend/internal/store/lite"
 )
 
-func newWorkspaceServer(t *testing.T) (*lite.Store, *httptest.Server) {
+func newWorkspaceServer(t *testing.T) (store.Store, *httptest.Server) {
 	t.Helper()
-	st, err := lite.New(filepath.Join(t.TempDir(), "fai.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(st.Close)
+	st := testStore(t)
 	server := httptest.NewServer(NewRouter(&Server{Store: st}))
 	t.Cleanup(server.Close)
 	return st, server

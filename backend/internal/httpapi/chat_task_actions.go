@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/alialjaffer/fai/backend/internal/store"
+	"github.com/alialjaffer/fai/backend/internal/tasks"
 )
 
 func (s *Server) findChatTask(ctx context.Context, action chatAction) (string, error) {
@@ -172,54 +173,18 @@ func chatDueDate(raw *string) (*string, error) {
 }
 
 func (s *Server) createChatTask(ctx context.Context, boardID, columnID int64, title string, due *string, parentID *int64, kind string, steps []string, repeat *store.TaskRepeat) (store.Task, error) {
-	position, err := s.appendPosition(ctx, columnID)
-	if err != nil {
-		return store.Task{}, err
-	}
-	task, err := s.Store.CreateTask(ctx, store.CreateTaskParams{
-		BoardID: boardID, ColumnID: columnID, Title: title, Priority: "medium",
-		DueDate: due, Position: position, ParentTaskID: parentID, Kind: kind, CreatedByFai: true, Repeat: repeat,
+	return s.taskService().Create(ctx, tasks.CreateParams{
+		BoardID: boardID, ColumnID: columnID, Title: title, Due: due, ParentID: parentID,
+		Kind: kind, Repeat: repeat, CreatedByFai: true, Steps: steps,
 	})
-	if err != nil {
-		return store.Task{}, err
-	}
-	if _, err := s.createChatChildren(ctx, task, steps); err != nil {
-		return store.Task{}, err
-	}
-	return task, nil
 }
 
-// Each insert reads the column's last position, so the loop stays sequential.
 func (s *Server) createChatChildren(ctx context.Context, parent store.Task, titles []string) (int, error) {
-	kind := "step"
-	if parent.Kind == "arc" {
-		kind = "task"
-	}
-	created := 0
-	for _, title := range nonEmptyTitles(titles) {
-		position, err := s.appendPosition(ctx, parent.ColumnID)
-		if err != nil {
-			return created, err
-		}
-		if _, err := s.Store.CreateTask(ctx, store.CreateTaskParams{
-			BoardID: parent.BoardID, ColumnID: parent.ColumnID, Title: title, Priority: "medium",
-			Position: position, ParentTaskID: &parent.ID, Kind: kind, CreatedByFai: true,
-		}); err != nil {
-			return created, err
-		}
-		created++
-	}
-	return created, nil
+	return s.taskService().CreateChildren(ctx, parent, titles)
 }
 
 func nonEmptyTitles(raw []string) []string {
-	out := make([]string, 0, len(raw))
-	for _, value := range raw {
-		if title := strings.TrimSpace(value); title != "" {
-			out = append(out, title)
-		}
-	}
-	return out
+	return tasks.CleanTitles(raw)
 }
 
 func childNoun(parent store.Task, count int) string {
@@ -303,11 +268,7 @@ func (s *Server) confirmChatMove(ctx context.Context, action chatAction) (string
 }
 
 func (s *Server) moveChatTask(ctx context.Context, task store.Task, column store.BoardColumn) error {
-	position, err := s.appendPosition(ctx, column.ID)
-	if err != nil {
-		return err
-	}
-	if _, err := s.moveTaskItem(ctx, task, column.ID, position, time.Now()); err != nil {
+	if _, err := s.taskService().Move(ctx, task, column, time.Now()); err != nil {
 		return err
 	}
 	s.broadcast("tasks")
@@ -315,27 +276,7 @@ func (s *Server) moveChatTask(ctx context.Context, task store.Task, column store
 }
 
 func (s *Server) resolveChatColumn(ctx context.Context, boardID int64, name string) (store.BoardColumn, []store.BoardColumn, bool, error) {
-	columns, err := s.Store.ListColumnsByBoard(ctx, boardID)
-	if err != nil {
-		return store.BoardColumn{}, nil, false, err
-	}
-	name = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(name), "#"))
-	if name == "" {
-		return store.BoardColumn{}, columns, false, nil
-	}
-	matches := make([]store.BoardColumn, 0, 1)
-	for _, column := range columns {
-		if strings.EqualFold(strings.TrimSpace(column.Name), name) {
-			matches = append(matches, column)
-		}
-	}
-	if len(matches) == 1 {
-		return matches[0], nil, true, nil
-	}
-	if len(matches) > 1 {
-		return store.BoardColumn{}, matches, false, nil
-	}
-	return store.BoardColumn{}, columns, false, nil
+	return s.taskService().Column(ctx, boardID, name)
 }
 
 func columnNames(columns []store.BoardColumn) string {
@@ -347,39 +288,11 @@ func columnNames(columns []store.BoardColumn) string {
 }
 
 func (s *Server) doneColumn(ctx context.Context, boardID int64) (store.BoardColumn, bool, error) {
-	columns, err := s.Store.ListColumnsByBoard(ctx, boardID)
-	if err != nil {
-		return store.BoardColumn{}, false, err
-	}
-	for _, column := range columns {
-		if column.IsDone {
-			return column, true, nil
-		}
-	}
-	return store.BoardColumn{}, false, nil
+	return s.taskService().DoneColumn(ctx, boardID)
 }
 
 func (s *Server) defaultBoardColumn(ctx context.Context) (int64, int64, error) {
-	boards, err := s.Store.ListBoards(ctx, nil)
-	if err != nil {
-		return 0, 0, err
-	}
-	if len(boards) == 0 {
-		return 0, 0, fmt.Errorf("no board exists yet")
-	}
-	columns, err := s.Store.ListColumnsByBoard(ctx, boards[0].ID)
-	if err != nil {
-		return 0, 0, err
-	}
-	if len(columns) == 0 {
-		return 0, 0, fmt.Errorf("board %q has no columns", boards[0].Name)
-	}
-	for _, column := range columns {
-		if !column.IsDone {
-			return boards[0].ID, column.ID, nil
-		}
-	}
-	return boards[0].ID, columns[0].ID, nil
+	return s.taskService().DefaultColumn(ctx)
 }
 
 func chatTaskPatch(action chatAction, task store.Task) (store.TaskPatch, []string, error) {
@@ -497,16 +410,10 @@ func (s *Server) confirmChatCompleteTask(ctx context.Context, action chatAction)
 	if err != nil {
 		return "", err
 	}
-	column, found, err := s.doneColumn(ctx, task.BoardID)
-	if err != nil {
+	if _, _, err := s.taskService().Complete(ctx, task, time.Now()); err != nil {
 		return "", err
 	}
-	if !found {
-		return "", fmt.Errorf("the board has no done column")
-	}
-	if err := s.moveChatTask(ctx, task, column); err != nil {
-		return "", err
-	}
+	s.broadcast("tasks")
 	return "Marked @" + task.Ref + " done.", nil
 }
 
@@ -636,10 +543,10 @@ func (s *Server) confirmChatComment(ctx context.Context, action chatAction) (str
 
 const maxLoggedTime = 24 * time.Hour
 
-func chatTimeSpan(action chatAction, now time.Time) (time.Time, time.Time, error) {
+func timeSpan(startedAt, endedAt string, minutes int, now time.Time) (time.Time, time.Time, error) {
 	end := now
-	if action.EndedAt != "" {
-		parsed, err := time.Parse(time.RFC3339, action.EndedAt)
+	if endedAt != "" {
+		parsed, err := time.Parse(time.RFC3339, endedAt)
 		if err != nil {
 			return time.Time{}, time.Time{}, fmt.Errorf("invalid ended_at")
 		}
@@ -647,14 +554,14 @@ func chatTimeSpan(action chatAction, now time.Time) (time.Time, time.Time, error
 	}
 	var start time.Time
 	switch {
-	case action.StartedAt != "":
-		parsed, err := time.Parse(time.RFC3339, action.StartedAt)
+	case startedAt != "":
+		parsed, err := time.Parse(time.RFC3339, startedAt)
 		if err != nil {
 			return time.Time{}, time.Time{}, fmt.Errorf("invalid started_at")
 		}
 		start = parsed
-	case action.Minutes > 0:
-		start = end.Add(-time.Duration(action.Minutes) * time.Minute)
+	case minutes > 0:
+		start = end.Add(-time.Duration(minutes) * time.Minute)
 	default:
 		return time.Time{}, time.Time{}, fmt.Errorf("log_time needs minutes or started_at")
 	}
@@ -693,7 +600,7 @@ func (s *Server) prepareChatLogTime(ctx context.Context, action chatAction, now 
 	if err != nil || question != "" {
 		return chatAction{}, question, false, err
 	}
-	start, end, err := chatTimeSpan(action, now)
+	start, end, err := timeSpan(action.StartedAt, action.EndedAt, action.Minutes, now)
 	if err != nil {
 		return chatAction{}, "", false, err
 	}
@@ -711,7 +618,7 @@ func (s *Server) confirmChatLogTime(ctx context.Context, action chatAction) (str
 	if action.StartedAt == "" || action.EndedAt == "" {
 		return "", fmt.Errorf("the time entry needs a start and an end")
 	}
-	start, end, err := chatTimeSpan(action, time.Now())
+	start, end, err := timeSpan(action.StartedAt, action.EndedAt, action.Minutes, time.Now())
 	if err != nil {
 		return "", err
 	}

@@ -206,6 +206,14 @@ type Store interface {
 	GetAppearance(ctx context.Context) (AppearanceSettings, error)
 	SaveAppearance(ctx context.Context, settings AppearanceSettings) (AppearanceSettings, error)
 
+	// Agent tokens authorize external agents over MCP. Only the SHA-256 hash of
+	// the secret is stored; list calls never see it.
+	CreateAgentToken(ctx context.Context, name, tokenHash, prefix string, workspaceID *int64) (AgentToken, error)
+	ListAgentTokens(ctx context.Context) ([]AgentToken, error)
+	DeleteAgentToken(ctx context.Context, id int64) error
+	AgentTokenByHash(ctx context.Context, tokenHash string) (AgentToken, error)
+	TouchAgentToken(ctx context.Context, id int64, at time.Time) error
+
 	// Backup and restore operate on the whole instance. RestoreBackup replaces
 	// every row; it never merges.
 	DumpBackup(ctx context.Context) (BackupData, error)

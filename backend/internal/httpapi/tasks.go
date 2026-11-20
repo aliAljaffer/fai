@@ -11,9 +11,10 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/alialjaffer/fai/backend/internal/store"
+	"github.com/alialjaffer/fai/backend/internal/tasks"
 )
 
-const positionGap = 1024.0
+const positionGap = tasks.PositionGap
 const positionEpsilon = 1e-6
 
 func parseID(r *http.Request, param string) (int64, bool) {
@@ -114,6 +115,7 @@ func (s *Server) createTask(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	s.notifyTask(r.Context(), "task.created", task)
 	writeJSON(w, http.StatusCreated, task)
 }
 
@@ -293,6 +295,7 @@ func (s *Server) updateTask(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	s.notifyTask(r.Context(), "task.updated", task)
 	writeJSON(w, http.StatusOK, task)
 }
 
@@ -376,24 +379,22 @@ func (s *Server) moveTask(w http.ResponseWriter, r *http.Request) {
 		position, _ = computePosition(filtered, body.AfterTaskID, body.BeforeTaskID)
 	}
 
-	task, err := s.moveTaskItem(ctx, before, body.ColumnID, position, time.Now())
+	task, err := s.taskService().MoveTo(ctx, before, body.ColumnID, position, time.Now())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	event := "task.moved"
+	if task.CompletedAt != nil && before.CompletedAt == nil {
+		event = "task.completed"
+	}
+	s.notifyTask(ctx, event, task)
 	writeJSON(w, http.StatusOK, task)
 }
 
 // appendPosition returns the position for a new task at the end of columnID.
 func (s *Server) appendPosition(ctx context.Context, columnID int64) (float64, error) {
-	existing, err := s.Store.ListTasksByColumnOrdered(ctx, columnID)
-	if err != nil {
-		return 0, err
-	}
-	if len(existing) == 0 {
-		return positionGap, nil
-	}
-	return existing[len(existing)-1].Position + positionGap, nil
+	return s.taskService().AppendPosition(ctx, columnID)
 }
 
 type idPos struct {

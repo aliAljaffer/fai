@@ -63,6 +63,11 @@ type Config struct {
 	// StaticDir serves the built frontend SPA from the same origin as the API.
 	// Used by the Electron build, which has no separate web server.
 	StaticDir string
+	// AgentTokens lists static agent keys as name:secret[:workspace_tag].
+	AgentTokens string
+	// WebhookURL receives task events when set. WebhookSecret signs them.
+	WebhookURL    string
+	WebhookSecret string
 	// AuthMode is "oidc" (default: backend validates bearer JWTs itself, used by the
 	// kubernetes deployment) or "proxy-header" (trusts X-Forwarded-User/-Email set by
 	// a fronting oauth2-proxy, used by the docker-compose deployment). Only safe in
@@ -131,6 +136,9 @@ func Load() Config {
 		TelegramTZOffset:      int(envInt64("TELEGRAM_TZ_OFFSET")),
 		ReminderChannel:       strings.ToLower(strings.TrimSpace(os.Getenv("REMINDER_CHANNEL"))),
 		StaticDir:             os.Getenv("STATIC_DIR"),
+		AgentTokens:           os.Getenv("FAI_AGENT_TOKENS"),
+		WebhookURL:            os.Getenv("FAI_WEBHOOK_URL"),
+		WebhookSecret:         os.Getenv("FAI_WEBHOOK_SECRET"),
 		AuthMode:              envOr("AUTH_MODE", "oidc"),
 	}
 }

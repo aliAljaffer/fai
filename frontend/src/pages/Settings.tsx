@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { PaletteSelect, PaletteSwatches } from '@/components/ThemePalettePicker'
+import { AgentsCard } from '@/components/agent/AgentsCard'
 import { CalendarSourcesSection } from '@/components/calendar/CalendarSourcesSection'
 import { Input } from '@/components/ui/input'
 import {
@@ -1161,6 +1162,8 @@ export function Settings() {
       <AppearanceCard />
 
       <AICard />
+
+      <AgentsCard />
 
       <Card>
         <CardHeader>

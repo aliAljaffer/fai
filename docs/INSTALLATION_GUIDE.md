@@ -159,6 +159,25 @@ Set `AUTH_MODE` to choose how the API authenticates requests:
 development. Do not set either in a real deployment. The backend refuses to
 start if the selected auth mode lacks its required configuration.
 
+### Agent access
+
+External agents use the MCP endpoint at `/mcp`. Create a key in
+**Settings → Agents**, or set `FAI_AGENT_TOKENS` as a comma-separated list of
+`name:secret[:WORKSPACE]` entries. Keys created in the UI can be revoked at any
+time and record when they were last used. Environment keys need a restart to
+change.
+
+`/mcp` authenticates with the agent key, so the production Caddyfile routes it
+around the site-wide Basic auth. Under `AUTH_MODE=oidc` the key is checked
+before the JWT middleware, so agents never need a browser login.
+
+Fai can also POST task events to an agent endpoint. Set `FAI_WEBHOOK_URL` and
+`FAI_WEBHOOK_SECRET`; both are required and delivery is off when the secret is
+empty. Requests are signed with HMAC-SHA256 over `<timestamp>.<body>`.
+
+See [AGENT_INTEGRATION.md](AGENT_INTEGRATION.md) for client setup, the tool
+list, and the event payload.
+
 ### Database
 
 Set `DATABASE_URL` to select the database:

@@ -282,3 +282,17 @@ export interface AISettings {
   source: 'database' | 'environment'
   updated_at: string | null
 }
+
+export interface AgentToken {
+  id: number
+  name: string
+  prefix: string
+  workspace_id: number | null
+  created_at: string
+  last_used_at: string | null
+}
+
+export interface CreatedAgentToken {
+  token: AgentToken
+  secret: string
+}

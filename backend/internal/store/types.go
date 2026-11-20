@@ -259,6 +259,17 @@ type AppearanceSettings struct {
 	UpdatedAt         time.Time         `json:"updated_at"`
 }
 
+// AgentToken authorizes an external agent over MCP. The secret itself is never
+// stored or returned by list calls, only its hash and a display prefix.
+type AgentToken struct {
+	ID          int64      `json:"id"`
+	Name        string     `json:"name"`
+	Prefix      string     `json:"prefix"`
+	WorkspaceID *int64     `json:"workspace_id"`
+	CreatedAt   time.Time  `json:"created_at"`
+	LastUsedAt  *time.Time `json:"last_used_at"`
+}
+
 func DefaultAppearance() AppearanceSettings {
 	return AppearanceSettings{
 		GlobalPaletteID:   "light-steel",

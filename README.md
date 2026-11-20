@@ -97,5 +97,6 @@ Go, React, Vite, Electron, SQLite, and PostgreSQL.
 ## Links
 
 - [Installation guide](docs/INSTALLATION_GUIDE.md)
+- [Agent integration](docs/AGENT_INTEGRATION.md)
 - [Security policy](SECURITY.md)
 - [License](LICENSE)

@@ -22,7 +22,7 @@ func actionTestStore(t *testing.T) *lite.Store {
 	return st
 }
 
-func columnID(t *testing.T, st *lite.Store, name string) int64 {
+func columnID(t *testing.T, st store.Store, name string) int64 {
 	t.Helper()
 	columns, err := st.ListColumnsByBoard(context.Background(), 1)
 	if err != nil {

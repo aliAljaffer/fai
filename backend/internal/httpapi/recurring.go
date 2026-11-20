@@ -150,48 +150,6 @@ func taskCreateRepeat(change repeatChange, kind string, due *string) (*store.Tas
 	return &store.TaskRepeat{Rule: *change.rule, Anchor: *due}, nil
 }
 
-func nextTaskDue(state store.TaskRepeat, due string, now time.Time) (string, error) {
-	after := due
-	if yesterday := now.UTC().AddDate(0, 0, -1).Format(recurrence.DateLayout); yesterday > after {
-		after = yesterday
-	}
-	return state.Rule.NextDate(state.Anchor, after)
-}
-
-func (s *Server) moveTaskItem(ctx context.Context, before store.Task, columnID int64, position float64, now time.Time) (store.Task, error) {
-	moved, err := s.Store.MoveTask(ctx, before.ID, columnID, position)
-	if err != nil {
-		return store.Task{}, err
-	}
-	state := before.RepeatState()
-	if state == nil || before.CompletedAt != nil || moved.CompletedAt == nil || before.DueDate == nil {
-		return moved, nil
-	}
-	if err := s.rollRepeatingTask(ctx, before, *state, now); err != nil {
-		return store.Task{}, err
-	}
-	moved.Repeat, moved.RepeatAnchor = nil, nil
-	return moved, nil
-}
-
-func (s *Server) rollRepeatingTask(ctx context.Context, before store.Task, state store.TaskRepeat, now time.Time) error {
-	due, err := nextTaskDue(state, *before.DueDate, now)
-	if err != nil {
-		return err
-	}
-	position, err := s.appendPosition(ctx, before.ColumnID)
-	if err != nil {
-		return err
-	}
-	_, err = s.Store.RollRepeatingTask(ctx, store.RollTaskParams{
-		TaskID: before.ID, BoardID: before.BoardID, ColumnID: before.ColumnID, Position: position, DueDate: due,
-	})
-	if errors.Is(err, store.ErrNotFound) {
-		return nil
-	}
-	return err
-}
-
 func importedTaskRepeat(item workspaceTaskExport) (*store.TaskRepeat, error) {
 	if item.Repeat == nil {
 		return nil, nil
